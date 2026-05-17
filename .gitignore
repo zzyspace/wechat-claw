@@ -5,3 +5,4 @@ dist/
 storage/
 *.log
 *.sqlite
+*.memory-card.json
