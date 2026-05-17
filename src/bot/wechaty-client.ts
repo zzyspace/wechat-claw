@@ -37,15 +37,18 @@ export async function startBot(logger: Logger) {
     puppetServiceTokenConfigured: Boolean(config.puppetServiceToken),
   });
 
-  const bot = WechatyBuilder.build({
+  const botOptions: Record<string, unknown> = {
     name: config.botName,
     puppet: config.puppet,
-    puppetOptions: config.puppetServiceToken
-      ? {
-          token: config.puppetServiceToken,
-        }
-      : undefined,
-  });
+  };
+
+  if (config.puppetServiceToken) {
+    botOptions.puppetOptions = {
+      token: config.puppetServiceToken,
+    };
+  }
+
+  const bot = WechatyBuilder.build(botOptions);
 
   bot.on("scan", async (qrcode: string, status: unknown) => {
     const statusName = resolveScanStatusName(ScanStatus, status);

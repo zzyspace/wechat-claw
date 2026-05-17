@@ -11,6 +11,7 @@
     "build": "tsc -p tsconfig.json",
     "dev": "node --loader ts-node/esm src/app/bootstrap.ts",
     "doctor": "node --loader ts-node/esm src/app/doctor.ts",
+    "postinstall": "node scripts/patch-wechaty-puppet-wechat.mjs",
     "start": "node dist/app/bootstrap.js"
   },
   "keywords": [],
@@ -19,7 +20,8 @@
   "dependencies": {
     "dotenv": "^16.6.1",
     "qrcode-terminal": "^0.12.0",
-    "wechaty": "^1.20.2"
+    "wechaty": "^1.20.2",
+    "wechaty-puppet-wechat": "^1.18.4"
   },
   "devDependencies": {
     "@types/node": "^24.12.4",

@@ -20,6 +20,10 @@ function readOptionalEnv(name: string): string | undefined {
   return value ? value : undefined;
 }
 
+function isServicePuppet(puppet?: string): boolean {
+  return puppet === "wechaty-puppet-service";
+}
+
 export function getAppConfig(): AppConfig {
   return {
     puppet: readOptionalEnv("WECHATY_PUPPET"),
@@ -46,8 +50,12 @@ export function validateAppConfig(config: AppConfig): ConfigValidationResult {
     errors.push("Missing WECHATY_DELIVERY_CONTACT_NAME");
   }
 
-  if (!config.puppetServiceToken) {
-    warnings.push("WECHATY_PUPPET_SERVICE_TOKEN is empty. This is only valid if your puppet does not require a token.");
+  if (isServicePuppet(config.puppet) && !config.puppetServiceToken) {
+    errors.push("Missing WECHATY_PUPPET_SERVICE_TOKEN for wechaty-puppet-service");
+  }
+
+  if (!isServicePuppet(config.puppet) && !config.puppetServiceToken) {
+    warnings.push("WECHATY_PUPPET_SERVICE_TOKEN is empty. This is expected for tokenless puppets such as wechaty-puppet-wechat.");
   }
 
   return {

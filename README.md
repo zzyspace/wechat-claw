@@ -22,7 +22,8 @@
 说明：
 
 - 普通微信接入不是官方开放接口
-- 你需要自己准备可用的 `puppet` 和对应 token
+- 你需要自己准备可用的 `puppet`
+- `service` 模式需要 token，`web` 模式通常不需要
 - 当前代码已预留 `WECHATY_PUPPET` 和 `WECHATY_PUPPET_SERVICE_TOKEN`
 
 ## 安装
@@ -36,7 +37,7 @@ npm install
 复制 `.env.example` 为 `.env`，并填写：
 
 ```env
-WECHATY_PUPPET=
+WECHATY_PUPPET=wechaty-puppet-wechat
 WECHATY_PUPPET_SERVICE_TOKEN=
 WECHATY_BOT_NAME=wechat-loss-bot
 WECHATY_TARGET_ROOM_TOPIC=门店食材报损群
@@ -46,10 +47,38 @@ WECHATY_DELIVERY_CONTACT_NAME=你的主微信昵称
 字段说明：
 
 - `WECHATY_PUPPET`: 具体接入方案名称
-- `WECHATY_PUPPET_SERVICE_TOKEN`: puppet service token
+- `WECHATY_PUPPET_SERVICE_TOKEN`: 仅 `wechaty-puppet-service` 等 service 模式需要
 - `WECHATY_BOT_NAME`: 本地 bot 名称
 - `WECHATY_TARGET_ROOM_TOPIC`: 需要监听的群名
 - `WECHATY_DELIVERY_CONTACT_NAME`: 收测试回传消息的联系人昵称
+
+推荐先试两种模式中的一种：
+
+`Web` 模式：
+
+```env
+WECHATY_PUPPET=wechaty-puppet-wechat
+WECHATY_PUPPET_SERVICE_TOKEN=
+WECHATY_PUPPET_WECHAT_PUPPETEER_UOS=1
+WECHATY_BOT_NAME=wechat-loss-bot
+WECHATY_TARGET_ROOM_TOPIC=AI测试群
+WECHATY_DELIVERY_CONTACT_NAME=你的主微信昵称
+```
+
+说明：
+
+- `WECHATY_PUPPET_WECHAT_PUPPETEER_UOS=1` 建议在 `web` 模式下默认开启
+- 这可以让 `wechaty-puppet-wechat` 走 UOS 兼容分支，当前在你的机器上比直接访问 `https://wx.qq.com` 更稳定
+
+`Service` 模式：
+
+```env
+WECHATY_PUPPET=wechaty-puppet-service
+WECHATY_PUPPET_SERVICE_TOKEN=puppet_paimon_xxx
+WECHATY_BOT_NAME=wechat-loss-bot
+WECHATY_TARGET_ROOM_TOPIC=AI测试群
+WECHATY_DELIVERY_CONTACT_NAME=你的主微信昵称
+```
 
 建议：
 
@@ -99,6 +128,9 @@ npm start
    - `WECHATY_PUPPET_SERVICE_TOKEN`
    - `WECHATY_TARGET_ROOM_TOPIC`
    - `WECHATY_DELIVERY_CONTACT_NAME`
+   如果你试的是 `wechaty-puppet-wechat`，`WECHATY_PUPPET_SERVICE_TOKEN` 留空即可。
+   同时建议增加：
+   - `WECHATY_PUPPET_WECHAT_PUPPETEER_UOS=1`
 4. 执行 `npm run doctor`，确认配置检查通过。
 5. 执行 `npm run dev`。
 6. 观察终端：
@@ -140,6 +172,17 @@ npm start
 - 当前 puppet 是否可用
 - token 是否正确
 - 当前微信号是否被风控
+- 若使用 `wechaty-puppet-wechat`，还要确认该微信号是否仍具备 Web WeChat 登录资格
+
+### `init() without a ready angular env`
+
+这个项目已经内置了对 `wechaty-puppet-wechat` 的本地补丁。
+
+补丁位置：
+
+- `scripts/patch-wechaty-puppet-wechat.mjs`
+
+它会在 `npm install` 后自动执行，修复 `wechaty-puppet-wechat` 注入过早导致的 Angular 环境竞态问题。
 
 ### 上线了但没有转发群消息
 
