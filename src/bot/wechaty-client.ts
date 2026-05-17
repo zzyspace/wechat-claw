@@ -2,6 +2,7 @@ import { getAppConfig, validateAppConfig } from "../core/config/env.js";
 import type { Logger } from "../core/logging/logger.js";
 import { loadWechatyModule } from "./wechaty-loader.js";
 import { handleMessage } from "./message-handler.js";
+import { writeLatestQrcodeArtifact } from "./qrcode-artifact.js";
 import { renderTerminalQrcode } from "./terminal-qrcode.js";
 
 function resolveScanStatusName(scanStatus: Record<string, string | number>, value: unknown) {
@@ -53,9 +54,11 @@ export async function startBot(logger: Logger) {
   bot.on("scan", async (qrcode: string, status: unknown) => {
     const statusName = resolveScanStatusName(ScanStatus, status);
     const qrcodeUrl = `https://wechaty.js.org/qrcode/${encodeURIComponent(qrcode)}`;
+    const artifactPath = writeLatestQrcodeArtifact(qrcodeUrl, qrcode);
 
     logger.info("Scan event received", {
       status: statusName,
+      artifactPath,
       qrcodeUrl,
     });
 
@@ -63,6 +66,7 @@ export async function startBot(logger: Logger) {
 
     if (!rendered) {
       logger.warn("Terminal QR rendering unavailable", {
+        artifactPath,
         reason: "qrcode-terminal package not installed",
         qrcodeUrl,
       });

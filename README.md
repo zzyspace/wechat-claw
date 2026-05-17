@@ -136,6 +136,7 @@ npm start
 6. 观察终端：
    - 若支持终端二维码，会直接显示二维码
    - 否则日志里会打印二维码链接
+   - 同时程序会写入 [storage/latest-qrcode.txt](/Users/ryan/DataDisk/Work/AI/wechat-claw/storage/latest-qrcode.txt)
 7. 用机器人微信号扫码登录。
 8. 登录成功后，程序会向 `WECHATY_DELIVERY_CONTACT_NAME` 发送一条 bot 上线通知。
 9. 在目标群里发一条测试消息。
@@ -148,6 +149,19 @@ npm start
 1. 机器人账号成功登录
 2. 你的主微信收到 bot 上线通知
 3. 目标群发消息后，你的主微信收到消息摘要
+
+## 二维码文件
+
+每次出现登录二维码时，程序都会刷新这个文件：
+
+- [storage/latest-qrcode.txt](/Users/ryan/DataDisk/Work/AI/wechat-claw/storage/latest-qrcode.txt)
+
+文件里包含：
+
+- 二维码链接
+- ASCII 终端二维码
+
+如果你看不到终端实时输出，直接打开这个文件即可。
 
 ## 下一步
 
