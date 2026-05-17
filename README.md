@@ -5,6 +5,8 @@
 - Wechaty 启动
 - 指定群消息监听
 - 将群消息回发给指定联系人
+- 原始消息落 SQLite
+- 图片附件落本地文件
 
 ## 当前能力
 
@@ -13,6 +15,8 @@
 - 监听群消息
 - 按群名过滤目标群
 - 将收到的消息转发给指定联系人，作为联调验证
+- 将原始群消息写入 `storage/wechat-claw.sqlite`
+- 将图片消息落到 `storage/raw/YYYY/MM/DD/`
 
 ## 环境要求
 
@@ -150,6 +154,11 @@ npm start
 2. 你的主微信收到 bot 上线通知
 3. 目标群发消息后，你的主微信收到消息摘要
 
+如果要额外验证存储链路，再检查：
+
+- [storage/wechat-claw.sqlite](/Users/ryan/DataDisk/Work/AI/wechat-claw/storage/wechat-claw.sqlite)
+- [storage/raw](/Users/ryan/DataDisk/Work/AI/wechat-claw/storage/raw)
+
 ## 二维码文件
 
 每次出现登录二维码时，程序都会刷新这个文件：
@@ -167,8 +176,6 @@ npm start
 
 当前只是接入验证骨架。后续开发会继续补：
 
-- 原始消息落库
-- 图片下载与存储
 - 场景路由
 - 报损结构化提取
 - 日报汇总与发送

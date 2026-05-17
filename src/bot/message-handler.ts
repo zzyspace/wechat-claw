@@ -1,4 +1,7 @@
 import type { Logger } from "../core/logging/logger.js";
+import { saveImageAttachment } from "../core/attachments/save-image-attachment.js";
+import { normalizeMessage } from "../core/messages/normalize-message.js";
+import { saveRawMessage } from "../core/storage/raw-message-repository.js";
 
 export interface MessageContext {
   targetRoomTopic?: string;
@@ -36,8 +39,39 @@ export async function handleMessage(message: any, context: MessageContext, logge
   const text = typeof message.text === "function" ? message.text() : "";
   const typeValue = typeof message.type === "function" ? message.type() : "unknown";
   const normalizedText = text.trim() || "(非文本消息)";
+  const messageId = typeof message.id === "function" ? message.id() : message.id || cryptoRandomId();
+  const sentAt =
+    typeof message.date === "function"
+      ? new Date(message.date()).toISOString()
+      : new Date().toISOString();
+
+  const attachments = [];
+
+  if (String(typeValue).toLowerCase().includes("image") || Number(typeValue) === 3) {
+    const imageAttachment = await saveImageAttachment(message);
+    if (imageAttachment) {
+      attachments.push(imageAttachment);
+    }
+  }
+
+  const normalized = normalizeMessage({
+    messageExternalId: String(messageId),
+    channelExternalId: typeof room.id === "function" ? room.id() : undefined,
+    channelName: roomTopic,
+    senderExternalId: talker && typeof talker.id === "function" ? talker.id() : undefined,
+    senderName,
+    messageType: String(typeValue),
+    textContent: normalizedText,
+    sentAt,
+    attachments,
+  });
+
+  const saveResult = saveRawMessage(normalized);
 
   logger.info("Received room message", {
+    attachmentsCount: attachments.length,
+    inserted: saveResult.inserted,
+    rawMessageId: saveResult.rawMessageId,
     roomTopic,
     senderName,
     text: normalizedText,
@@ -56,7 +90,11 @@ export async function handleMessage(message: any, context: MessageContext, logge
 
   await safeTalk(
     deliveryContact,
-    `[wechat-claw] 已收到群消息\n群聊: ${roomTopic}\n发送人: ${senderName}\n消息类型: ${String(typeValue)}\n内容: ${normalizedText}`,
+    `[wechat-claw] 已收到群消息\n群聊: ${roomTopic}\n发送人: ${senderName}\n消息类型: ${String(typeValue)}\n内容: ${normalizedText}\n附件数: ${attachments.length}\n入库: ${saveResult.inserted ? "新消息" : "已去重"}`,
     logger,
   );
+}
+
+function cryptoRandomId() {
+  return `generated_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
 }
