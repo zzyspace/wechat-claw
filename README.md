@@ -17,6 +17,7 @@
 - 将收到的消息转发给指定联系人，作为联调验证
 - 将原始群消息写入 `storage/wechat-claw.sqlite`
 - 将图片消息落到 `storage/raw/YYYY/MM/DD/`
+- 对报损消息做第一版启发式结构化提取
 
 ## 环境要求
 
@@ -117,6 +118,12 @@ npm run dev
 npm run build
 ```
 
+查看最近消息：
+
+```bash
+npm run inspect:messages
+```
+
 生产运行：
 
 ```bash
@@ -158,6 +165,7 @@ npm start
 
 - [storage/wechat-claw.sqlite](/Users/ryan/DataDisk/Work/AI/wechat-claw/storage/wechat-claw.sqlite)
 - [storage/raw](/Users/ryan/DataDisk/Work/AI/wechat-claw/storage/raw)
+- `npm run inspect:messages`
 
 ## 二维码文件
 
@@ -177,7 +185,7 @@ npm start
 当前只是接入验证骨架。后续开发会继续补：
 
 - 场景路由
-- 报损结构化提取
+- 多模态报损结构化提取
 - 日报汇总与发送
 
 ## 常见问题

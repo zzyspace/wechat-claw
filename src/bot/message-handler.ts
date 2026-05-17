@@ -1,7 +1,9 @@
 import type { Logger } from "../core/logging/logger.js";
 import { saveImageAttachment } from "../core/attachments/save-image-attachment.js";
 import { normalizeMessage } from "../core/messages/normalize-message.js";
+import { saveScenarioExtraction } from "../core/scenarios/scenario-extraction-repository.js";
 import { saveRawMessage } from "../core/storage/raw-message-repository.js";
+import { extractLossReportHeuristically } from "../scenarios/loss-report/heuristic-extractor.js";
 
 export interface MessageContext {
   targetRoomTopic?: string;
@@ -67,12 +69,31 @@ export async function handleMessage(message: any, context: MessageContext, logge
   });
 
   const saveResult = saveRawMessage(normalized);
+  const lossReportExtraction = extractLossReportHeuristically({
+    rawMessageId: saveResult.rawMessageId,
+    channelName: roomTopic,
+    senderName,
+    messageType: String(typeValue),
+    textContent: normalizedText,
+    sentAt,
+    attachments,
+  });
+  const savedExtraction = saveScenarioExtraction({
+    rawMessageId: saveResult.rawMessageId,
+    scenarioCode: lossReportExtraction.scenarioCode,
+    extractorCode: lossReportExtraction.extractorCode,
+    status: lossReportExtraction.status,
+    confidence: lossReportExtraction.confidence,
+    needsReview: lossReportExtraction.needsReview,
+    resultJson: lossReportExtraction.resultJson,
+  });
 
   logger.info("Received room message", {
     attachmentsCount: attachments.length,
     inserted: saveResult.inserted,
     rawMessageId: saveResult.rawMessageId,
     roomTopic,
+    scenarioStatus: savedExtraction.status,
     senderName,
     text: normalizedText,
     typeValue,
@@ -90,7 +111,7 @@ export async function handleMessage(message: any, context: MessageContext, logge
 
   await safeTalk(
     deliveryContact,
-    `[wechat-claw] 已收到群消息\n群聊: ${roomTopic}\n发送人: ${senderName}\n消息类型: ${String(typeValue)}\n内容: ${normalizedText}\n附件数: ${attachments.length}\n入库: ${saveResult.inserted ? "新消息" : "已去重"}`,
+    `[wechat-claw] 已收到群消息\n群聊: ${roomTopic}\n发送人: ${senderName}\n消息类型: ${String(typeValue)}\n内容: ${normalizedText}\n附件数: ${attachments.length}\n入库: ${saveResult.inserted ? "新消息" : "已去重"}\n报损提取: ${savedExtraction.status} / review=${savedExtraction.needsReview ? "是" : "否"}`,
     logger,
   );
 }
