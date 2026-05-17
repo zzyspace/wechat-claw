@@ -1,0 +1,29 @@
+{
+  "name": "wechat-claw",
+  "version": "1.0.0",
+  "description": "Wechat group listener for structured business summaries",
+  "type": "module",
+  "main": "dist/app/bootstrap.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "node --loader ts-node/esm src/app/bootstrap.ts",
+    "doctor": "node --loader ts-node/esm src/app/doctor.ts",
+    "start": "node dist/app/bootstrap.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "dotenv": "^16.6.1",
+    "qrcode-terminal": "^0.12.0",
+    "wechaty": "^1.20.2"
+  },
+  "devDependencies": {
+    "@types/node": "^24.12.4",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.3"
+  }
+}
