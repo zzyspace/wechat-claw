@@ -10,7 +10,7 @@ export interface NormalizeMessageInput {
   senderName: string;
   messageType: string;
   textContent: string;
-  sentAt: string;
+  eventReceivedAt: string;
   attachments: StoredAttachment[];
 }
 
@@ -22,7 +22,7 @@ function computeDedupeKey(input: NormalizeMessageInput): string {
   hash.update("|");
   hash.update(input.senderExternalId ?? "");
   hash.update("|");
-  hash.update(input.sentAt);
+  hash.update(input.eventReceivedAt);
   hash.update("|");
   hash.update(input.textContent);
 
@@ -43,7 +43,7 @@ export function normalizeMessage(input: NormalizeMessageInput): StoredRawMessage
     senderName: input.senderName,
     messageType: input.messageType,
     textContent: input.textContent,
-    sentAt: input.sentAt,
+    eventReceivedAt: input.eventReceivedAt,
     dedupeKey: computeDedupeKey(input),
     attachments: input.attachments,
   };

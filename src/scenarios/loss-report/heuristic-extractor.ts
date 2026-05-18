@@ -40,6 +40,19 @@ function detectEvidenceType(input: LossReportHeuristicInput): "text" | "image" |
   return "text";
 }
 
+function buildReporterSummary(input: LossReportHeuristicInput, items: LossReportItem[]): string {
+  if (items.length === 0) {
+    return input.attachments.length > 0 ? "发送了图片报损" : "发送了疑似报损消息";
+  }
+
+  return items
+    .map((item) => {
+      const quantityText = item.quantity !== null ? `${item.quantity}${item.unit ?? ""}` : "";
+      return `${item.name ?? "未识别物品"}${quantityText ? ` ${quantityText}` : ""}`;
+    })
+    .join("；");
+}
+
 function detectReasonCategory(text: string): string | null {
   for (const rule of REASON_RULES) {
     if (rule.keywords.some((keyword) => text.includes(keyword))) {
@@ -91,6 +104,7 @@ export function extractLossReportHeuristically(
   const reasonCategory = detectReasonCategory(notes);
   const items = extractItems(notes);
   const relevant = isLikelyRelevant(input, notes);
+  const reporterSummary = buildReporterSummary(input, items);
 
   if (!relevant) {
     return {
@@ -107,6 +121,7 @@ export function extractLossReportHeuristically(
         reportedAt: input.sentAt,
         isRelevant: false,
         evidenceType,
+        reporterSummary,
         reasonCategory: null,
         notes,
         items: [],
@@ -131,6 +146,7 @@ export function extractLossReportHeuristically(
       reportedAt: input.sentAt,
       isRelevant: true,
       evidenceType,
+      reporterSummary,
       reasonCategory,
       notes,
       items,

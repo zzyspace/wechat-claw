@@ -19,7 +19,7 @@ export interface LossReportItem {
 
 export interface LossReportHeuristicResult {
   scenarioCode: "loss-report";
-  extractorCode: "heuristic-v1";
+  extractorCode: string;
   status: "extracted" | "ignored";
   confidence: number;
   needsReview: boolean;
@@ -31,8 +31,37 @@ export interface LossReportHeuristicResult {
     reportedAt: string;
     isRelevant: boolean;
     evidenceType: "text" | "image" | "image+text";
+    reporterSummary: string;
     reasonCategory: string | null;
     notes: string;
     items: LossReportItem[];
   };
+}
+
+export interface LossReporterDailySummaryItem {
+  rawMessageId: number;
+  rawMessageIds?: number[];
+  reportedAt: string;
+  eventReceivedAt?: string;
+  evidenceType: "text" | "image" | "image+text";
+  reporterSummary?: string;
+  sourceTexts?: string[];
+  notes: string;
+  reasonCategory: string | null;
+  items: LossReportItem[];
+  needsReview: boolean;
+}
+
+export interface LossReporterDailySummary {
+  reporter: string;
+  messageCount: number;
+  reportItems: LossReporterDailySummaryItem[];
+}
+
+export interface LossDailySummary {
+  date: string;
+  totalRelevantMessages: number;
+  totalReporters: number;
+  totalNeedsReview: number;
+  reporters: LossReporterDailySummary[];
 }

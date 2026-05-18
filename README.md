@@ -18,6 +18,7 @@
 - 将原始群消息写入 `storage/wechat-claw.sqlite`
 - 将图片消息落到 `storage/raw/YYYY/MM/DD/`
 - 对报损消息做第一版启发式结构化提取
+- 支持按人生成报损日报文本骨架
 
 ## 环境要求
 
@@ -44,6 +45,12 @@ npm install
 ```env
 WECHATY_PUPPET=wechaty-puppet-wechat
 WECHATY_PUPPET_SERVICE_TOKEN=
+WECHATY_SUMMARY_CRON=0 22 * * *
+WECHATY_LOSS_MERGE_WINDOW_SECONDS=60
+WECHATY_LOSS_EXTRACTION_PROVIDER=
+WECHATY_LOSS_EXTRACTION_MODEL=
+WECHATY_LOSS_EXTRACTION_API_KEY=
+WECHATY_LOSS_EXTRACTION_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 WECHATY_BOT_NAME=wechat-loss-bot
 WECHATY_TARGET_ROOM_TOPIC=门店食材报损群
 WECHATY_DELIVERY_CONTACT_NAME=你的主微信昵称
@@ -53,6 +60,13 @@ WECHATY_DELIVERY_CONTACT_NAME=你的主微信昵称
 
 - `WECHATY_PUPPET`: 具体接入方案名称
 - `WECHATY_PUPPET_SERVICE_TOKEN`: 仅 `wechaty-puppet-service` 等 service 模式需要
+- `WECHATY_SUMMARY_CRON`: 日报汇总周期，默认每天 `22:00`
+- `WECHATY_SUMMARY_PROMPT_TEMPLATE`: 总结提示词模板，可自定义
+- `WECHATY_LOSS_MERGE_WINDOW_SECONDS`: 同一人图文消息合并窗口，默认 `60` 秒
+- `WECHATY_LOSS_EXTRACTION_PROVIDER`: 报损提取模型提供商
+- `WECHATY_LOSS_EXTRACTION_MODEL`: 报损提取模型名
+- `WECHATY_LOSS_EXTRACTION_API_KEY`: 报损提取模型 API Key
+- `WECHATY_LOSS_EXTRACTION_BASE_URL`: 报损提取模型接口地址
 - `WECHATY_BOT_NAME`: 本地 bot 名称
 - `WECHATY_TARGET_ROOM_TOPIC`: 需要监听的群名
 - `WECHATY_DELIVERY_CONTACT_NAME`: 收测试回传消息的联系人昵称
@@ -124,6 +138,24 @@ npm run build
 npm run inspect:messages
 ```
 
+生成报损日报：
+
+```bash
+npm run summary:loss
+```
+
+生成最近 N 分钟报损汇总：
+
+```bash
+npm run summary:loss:recent
+```
+
+例如看最近 10 分钟：
+
+```bash
+npm run summary:loss:recent 10
+```
+
 生产运行：
 
 ```bash
@@ -166,6 +198,8 @@ npm start
 - [storage/wechat-claw.sqlite](/Users/ryan/DataDisk/Work/AI/wechat-claw/storage/wechat-claw.sqlite)
 - [storage/raw](/Users/ryan/DataDisk/Work/AI/wechat-claw/storage/raw)
 - `npm run inspect:messages`
+- `npm run summary:loss`
+- `npm run summary:loss:recent 10`
 
 ## 二维码文件
 
@@ -187,6 +221,19 @@ npm start
 - 场景路由
 - 多模态报损结构化提取
 - 日报汇总与发送
+
+说明：
+
+- 当前已经预留“模型优先、启发式回退”的报损提取链路
+- 如果没有填写 `WECHATY_LOSS_EXTRACTION_PROVIDER/MODEL/API_KEY`，系统会自动回退到本地启发式提取
+- 接入 Qwen3-VL-Flash 时，建议这样填写：
+
+```env
+WECHATY_LOSS_EXTRACTION_PROVIDER=qwen
+WECHATY_LOSS_EXTRACTION_MODEL=qwen3-vl-flash
+WECHATY_LOSS_EXTRACTION_API_KEY=你的百炼APIKey
+WECHATY_LOSS_EXTRACTION_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
+```
 
 ## 常见问题
 

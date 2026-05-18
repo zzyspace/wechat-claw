@@ -12,6 +12,8 @@
     "dev": "node --loader ts-node/esm src/app/bootstrap.ts",
     "doctor": "node --loader ts-node/esm src/app/doctor.ts",
     "inspect:messages": "node --loader ts-node/esm src/app/inspect-recent-messages.ts",
+    "summary:loss": "node --loader ts-node/esm src/app/render-loss-summary.ts",
+    "summary:loss:recent": "node --loader ts-node/esm src/app/render-loss-summary-recent.ts",
     "postinstall": "node scripts/patch-wechaty-puppet-wechat.mjs",
     "start": "node dist/app/bootstrap.js"
   },

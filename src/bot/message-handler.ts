@@ -1,9 +1,11 @@
 import type { Logger } from "../core/logging/logger.js";
 import { saveImageAttachment } from "../core/attachments/save-image-attachment.js";
+import { getAppConfig } from "../core/config/env.js";
 import { normalizeMessage } from "../core/messages/normalize-message.js";
 import { saveScenarioExtraction } from "../core/scenarios/scenario-extraction-repository.js";
 import { saveRawMessage } from "../core/storage/raw-message-repository.js";
 import { extractLossReportHeuristically } from "../scenarios/loss-report/heuristic-extractor.js";
+import { extractLossReportByModel } from "../scenarios/loss-report/model-provider.js";
 
 export interface MessageContext {
   targetRoomTopic?: string;
@@ -40,16 +42,13 @@ export async function handleMessage(message: any, context: MessageContext, logge
   const senderName = talker && typeof talker.name === "function" ? talker.name() : "unknown";
   const text = typeof message.text === "function" ? message.text() : "";
   const typeValue = typeof message.type === "function" ? message.type() : "unknown";
-  const normalizedText = text.trim() || "(非文本消息)";
+  const normalizedText = normalizeMessageText(text, typeValue);
   const messageId = typeof message.id === "function" ? message.id() : message.id || cryptoRandomId();
-  const sentAt =
-    typeof message.date === "function"
-      ? new Date(message.date()).toISOString()
-      : new Date().toISOString();
+  const eventReceivedAt = new Date().toISOString();
 
   const attachments = [];
 
-  if (String(typeValue).toLowerCase().includes("image") || Number(typeValue) === 3) {
+  if (isImageLikeMessage(typeValue, normalizedText)) {
     const imageAttachment = await saveImageAttachment(message);
     if (imageAttachment) {
       attachments.push(imageAttachment);
@@ -64,20 +63,40 @@ export async function handleMessage(message: any, context: MessageContext, logge
     senderName,
     messageType: String(typeValue),
     textContent: normalizedText,
-    sentAt,
+    eventReceivedAt,
     attachments,
   });
 
   const saveResult = saveRawMessage(normalized);
-  const lossReportExtraction = extractLossReportHeuristically({
-    rawMessageId: saveResult.rawMessageId,
-    channelName: roomTopic,
-    senderName,
-    messageType: String(typeValue),
-    textContent: normalizedText,
-    sentAt,
-    attachments,
-  });
+  const appConfig = getAppConfig();
+  const modelExtraction = await extractLossReportByModel(
+    {
+      rawMessageId: saveResult.rawMessageId,
+      channelName: roomTopic,
+      senderName,
+      textContent: normalizedText,
+      sentAt: eventReceivedAt,
+      attachments,
+    },
+    {
+      enabled: true,
+      provider: appConfig.lossExtractionProvider,
+      model: appConfig.lossExtractionModel,
+      apiKey: appConfig.lossExtractionApiKey,
+      baseUrl: appConfig.lossExtractionBaseUrl,
+    },
+  );
+  const lossReportExtraction =
+    modelExtraction ??
+    extractLossReportHeuristically({
+      rawMessageId: saveResult.rawMessageId,
+      channelName: roomTopic,
+      senderName,
+      messageType: String(typeValue),
+      textContent: normalizedText,
+      sentAt: eventReceivedAt,
+      attachments,
+    });
   const savedExtraction = saveScenarioExtraction({
     rawMessageId: saveResult.rawMessageId,
     scenarioCode: lossReportExtraction.scenarioCode,
@@ -118,4 +137,47 @@ export async function handleMessage(message: any, context: MessageContext, logge
 
 function cryptoRandomId() {
   return `generated_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function isImageLikeMessage(typeValue: unknown, normalizedText: string) {
+  const numericType = Number(typeValue);
+  const textType = String(typeValue).toLowerCase();
+
+  if (textType.includes("image")) {
+    return true;
+  }
+
+  if (numericType === 3 || numericType === 6) {
+    return true;
+  }
+
+  if (normalizedText.includes("<img ") || normalizedText.includes("&lt;img ")) {
+    return true;
+  }
+
+  return false;
+}
+
+function normalizeMessageText(text: string, typeValue: unknown) {
+  const trimmed = text.trim();
+
+  if (!trimmed) {
+    return "(非文本消息)";
+  }
+
+  if (isXmlImagePayload(trimmed, typeValue)) {
+    return "(非文本消息)";
+  }
+
+  return trimmed;
+}
+
+function isXmlImagePayload(text: string, typeValue: unknown) {
+  const numericType = Number(typeValue);
+
+  if (numericType === 6 && (text.includes("<img ") || text.includes("&lt;img "))) {
+    return true;
+  }
+
+  return false;
 }

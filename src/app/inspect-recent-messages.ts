@@ -12,7 +12,7 @@ function main() {
   for (const message of messages) {
     console.log("----");
     console.log(`id=${message.id}`);
-    console.log(`sent_at=${message.sentAt}`);
+    console.log(`event_received_at=${message.eventReceivedAt}`);
     console.log(`channel=${message.channelName}`);
     console.log(`sender=${message.senderName}`);
     console.log(`type=${message.messageType}`);
@@ -25,7 +25,7 @@ function main() {
 
     for (const extraction of message.scenarioExtractions) {
       console.log(
-        `scenario: ${extraction.scenarioCode} status=${extraction.status} confidence=${extraction.confidence} needs_review=${extraction.needsReview}`,
+        `scenario: ${extraction.scenarioCode} extractor=${extraction.extractorCode} status=${extraction.status} confidence=${extraction.confidence} needs_review=${extraction.needsReview}`,
       );
       console.log(`result=${JSON.stringify(extraction.resultJson)}`);
     }
