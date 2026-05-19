@@ -94,58 +94,58 @@ cleanup() {
 }
 trap cleanup EXIT
 
-awk \
-  -v state_dir="${STATE_DIR}" \
-  -v timezone="${TIMEZONE}" \
-  '
-  BEGIN {
-    has_state_dir = 0
-    has_timezone = 0
-  }
+trim_whitespace() {
+  local value="$1"
+  value="${value#"${value%%[![:space:]]*}"}"
+  value="${value%"${value##*[![:space:]]}"}"
+  printf '%s' "${value}"
+}
 
-  /^[[:space:]]*#/ { next }
-  /^[[:space:]]*$/ { next }
+has_state_dir=0
+has_timezone=0
 
-  {
-    if (match($0, /^[[:space:]]*([A-Za-z_][A-Za-z0-9_]*)=(.*)$/, parts)) {
-      key = parts[1]
-      value = parts[2]
+while IFS= read -r line || [[ -n "${line}" ]]; do
+  if [[ "${line}" =~ ^[[:space:]]*$ ]] || [[ "${line}" =~ ^[[:space:]]*# ]]; then
+    continue
+  fi
 
-      if (key == "WECHATY_STATE_DIR") {
-        print key "=" state_dir
-        has_state_dir = 1
-        next
-      }
+  if [[ "${line}" != *=* ]]; then
+    continue
+  fi
 
-      if (key == "WECHATY_TIMEZONE") {
-        print key "=" timezone
-        has_timezone = 1
-        next
-      }
+  key="${line%%=*}"
+  value="${line#*=}"
+  key="$(trim_whitespace "${key}")"
 
-      if (key == "WECHATY_SUMMARY_CRON") {
-        gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
-        if (value != "" && value !~ /^".*"$/ && value !~ /^'\''.*'\''$/ && value ~ /[[:space:]]/) {
-          value = "\"" value "\""
-        }
-        print key "=" value
-        next
-      }
+  case "${key}" in
+    WECHATY_STATE_DIR)
+      printf 'WECHATY_STATE_DIR=%s\n' "${STATE_DIR}" >> "${rendered_env}"
+      has_state_dir=1
+      ;;
+    WECHATY_TIMEZONE)
+      printf 'WECHATY_TIMEZONE=%s\n' "${TIMEZONE}" >> "${rendered_env}"
+      has_timezone=1
+      ;;
+    WECHATY_SUMMARY_CRON)
+      value="$(trim_whitespace "${value}")"
+      if [[ -n "${value}" && ! "${value}" =~ ^\".*\"$ && ! "${value}" =~ ^\'.*\'$ && "${value}" =~ [[:space:]] ]]; then
+        value="\"${value}\""
+      fi
+      printf 'WECHATY_SUMMARY_CRON=%s\n' "${value}" >> "${rendered_env}"
+      ;;
+    *)
+      printf '%s=%s\n' "${key}" "${value}" >> "${rendered_env}"
+      ;;
+  esac
+done < "${SOURCE_ENV_FILE}"
 
-      print key "=" value
-    }
-  }
+if [[ "${has_state_dir}" -eq 0 ]]; then
+  printf 'WECHATY_STATE_DIR=%s\n' "${STATE_DIR}" >> "${rendered_env}"
+fi
 
-  END {
-    if (!has_state_dir) {
-      print "WECHATY_STATE_DIR=" state_dir
-    }
-
-    if (!has_timezone) {
-      print "WECHATY_TIMEZONE=" timezone
-    }
-  }
-  ' "${SOURCE_ENV_FILE}" > "${rendered_env}"
+if [[ "${has_timezone}" -eq 0 ]]; then
+  printf 'WECHATY_TIMEZONE=%s\n' "${TIMEZONE}" >> "${rendered_env}"
+fi
 
 remote_tmp="/tmp/wechat-claw.env.$(date +%s).$$"
 
