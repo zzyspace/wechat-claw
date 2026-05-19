@@ -1,0 +1,129 @@
+import fs from "node:fs";
+
+import type { AppConfig } from "../config/env.js";
+import type { Logger } from "../logging/logger.js";
+import { classifyRuntimeError, extractErrorMessage, type RuntimeErrorCategory } from "./error-classification.js";
+import { ensureStateDir, getHealthArtifactPath } from "./state-paths.js";
+
+export type RuntimeHealthStatus = "starting" | "waiting_for_scan" | "logged_in" | "degraded" | "stopped";
+
+interface HealthErrorRecord {
+  at: string;
+  category: RuntimeErrorCategory;
+  message: string;
+}
+
+export interface RuntimeHealthSnapshot {
+  status: RuntimeHealthStatus;
+  pid: number;
+  botName: string;
+  puppet?: string;
+  startedAt: string;
+  lastScanAt: string | null;
+  lastLoginAt: string | null;
+  lastMessageAt: string | null;
+  lastSummaryAt: string | null;
+  lastError: HealthErrorRecord | null;
+}
+
+function writeJsonFile(path: string, value: unknown) {
+  const tempPath = `${path}.tmp`;
+  fs.writeFileSync(tempPath, `${JSON.stringify(value, null, 2)}\n`, "utf8");
+  fs.renameSync(tempPath, path);
+}
+
+export class HealthReporter {
+  private snapshot: RuntimeHealthSnapshot;
+
+  constructor(
+    private readonly config: AppConfig,
+    private readonly logger: Logger,
+  ) {
+    const startedAt = new Date().toISOString();
+
+    this.snapshot = {
+      status: "starting",
+      pid: process.pid,
+      botName: config.botName,
+      puppet: config.puppet,
+      startedAt,
+      lastScanAt: null,
+      lastLoginAt: null,
+      lastMessageAt: null,
+      lastSummaryAt: null,
+      lastError: null,
+    };
+  }
+
+  private persist() {
+    ensureStateDir(this.config);
+    writeJsonFile(getHealthArtifactPath(this.config), this.snapshot);
+  }
+
+  private update(patch: Partial<RuntimeHealthSnapshot>) {
+    this.snapshot = {
+      ...this.snapshot,
+      ...patch,
+    };
+    this.persist();
+  }
+
+  initialize() {
+    this.persist();
+  }
+
+  setStatus(status: RuntimeHealthStatus) {
+    this.update({ status });
+  }
+
+  markScan() {
+    this.update({
+      status: "waiting_for_scan",
+      lastScanAt: new Date().toISOString(),
+    });
+  }
+
+  markLogin() {
+    this.update({
+      status: "logged_in",
+      lastLoginAt: new Date().toISOString(),
+    });
+  }
+
+  markMessage() {
+    this.update({
+      lastMessageAt: new Date().toISOString(),
+    });
+  }
+
+  markSummary() {
+    this.update({
+      lastSummaryAt: new Date().toISOString(),
+    });
+  }
+
+  markError(
+    error: unknown,
+    options?: {
+      status?: RuntimeHealthStatus;
+      category?: RuntimeErrorCategory;
+    },
+  ) {
+    const category = options?.category ?? classifyRuntimeError(error);
+    const message = extractErrorMessage(error);
+
+    this.update({
+      status: options?.status ?? "degraded",
+      lastError: {
+        at: new Date().toISOString(),
+        category,
+        message,
+      },
+    });
+
+    this.logger.error("Runtime health recorded an error", {
+      category,
+      message,
+    });
+  }
+}

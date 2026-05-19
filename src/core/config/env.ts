@@ -6,6 +6,8 @@ export interface AppConfig {
   puppet?: string;
   puppetServiceToken?: string;
   botName: string;
+  stateDir: string;
+  timeZone: string;
   targetRoomTopic?: string;
   deliveryContactName?: string;
   summaryCron: string;
@@ -27,6 +29,16 @@ function readOptionalEnv(name: string): string | undefined {
   return value ? value : undefined;
 }
 
+function readStringEnv(name: string, fallback: string): string {
+  const raw = process.env[name];
+
+  if (raw === undefined) {
+    return fallback;
+  }
+
+  return raw.trim();
+}
+
 function isServicePuppet(puppet?: string): boolean {
   return puppet === "wechaty-puppet-service";
 }
@@ -41,14 +53,33 @@ function readPositiveNumberEnv(name: string, fallback: number): number {
   return Number.isFinite(value) && value > 0 ? value : fallback;
 }
 
+function isValidTimeZone(timeZone: string): boolean {
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone }).format(new Date());
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function isValidCronExpression(expression: string): boolean {
+  if (!expression) {
+    return true;
+  }
+
+  return expression.trim().split(/\s+/).length === 5;
+}
+
 export function getAppConfig(): AppConfig {
   return {
     puppet: readOptionalEnv("WECHATY_PUPPET"),
     puppetServiceToken: readOptionalEnv("WECHATY_PUPPET_SERVICE_TOKEN"),
     botName: process.env.WECHATY_BOT_NAME?.trim() || "wechat-loss-bot",
+    stateDir: readStringEnv("WECHATY_STATE_DIR", "/var/lib/wechat-claw") || "/var/lib/wechat-claw",
+    timeZone: readStringEnv("WECHATY_TIMEZONE", "Asia/Shanghai") || "Asia/Shanghai",
     targetRoomTopic: readOptionalEnv("WECHATY_TARGET_ROOM_TOPIC"),
     deliveryContactName: readOptionalEnv("WECHATY_DELIVERY_CONTACT_NAME"),
-    summaryCron: process.env.WECHATY_SUMMARY_CRON?.trim() || "0 22 * * *",
+    summaryCron: readStringEnv("WECHATY_SUMMARY_CRON", "0 22 * * *"),
     summaryPromptTemplate:
       process.env.WECHATY_SUMMARY_PROMPT_TEMPLATE?.trim() ||
       [
@@ -82,12 +113,30 @@ export function validateAppConfig(config: AppConfig): ConfigValidationResult {
     errors.push("Missing WECHATY_DELIVERY_CONTACT_NAME");
   }
 
+  if (!config.stateDir.trim()) {
+    errors.push("Missing WECHATY_STATE_DIR");
+  }
+
+  if (!config.timeZone.trim()) {
+    errors.push("Missing WECHATY_TIMEZONE");
+  } else if (!isValidTimeZone(config.timeZone)) {
+    errors.push(`Invalid WECHATY_TIMEZONE: ${config.timeZone}`);
+  }
+
+  if (!isValidCronExpression(config.summaryCron)) {
+    errors.push(`Invalid WECHATY_SUMMARY_CRON: ${config.summaryCron}`);
+  }
+
   if (isServicePuppet(config.puppet) && !config.puppetServiceToken) {
     errors.push("Missing WECHATY_PUPPET_SERVICE_TOKEN for wechaty-puppet-service");
   }
 
   if (!isServicePuppet(config.puppet) && !config.puppetServiceToken) {
     warnings.push("WECHATY_PUPPET_SERVICE_TOKEN is empty. This is expected for tokenless puppets such as wechaty-puppet-wechat.");
+  }
+
+  if (!config.summaryCron) {
+    warnings.push("WECHATY_SUMMARY_CRON is empty. Daily summary scheduler is disabled.");
   }
 
   return {

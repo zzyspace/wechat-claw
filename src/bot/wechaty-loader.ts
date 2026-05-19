@@ -11,3 +11,18 @@ export async function loadWechatyModule(): Promise<WechatyModule> {
     );
   }
 }
+
+export async function loadPuppetModule(puppet?: string): Promise<void> {
+  if (!puppet) {
+    return;
+  }
+
+  try {
+    await import(puppet);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      `Failed to load puppet runtime ${puppet}. Verify production dependencies and Chromium runtime libraries. Original error: ${message}`,
+    );
+  }
+}

@@ -19,6 +19,9 @@ git status
 - 二维码落文件
 - 原始消息落 SQLite
 - 图片附件落本地文件
+- 登录态显式落 memory-card
+- 进程内日报调度
+- health.json 健康状态写入
 
 ## 3. 安装依赖
 
@@ -42,6 +45,9 @@ WECHATY_PUPPET=wechaty-puppet-wechat
 WECHATY_PUPPET_SERVICE_TOKEN=
 WECHATY_PUPPET_WECHAT_PUPPETEER_UOS=1
 WECHATY_BOT_NAME=wechat-loss-bot
+WECHATY_STATE_DIR=/private/tmp/wechat-claw-state
+WECHATY_TIMEZONE=Asia/Shanghai
+WECHATY_SUMMARY_CRON=0 22 * * *
 WECHATY_TARGET_ROOM_TOPIC=AI测试群
 WECHATY_DELIVERY_CONTACT_NAME=Ryan。
 ```
@@ -51,7 +57,7 @@ WECHATY_DELIVERY_CONTACT_NAME=Ryan。
 先检查配置：
 
 ```bash
-npm run doctor
+WECHATY_STATE_DIR=/private/tmp/wechat-claw-state npm run doctor
 ```
 
 再启动：
@@ -62,26 +68,31 @@ npm run dev
 
 如果需要二维码，查看：
 
-- [storage/latest-qrcode.txt](/Users/ryan/DataDisk/Work/AI/wechat-claw/storage/latest-qrcode.txt)
+- `/private/tmp/wechat-claw-state/latest-qrcode.txt`
+
+如果要看健康状态：
+
+- `/private/tmp/wechat-claw-state/health.json`
 
 ## 6. 如果要检查存储结果
 
 消息数据库：
 
-- [storage/wechat-claw.sqlite](/Users/ryan/DataDisk/Work/AI/wechat-claw/storage/wechat-claw.sqlite)
+- `/private/tmp/wechat-claw-state/wechat-claw.sqlite`
 
 图片附件目录：
 
-- [storage/raw](/Users/ryan/DataDisk/Work/AI/wechat-claw/storage/raw)
+- `/private/tmp/wechat-claw-state/raw`
 
 ## 7. 会保留的内容
 
 - git 提交
 - 代码改动
 - `.env`
-- `wechat-loss-bot.memory-card.json`
+- `WECHATY_STATE_DIR` 下的 memory-card
 - SQLite 数据
 - 已下载图片
+- health.json
 
 ## 8. 不会保留的内容
 
@@ -91,7 +102,9 @@ npm run dev
 
 ## 9. 下一个开发目标
 
-下一步建议继续做：
+服务器部署时，重点关注：
 
-1. 增加查看最近消息的本地脚本
-2. 实现报损场景结构化提取
+1. `WECHATY_STATE_DIR` 是否可写
+2. systemd 服务是否加载了 `/etc/wechat-claw.env`
+3. 登录二维码是否生成到 `latest-qrcode.txt`
+4. `health.json` 的 `status` 是否进入 `logged_in`

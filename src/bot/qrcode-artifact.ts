@@ -2,6 +2,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { createRequire } from "node:module";
 
+import { getQrcodeArtifactPath } from "../core/runtime/state-paths.js";
+
 const require = createRequire(import.meta.url);
 
 function ensureDirectoryForFile(filePath: string) {
@@ -26,7 +28,7 @@ function renderAsciiQrcode(qrcode: string): string {
 }
 
 export function writeLatestQrcodeArtifact(qrcodeUrl: string, qrcode: string) {
-  const artifactPath = path.join(process.cwd(), "storage", "latest-qrcode.txt");
+  const artifactPath = getQrcodeArtifactPath();
   const asciiQrcode = renderAsciiQrcode(qrcode);
   const content = [
     `updated_at=${new Date().toISOString()}`,

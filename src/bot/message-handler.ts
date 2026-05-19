@@ -4,21 +4,13 @@ import { getAppConfig } from "../core/config/env.js";
 import { normalizeMessage } from "../core/messages/normalize-message.js";
 import { saveScenarioExtraction } from "../core/scenarios/scenario-extraction-repository.js";
 import { saveRawMessage } from "../core/storage/raw-message-repository.js";
+import { sendTextToNamedContact } from "./delivery-contact.js";
 import { extractLossReportHeuristically } from "../scenarios/loss-report/heuristic-extractor.js";
 import { extractLossReportByModel } from "../scenarios/loss-report/model-provider.js";
 
 export interface MessageContext {
   targetRoomTopic?: string;
   deliveryContactName?: string;
-}
-
-async function safeTalk(contact: any, text: string, logger: Logger) {
-  if (!contact) {
-    logger.warn("Delivery contact not found");
-    return;
-  }
-
-  await contact.say(text);
 }
 
 export async function handleMessage(message: any, context: MessageContext, logger: Logger) {
@@ -123,13 +115,14 @@ export async function handleMessage(message: any, context: MessageContext, logge
   }
 
   const bot = typeof message.wechaty === "function" ? message.wechaty() : message.wechaty;
-  const deliveryContact =
-    bot && typeof bot.Contact?.find === "function"
-      ? await bot.Contact.find({ name: context.deliveryContactName })
-      : null;
+  if (!bot) {
+    logger.warn("Wechaty instance unavailable for delivery contact notification");
+    return;
+  }
 
-  await safeTalk(
-    deliveryContact,
+  await sendTextToNamedContact(
+    bot,
+    context.deliveryContactName,
     `[wechat-claw] 已收到群消息\n群聊: ${roomTopic}\n发送人: ${senderName}\n消息类型: ${String(typeValue)}\n内容: ${normalizedText}\n附件数: ${attachments.length}\n入库: ${saveResult.inserted ? "新消息" : "已去重"}\n报损提取: ${savedExtraction.status} / review=${savedExtraction.needsReview ? "是" : "否"}`,
     logger,
   );

@@ -1,9 +1,20 @@
 import { getAppConfig, validateAppConfig } from "../core/config/env.js";
 import type { Logger } from "../core/logging/logger.js";
+import { getMemoryCardFilePath } from "../core/runtime/state-paths.js";
 import { loadWechatyModule } from "./wechaty-loader.js";
+import { sendTextToNamedContact } from "./delivery-contact.js";
 import { handleMessage } from "./message-handler.js";
 import { writeLatestQrcodeArtifact } from "./qrcode-artifact.js";
 import { renderTerminalQrcode } from "./terminal-qrcode.js";
+import type { WechatyInstance } from "./types.js";
+
+export interface BotLifecycleHooks {
+  onScan?: (payload: { statusName: string; qrcodeUrl: string; artifactPath: string }) => void;
+  onLogin?: (payload: { name: string }) => void;
+  onLogout?: (payload: { name: string }) => void;
+  onError?: (error: Error) => void;
+  onMessage?: () => void;
+}
 
 function resolveScanStatusName(scanStatus: Record<string, string | number>, value: unknown) {
   for (const [key, statusValue] of Object.entries(scanStatus)) {
@@ -15,7 +26,10 @@ function resolveScanStatusName(scanStatus: Record<string, string | number>, valu
   return String(value);
 }
 
-export async function startBot(logger: Logger) {
+export async function startBot(
+  logger: Logger,
+  hooks: BotLifecycleHooks = {},
+): Promise<WechatyInstance> {
   const config = getAppConfig();
   const validation = validateAppConfig(config);
 
@@ -28,19 +42,31 @@ export async function startBot(logger: Logger) {
   }
 
   const { WechatyBuilder, ScanStatus, log } = await loadWechatyModule();
+  const { MemoryCard } = await import("memory-card");
 
   log.info("Wechaty", "Starting bot with configured puppet");
   logger.info("Startup config loaded", {
     botName: config.botName,
     puppet: config.puppet,
+    stateDir: config.stateDir,
+    timeZone: config.timeZone,
     targetRoomTopic: config.targetRoomTopic,
     deliveryContactName: config.deliveryContactName,
     puppetServiceTokenConfigured: Boolean(config.puppetServiceToken),
   });
 
+  const memory = new MemoryCard({
+    name: getMemoryCardFilePath(config),
+    storageOptions: {
+      type: "file",
+    },
+  });
+  await memory.load();
+
   const botOptions: Record<string, unknown> = {
     name: config.botName,
     puppet: config.puppet,
+    memory,
   };
 
   if (config.puppetServiceToken) {
@@ -61,6 +87,11 @@ export async function startBot(logger: Logger) {
       artifactPath,
       qrcodeUrl,
     });
+    hooks.onScan?.({
+      statusName,
+      qrcodeUrl,
+      artifactPath,
+    });
 
     const rendered = await renderTerminalQrcode(qrcode);
 
@@ -76,30 +107,25 @@ export async function startBot(logger: Logger) {
   bot.on("login", async (user: any) => {
     const name = user && typeof user.name === "function" ? user.name() : "unknown";
     logger.info("Bot logged in", { name });
+    hooks.onLogin?.({ name });
 
     if (!config.deliveryContactName) {
       return;
     }
 
     try {
-      const deliveryContact =
-        typeof bot.Contact?.find === "function"
-          ? await bot.Contact.find({ name: config.deliveryContactName })
-          : null;
+      const delivered = await sendTextToNamedContact(
+        bot,
+        config.deliveryContactName,
+        `[wechat-claw] bot 已上线\n监听群: ${config.targetRoomTopic}\n当前账号: ${name}`,
+        logger,
+      );
 
-      if (!deliveryContact) {
-        logger.warn("Delivery contact not found after login", {
+      if (delivered) {
+        logger.info("Sent online notice", {
           deliveryContactName: config.deliveryContactName,
         });
-        return;
       }
-
-      await deliveryContact.say(
-        `[wechat-claw] bot 已上线\n监听群: ${config.targetRoomTopic}\n当前账号: ${name}`,
-      );
-      logger.info("Sent online notice", {
-        deliveryContactName: config.deliveryContactName,
-      });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       logger.error("Failed to send online notice", { message });
@@ -109,6 +135,7 @@ export async function startBot(logger: Logger) {
   bot.on("logout", (user: any) => {
     const name = user && typeof user.name === "function" ? user.name() : "unknown";
     logger.warn("Bot logged out", { name });
+    hooks.onLogout?.({ name });
   });
 
   bot.on("error", (error: Error) => {
@@ -116,9 +143,11 @@ export async function startBot(logger: Logger) {
       message: error.message,
       stack: error.stack,
     });
+    hooks.onError?.(error);
   });
 
   bot.on("message", async (message: any) => {
+    hooks.onMessage?.();
     try {
       await handleMessage(
         message,
@@ -138,4 +167,6 @@ export async function startBot(logger: Logger) {
   logger.info("Bot started", {
     nextStep: "Scan the QR code with the bot account and wait for the online notice.",
   });
+
+  return bot;
 }

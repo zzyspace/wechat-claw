@@ -2,6 +2,9 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
+import { getAppConfig } from "../config/env.js";
+import { getRawStorageDir } from "../runtime/state-paths.js";
+import { getZonedDateParts } from "../runtime/timezone.js";
 import type { StoredAttachment } from "../storage/types.js";
 
 function ensureDir(dirPath: string) {
@@ -36,14 +39,13 @@ export async function saveImageAttachment(message: any): Promise<StoredAttachmen
   const fileBuffer = await fileBox.toBuffer();
   const sha256 = crypto.createHash("sha256").update(fileBuffer).digest("hex");
   const ext = path.extname(fileName) || ".bin";
-  const now = new Date();
+  const config = getAppConfig();
+  const zonedNow = getZonedDateParts(new Date(), config.timeZone);
   const targetDir = path.join(
-    process.cwd(),
-    "storage",
-    "raw",
-    String(now.getFullYear()),
-    String(now.getMonth() + 1).padStart(2, "0"),
-    String(now.getDate()).padStart(2, "0"),
+    getRawStorageDir(config),
+    String(zonedNow.year),
+    String(zonedNow.month).padStart(2, "0"),
+    String(zonedNow.day).padStart(2, "0"),
   );
 
   ensureDir(targetDir);

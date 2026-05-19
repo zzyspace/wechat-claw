@@ -1,0 +1,15 @@
+[Unit]
+Description=wechat-claw bot service
+After=network.target
+
+[Service]
+Type=simple
+User=wechatclaw
+WorkingDirectory=/opt/wechat-claw/current
+EnvironmentFile=/etc/wechat-claw.env
+ExecStart=/usr/bin/node dist/app/bootstrap.js
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

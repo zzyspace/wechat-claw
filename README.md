@@ -7,6 +7,8 @@
 - 将群消息回发给指定联系人
 - 原始消息落 SQLite
 - 图片附件落本地文件
+- 进程内定时发送报损日报
+- 显式登录态与运行状态目录
 
 ## 当前能力
 
@@ -15,10 +17,12 @@
 - 监听群消息
 - 按群名过滤目标群
 - 将收到的消息转发给指定联系人，作为联调验证
-- 将原始群消息写入 `storage/wechat-claw.sqlite`
-- 将图片消息落到 `storage/raw/YYYY/MM/DD/`
+- 将原始群消息写入 `WECHATY_STATE_DIR/wechat-claw.sqlite`
+- 将图片消息落到 `WECHATY_STATE_DIR/raw/YYYY/MM/DD/`
 - 对报损消息做第一版启发式结构化提取
 - 支持按人生成报损日报文本骨架
+- 支持按 cron 在 bot 进程内直接发送日报
+- 将二维码、登录态、健康状态统一写入 `WECHATY_STATE_DIR`
 
 ## 环境要求
 
@@ -45,6 +49,8 @@ npm install
 ```env
 WECHATY_PUPPET=wechaty-puppet-wechat
 WECHATY_PUPPET_SERVICE_TOKEN=
+WECHATY_STATE_DIR=/var/lib/wechat-claw
+WECHATY_TIMEZONE=Asia/Shanghai
 WECHATY_SUMMARY_CRON=0 22 * * *
 WECHATY_LOSS_MERGE_WINDOW_SECONDS=60
 WECHATY_LOSS_EXTRACTION_PROVIDER=
@@ -60,7 +66,9 @@ WECHATY_DELIVERY_CONTACT_NAME=你的主微信昵称
 
 - `WECHATY_PUPPET`: 具体接入方案名称
 - `WECHATY_PUPPET_SERVICE_TOKEN`: 仅 `wechaty-puppet-service` 等 service 模式需要
-- `WECHATY_SUMMARY_CRON`: 日报汇总周期，默认每天 `22:00`
+- `WECHATY_STATE_DIR`: 统一状态目录，包含 SQLite、附件、二维码、health、memory-card
+- `WECHATY_TIMEZONE`: 日期边界和 cron 解释时区，默认 `Asia/Shanghai`
+- `WECHATY_SUMMARY_CRON`: 日报汇总周期，默认每天 `22:00`，留空表示关闭定时日报
 - `WECHATY_SUMMARY_PROMPT_TEMPLATE`: 总结提示词模板，可自定义
 - `WECHATY_LOSS_MERGE_WINDOW_SECONDS`: 同一人图文消息合并窗口，默认 `60` 秒
   当前规则：
@@ -84,6 +92,8 @@ WECHATY_PUPPET=wechaty-puppet-wechat
 WECHATY_PUPPET_SERVICE_TOKEN=
 WECHATY_PUPPET_WECHAT_PUPPETEER_UOS=1
 WECHATY_BOT_NAME=wechat-loss-bot
+WECHATY_STATE_DIR=/private/tmp/wechat-claw-state
+WECHATY_TIMEZONE=Asia/Shanghai
 WECHATY_TARGET_ROOM_TOPIC=AI测试群
 WECHATY_DELIVERY_CONTACT_NAME=你的主微信昵称
 ```
@@ -99,6 +109,8 @@ WECHATY_DELIVERY_CONTACT_NAME=你的主微信昵称
 WECHATY_PUPPET=wechaty-puppet-service
 WECHATY_PUPPET_SERVICE_TOKEN=puppet_paimon_xxx
 WECHATY_BOT_NAME=wechat-loss-bot
+WECHATY_STATE_DIR=/private/tmp/wechat-claw-state
+WECHATY_TIMEZONE=Asia/Shanghai
 WECHATY_TARGET_ROOM_TOPIC=AI测试群
 WECHATY_DELIVERY_CONTACT_NAME=你的主微信昵称
 ```
@@ -117,11 +129,20 @@ WECHATY_DELIVERY_CONTACT_NAME=你的主微信昵称
 npm run doctor
 ```
 
+如果你是在本机开发，而不是 Linux 服务器，建议先显式指定一个可写目录：
+
+```bash
+WECHATY_STATE_DIR=/private/tmp/wechat-claw-state npm run doctor
+```
+
 预期：
 
 - 输出当前配置摘要
+- `State directory check passed`
+- `Summary cron check passed`
 - 缺少必要配置时直接报错退出
 - `Wechaty module check passed`
+- `Puppet runtime check passed`
 - `Doctor check passed`
 
 开发模式：
@@ -183,7 +204,7 @@ npm start
 6. 观察终端：
    - 若支持终端二维码，会直接显示二维码
    - 否则日志里会打印二维码链接
-   - 同时程序会写入 [storage/latest-qrcode.txt](/Users/ryan/DataDisk/Work/AI/wechat-claw/storage/latest-qrcode.txt)
+   - 同时程序会写入 `WECHATY_STATE_DIR/latest-qrcode.txt`
 7. 用机器人微信号扫码登录。
 8. 登录成功后，程序会向 `WECHATY_DELIVERY_CONTACT_NAME` 发送一条 bot 上线通知。
 9. 在目标群里发一条测试消息。
@@ -199,8 +220,8 @@ npm start
 
 如果要额外验证存储链路，再检查：
 
-- [storage/wechat-claw.sqlite](/Users/ryan/DataDisk/Work/AI/wechat-claw/storage/wechat-claw.sqlite)
-- [storage/raw](/Users/ryan/DataDisk/Work/AI/wechat-claw/storage/raw)
+- `WECHATY_STATE_DIR/wechat-claw.sqlite`
+- `WECHATY_STATE_DIR/raw`
 - `npm run inspect:messages`
 - `npm run summary:loss`
 - `npm run summary:loss:recent 10`
@@ -209,7 +230,7 @@ npm start
 
 每次出现登录二维码时，程序都会刷新这个文件：
 
-- [storage/latest-qrcode.txt](/Users/ryan/DataDisk/Work/AI/wechat-claw/storage/latest-qrcode.txt)
+- `WECHATY_STATE_DIR/latest-qrcode.txt`
 
 文件里包含：
 
@@ -217,6 +238,72 @@ npm start
 - ASCII 终端二维码
 
 如果你看不到终端实时输出，直接打开这个文件即可。
+
+## 健康状态文件
+
+每次启动后，程序都会维护：
+
+- `WECHATY_STATE_DIR/health.json`
+
+当前字段包括：
+
+- `status`
+- `pid`
+- `botName`
+- `puppet`
+- `startedAt`
+- `lastScanAt`
+- `lastLoginAt`
+- `lastMessageAt`
+- `lastSummaryAt`
+- `lastError`
+
+## Linux 单机部署
+
+推荐目标：
+
+- `Ubuntu 22.04/24.04 x86_64`
+- `Node.js 20`
+- `systemd`
+- 不使用 Docker
+
+建议目录约定：
+
+- 代码目录：`/opt/wechat-claw/current`
+- 状态目录：`/var/lib/wechat-claw`
+- 环境变量文件：`/etc/wechat-claw.env`
+- systemd 服务：`deploy/wechat-claw.service`
+
+部署步骤：
+
+```bash
+git clone <your-repo> /opt/wechat-claw/current
+cd /opt/wechat-claw/current
+npm ci
+npm run build
+sudo systemctl restart wechat-claw
+```
+
+`/etc/wechat-claw.env` 最少包含：
+
+```env
+WECHATY_PUPPET=wechaty-puppet-wechat
+WECHATY_PUPPET_WECHAT_PUPPETEER_UOS=1
+WECHATY_BOT_NAME=wechat-loss-bot
+WECHATY_STATE_DIR=/var/lib/wechat-claw
+WECHATY_TIMEZONE=Asia/Shanghai
+WECHATY_SUMMARY_CRON=0 22 * * *
+WECHATY_TARGET_ROOM_TOPIC=AI测试群
+WECHATY_DELIVERY_CONTACT_NAME=你的主微信昵称
+```
+
+常用排障入口：
+
+- `journalctl -u wechat-claw -f`
+- `/var/lib/wechat-claw/health.json`
+- `/var/lib/wechat-claw/latest-qrcode.txt`
+
+首次登录或掉线重登时，直接查看二维码文件并扫码即可。
 
 ## 下一步
 
