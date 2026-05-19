@@ -76,7 +76,8 @@ export function buildLossDailySummaryWithMergeWindow(
     const shouldMerge =
       existing.currentDraft !== undefined &&
       lastTime !== null &&
-      Math.abs(currentTime - lastTime) <= mergeWindowMs;
+      Math.abs(currentTime - lastTime) <= mergeWindowMs &&
+      canMergeDraft(existing.currentDraft, row, result);
 
     if (shouldMerge && existing.currentDraft) {
       mergeRowIntoDraft(existing.currentDraft, row, result, relevant);
@@ -173,6 +174,23 @@ function mergeRowIntoDraft(
   draft.reasonCategory = mergeReasonCategory(draft.reasonCategory, result.reasonCategory);
   draft.reporterSummary = mergeReporterSummary(draft.reporterSummary, result.reporterSummary);
   draft.items = mergeItems(draft.items, result.items);
+}
+
+function canMergeDraft(
+  draft: DraftGroup,
+  row: ExtractionRow,
+  result: {
+    evidenceType: "text" | "image" | "image+text";
+  },
+) {
+  const draftAlreadyHasImage = draft.evidenceType === "image" || draft.evidenceType === "image+text";
+  const currentIsImage = result.evidenceType === "image" || result.evidenceType === "image+text";
+
+  if (draftAlreadyHasImage && currentIsImage) {
+    return false;
+  }
+
+  return true;
 }
 
 function finalizeDraft(
@@ -330,7 +348,7 @@ function mergeSourceTexts(existing: string[] | undefined, textContent: string) {
   const next = [...(existing ?? [])];
   const normalized = textContent.trim();
 
-  if (!normalized || normalized === "(非文本消息)") {
+  if (!hasMeaningfulSourceText(normalized)) {
     return next;
   }
 
@@ -339,6 +357,11 @@ function mergeSourceTexts(existing: string[] | undefined, textContent: string) {
   }
 
   return next;
+}
+
+function hasMeaningfulSourceText(textContent: string) {
+  const normalized = textContent.trim();
+  return Boolean(normalized && normalized !== "(非文本消息)");
 }
 
 export function renderLossDailySummaryText(summary: LossDailySummary, promptTemplate: string): string {
@@ -386,7 +409,7 @@ function buildDisplayReason(item: LossReporterDailySummaryItem) {
   const reasonLabel = item.reasonCategory || preferReasonCategory(item.reasonCategory, item.notes) || "未说明";
   const sourceText = chooseSourceText(item.sourceTexts, reasonLabel, item.reporterSummary);
 
-  return sourceText ? `${reasonLabel} (${sourceText})` : reasonLabel;
+  return sourceText || reasonLabel;
 }
 
 function chooseSourceText(sourceTexts: string[] | undefined, fallback: string, reporterSummary?: string) {
@@ -409,6 +432,24 @@ function simplifyReporterSummary(reporterSummary: string | undefined, reasonCate
     return reasonCategory ? `${reasonCategory}（未识别具体物品）` : "未识别具体物品";
   }
 
+  const directNounPatterns = [
+    /破碎的([^，。；]+)/,
+    /有泡沫残留的([^，。；]+)/,
+    /手持一支([^，。；]+)/,
+    /手持一个([^，。；]+)/,
+    /手持一块([^，。；]+)/,
+    /盘中有一块([^，。；]+)/,
+    /盘中有一份([^，。；]+)/,
+    /一把([^，。；]+)/,
+  ];
+
+  for (const pattern of directNounPatterns) {
+    const match = reporterSummary.match(pattern);
+    if (match?.[1]) {
+      return normalizeThingName(match[1]);
+    }
+  }
+
   const patterns = [
     /一块([^，。；]+)/,
     /一份([^，。；]+)/,
@@ -420,7 +461,7 @@ function simplifyReporterSummary(reporterSummary: string | undefined, reasonCate
   for (const pattern of patterns) {
     const match = reporterSummary.match(pattern);
     if (match?.[1]) {
-      return match[1];
+      return normalizeThingName(match[1]);
     }
   }
 
@@ -430,6 +471,14 @@ function simplifyReporterSummary(reporterSummary: string | undefined, reasonCate
 
   if (reporterSummary.includes("蟹")) {
     return "蟹";
+  }
+
+  if (reporterSummary.includes("电子蜡烛")) {
+    return "电子蜡烛";
+  }
+
+  if (reporterSummary.includes("玻璃状物体")) {
+    return "玻璃状物体";
   }
 
   return reporterSummary;
@@ -449,4 +498,20 @@ function inferShortReasonFromSummary(reporterSummary: string | undefined) {
   }
 
   return "";
+}
+
+function normalizeThingName(text: string) {
+  return text
+    .replace(/，.*$/, "")
+    .replace(/置于.*$/, "")
+    .replace(/均无法.*$/, "")
+    .replace(/疑似.*$/, "")
+    .replace(/底部有.*$/, "")
+    .replace(/杯口有.*$/, "")
+    .replace(/杯底有.*$/, "")
+    .replace(/有明显.*$/, "")
+    .replace(/带盖的/, "")
+    .replace(/透明的?/, "")
+    .replace(/白色的?/, "")
+    .trim();
 }

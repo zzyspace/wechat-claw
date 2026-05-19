@@ -85,7 +85,9 @@ function buildPrompt(input: LossReportModelExtractionInput) {
     "必须返回 JSON，不要输出额外解释。",
     "JSON 字段：is_relevant, reporter_summary, reason_category, notes, items。",
     "items 内字段：name, quantity, unit, confidence。",
-    "如果只有图片无法确定具体物品，也要保留 is_relevant=true，并把 items 设为空数组。",
+    "如果只有图片，也要尽量给出一个简短的物品名称，例如：玻璃杯、电子蜡烛、饼状食物、玻璃状物体。",
+    "只有在完全无法识别物品时，才把 items 设为空数组。",
+    "reporter_summary 必须是简短名词性描述，不要写完整视觉分析句子。",
     "notes 只保留简短、直接的提取结论，不要写长段分析。",
     `发送人：${input.senderName}`,
     `群聊：${input.channelName}`,
@@ -222,21 +224,23 @@ export async function extractLossReportByModel(
       unit: item.unit ?? null,
       confidence: typeof item.confidence === "number" ? item.confidence : 0.7,
     })) ?? fallbackItems;
-
-  const relevant = result?.is_relevant ?? (imageExists || normalizedItems.length > 0);
   const reporterSummary =
     result?.reporter_summary ??
     (normalizedItems.length > 0
       ? normalizedItems.map((item) => `${item.name ?? "未识别物品"}${item.quantity !== null ? ` ${item.quantity}${item.unit ?? ""}` : ""}`).join("；")
       : "未识别具体物品");
+  const completedItems =
+    normalizedItems.length > 0 ? normalizedItems : inferFallbackItemFromSummary(reporterSummary);
+
+  const relevant = result?.is_relevant ?? (imageExists || normalizedItems.length > 0);
   const hasHumanText = input.textContent !== "(非文本消息)" && input.textContent.trim().length > 0;
 
   return {
     scenarioCode: "loss-report",
     extractorCode: `model-${config.provider}-${config.model}`,
     status: relevant ? "extracted" : "ignored",
-    confidence: normalizedItems.length > 0 ? 0.84 : imageExists ? 0.68 : 0.55,
-    needsReview: normalizedItems.length === 0 || imageExists,
+    confidence: completedItems.length > 0 ? 0.84 : imageExists ? 0.68 : 0.55,
+    needsReview: completedItems.length === 0 || imageExists,
     resultJson: {
       eventType: "loss_report",
       rawMessageId: input.rawMessageId,
@@ -248,7 +252,7 @@ export async function extractLossReportByModel(
       reporterSummary,
       reasonCategory: result?.reason_category ?? null,
       notes: normalizeModelNotes(result?.notes, hasHumanText ? notes : ""),
-      items: normalizedItems,
+      items: completedItems,
     },
   };
 }
@@ -280,4 +284,63 @@ function isModelAnalysisNote(text: string) {
     text.includes("无法提取") ||
     text.includes("无法确认")
   );
+}
+
+function inferFallbackItemFromSummary(summary: string): LossReportItem[] {
+  const simplifiedName = extractSimpleThingName(summary);
+
+  if (!simplifiedName) {
+    return [];
+  }
+
+  return [
+    {
+      name: simplifiedName,
+      quantity: null,
+      unit: null,
+      confidence: 0.6,
+    },
+  ];
+}
+
+function extractSimpleThingName(summary: string) {
+  const directMatches = [
+    /玻璃杯/,
+    /电子蜡烛/,
+    /玻璃状物体/,
+    /饼状食物/,
+    /红色刷子/,
+    /扫帚/,
+    /蟹/,
+  ];
+
+  for (const pattern of directMatches) {
+    const match = summary.match(pattern);
+    if (match?.[0]) {
+      return match[0];
+    }
+  }
+
+  const nounPatterns = [
+    /一块([^，。；]+)/,
+    /一份([^，。；]+)/,
+    /一个([^，。；]+)/,
+    /一支([^，。；]+)/,
+    /一把([^，。；]+)/,
+  ];
+
+  for (const pattern of nounPatterns) {
+    const match = summary.match(pattern);
+    if (match?.[1]) {
+      return match[1]
+        .replace(/严重烧焦的?/, "")
+        .replace(/有明显裂纹的?/, "")
+        .replace(/有泡沫残留的?/, "")
+        .replace(/白色的?/, "")
+        .replace(/透明的?/, "")
+        .trim();
+    }
+  }
+
+  return "";
 }

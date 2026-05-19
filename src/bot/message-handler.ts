@@ -39,7 +39,7 @@ export async function handleMessage(message: any, context: MessageContext, logge
   }
 
   const talker = typeof message.talker === "function" ? await message.talker() : null;
-  const senderName = talker && typeof talker.name === "function" ? talker.name() : "unknown";
+  const senderName = await resolveSenderName(room, talker);
   const text = typeof message.text === "function" ? message.text() : "";
   const typeValue = typeof message.type === "function" ? message.type() : "unknown";
   const normalizedText = normalizeMessageText(text, typeValue);
@@ -180,4 +180,27 @@ function isXmlImagePayload(text: string, typeValue: unknown) {
   }
 
   return false;
+}
+
+async function resolveSenderName(room: any, talker: any) {
+  if (!talker) {
+    return "unknown";
+  }
+
+  if (room && typeof room.alias === "function") {
+    try {
+      const roomAlias = await room.alias(talker);
+      if (roomAlias && String(roomAlias).trim()) {
+        return String(roomAlias).trim();
+      }
+    } catch {
+      // ignore and fall back to contact nickname
+    }
+  }
+
+  if (typeof talker.name === "function") {
+    return talker.name();
+  }
+
+  return "unknown";
 }

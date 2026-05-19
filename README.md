@@ -63,6 +63,10 @@ WECHATY_DELIVERY_CONTACT_NAME=你的主微信昵称
 - `WECHATY_SUMMARY_CRON`: 日报汇总周期，默认每天 `22:00`
 - `WECHATY_SUMMARY_PROMPT_TEMPLATE`: 总结提示词模板，可自定义
 - `WECHATY_LOSS_MERGE_WINDOW_SECONDS`: 同一人图文消息合并窗口，默认 `60` 秒
+  当前规则：
+  - 图 + 文字：窗口内可合并为一条报损
+  - 图 + 图：不合并
+  - 一条报损最多保留一张图片
 - `WECHATY_LOSS_EXTRACTION_PROVIDER`: 报损提取模型提供商
 - `WECHATY_LOSS_EXTRACTION_MODEL`: 报损提取模型名
 - `WECHATY_LOSS_EXTRACTION_API_KEY`: 报损提取模型 API Key
