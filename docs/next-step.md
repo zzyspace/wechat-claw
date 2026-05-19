@@ -109,13 +109,19 @@ npm run dev
 3. 登录二维码是否生成到 `latest-qrcode.txt`
 4. `health.json` 的 `status` 是否进入 `logged_in`
 
-如果服务器已经初始化完成，后续发布可以直接执行：
+如果服务器已经初始化完成，而你这次没有改本地 `.env`，可以直接执行：
 
 ```bash
 sudo deploy-wechat-claw
 ```
 
-如果本地 `.env` 改了，需要同步到服务器生产配置，优先执行：
+如果你想避免忘记同步服务器配置，推荐以后统一使用这一条本地发布命令：
+
+```bash
+deploy/release-wechat-claw.sh root@139.196.140.215
+```
+
+如果本地 `.env` 改了，但这次只想同步配置、不发布代码，再单独执行：
 
 ```bash
 deploy/sync-wechat-claw-env.sh root@139.196.140.215

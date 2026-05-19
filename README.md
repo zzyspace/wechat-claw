@@ -284,7 +284,7 @@ npm run build
 sudo systemctl restart wechat-claw
 ```
 
-如果服务器已经完成这次初始化，后续更新可以直接用一条命令：
+如果服务器已经完成这次初始化，而你这次没有改本地 `.env`，可以直接用：
 
 ```bash
 sudo deploy-wechat-claw
@@ -298,7 +298,19 @@ sudo deploy-wechat-claw
 - `npm run doctor`
 - `systemctl restart wechat-claw`
 
-如果你本地改了 `.env`，想同步到服务器生产配置而不手动编辑 `/etc/wechat-claw.env`，可以在本机执行：
+如果你想降低“忘记同步服务器配置”的风险，推荐以后统一只用这一条本地发布命令：
+
+```bash
+deploy/release-wechat-claw.sh root@139.196.140.215
+```
+
+这条命令会固定执行：
+
+- 同步本地 `.env` 到服务器 `/etc/wechat-claw.env`
+- 自动补齐服务器专用字段
+- 触发远程 `git pull + npm ci + build + doctor + restart`
+
+如果你本地改了 `.env`，但这次只想同步配置、不发布代码，才单独使用：
 
 ```bash
 deploy/sync-wechat-claw-env.sh root@139.196.140.215
@@ -313,7 +325,7 @@ deploy/sync-wechat-claw-env.sh root@139.196.140.215
 - 自动把 `WECHATY_SUMMARY_CRON` 转成服务器更稳的带引号形式
 - 安装到服务器 `/etc/wechat-claw.env`
 
-如果你想同步配置后顺手发布代码，也可以直接：
+如果你更喜欢保留原来的细分命令，也可以显式写成：
 
 ```bash
 deploy/sync-wechat-claw-env.sh --deploy root@139.196.140.215
