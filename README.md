@@ -298,6 +298,27 @@ sudo deploy-wechat-claw
 - `npm run doctor`
 - `systemctl restart wechat-claw`
 
+如果你本地改了 `.env`，想同步到服务器生产配置而不手动编辑 `/etc/wechat-claw.env`，可以在本机执行：
+
+```bash
+deploy/sync-wechat-claw-env.sh root@139.196.140.215
+```
+
+这个脚本会：
+
+- 读取本地 `.env`
+- 自动补齐服务器专用字段：
+  - `WECHATY_STATE_DIR=/var/lib/wechat-claw`
+  - `WECHATY_TIMEZONE=Asia/Shanghai`
+- 自动把 `WECHATY_SUMMARY_CRON` 转成服务器更稳的带引号形式
+- 安装到服务器 `/etc/wechat-claw.env`
+
+如果你想同步配置后顺手发布代码，也可以直接：
+
+```bash
+deploy/sync-wechat-claw-env.sh --deploy root@139.196.140.215
+```
+
 `/etc/wechat-claw.env` 最少包含：
 
 ```env

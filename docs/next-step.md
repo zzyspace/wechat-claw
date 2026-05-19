@@ -114,3 +114,15 @@ npm run dev
 ```bash
 sudo deploy-wechat-claw
 ```
+
+如果本地 `.env` 改了，需要同步到服务器生产配置，优先执行：
+
+```bash
+deploy/sync-wechat-claw-env.sh root@139.196.140.215
+```
+
+如果想同步配置后顺手发布：
+
+```bash
+deploy/sync-wechat-claw-env.sh --deploy root@139.196.140.215
+```

@@ -6,6 +6,36 @@ APP_DIR="/opt/wechat-claw/current"
 APP_USER="wechatclaw"
 ENV_FILE="/etc/wechat-claw.env"
 SERVICE_NAME="wechat-claw"
+WITH_ENV_SOURCE=""
+
+usage() {
+  cat <<'EOF'
+Usage:
+  deploy-wechat-claw [--with-env <server-env-file>]
+
+Options:
+  --with-env <server-env-file>  Install a server-local env file to /etc/wechat-claw.env before deploy
+  -h, --help                    Show help
+EOF
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --with-env)
+      WITH_ENV_SOURCE="$2"
+      shift 2
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      echo "Unknown argument: $1" >&2
+      usage >&2
+      exit 1
+      ;;
+  esac
+done
 
 if [[ "${EUID}" -ne 0 ]]; then
   echo "Please run this script as root or with sudo." >&2
@@ -22,6 +52,16 @@ done
 if [[ ! -d "${APP_DIR}" ]]; then
   echo "Application directory does not exist: ${APP_DIR}" >&2
   exit 1
+fi
+
+if [[ -n "${WITH_ENV_SOURCE}" ]]; then
+  if ! command -v install-wechat-claw-env >/dev/null 2>&1; then
+    echo "Missing required command: install-wechat-claw-env" >&2
+    exit 1
+  fi
+
+  echo "[deploy] Installing environment file from ${WITH_ENV_SOURCE}"
+  install-wechat-claw-env "${WITH_ENV_SOURCE}" "${ENV_FILE}"
 fi
 
 if [[ ! -f "${ENV_FILE}" ]]; then
