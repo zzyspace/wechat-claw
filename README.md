@@ -284,6 +284,20 @@ npm run build
 sudo systemctl restart wechat-claw
 ```
 
+如果服务器已经完成这次初始化，后续更新可以直接用一条命令：
+
+```bash
+sudo deploy-wechat-claw
+```
+
+这个命令会执行：
+
+- `git pull --ff-only origin main`
+- `npm ci`
+- `npm run build`
+- `npm run doctor`
+- `systemctl restart wechat-claw`
+
 `/etc/wechat-claw.env` 最少包含：
 
 ```env

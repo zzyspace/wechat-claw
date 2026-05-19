@@ -108,3 +108,9 @@ npm run dev
 2. systemd 服务是否加载了 `/etc/wechat-claw.env`
 3. 登录二维码是否生成到 `latest-qrcode.txt`
 4. `health.json` 的 `status` 是否进入 `logged_in`
+
+如果服务器已经初始化完成，后续发布可以直接执行：
+
+```bash
+sudo deploy-wechat-claw
+```
