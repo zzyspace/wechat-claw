@@ -94,3 +94,40 @@ test("renderLossDailySummaryText includes channel name when provided", () => {
 
   assert.match(text, /群聊：门店A报损群/);
 });
+
+test("renderLossDailySummaryText omits empty prompt template", () => {
+  const text = renderLossDailySummaryText(
+    {
+      date: "2026-05-20",
+      channelCode: "loss_a",
+      channelName: "门店A报损群",
+      totalRelevantMessages: 1,
+      totalReporters: 1,
+      totalNeedsReview: 0,
+      reporters: [
+        {
+          reporter: "小王",
+          messageCount: 1,
+          reportItems: [
+            {
+              rawMessageId: 1,
+              channelCode: "loss_a",
+              channelName: "门店A报损群",
+              reportedAt: "2026-05-20T10:00:00.000Z",
+              evidenceType: "text",
+              reporterSummary: "生菜 1份",
+              sourceTexts: ["生菜坏了"],
+              notes: "变质",
+              reasonCategory: "变质",
+              items: [{ name: "生菜", quantity: 1, unit: "份", confidence: 0.95 }],
+              needsReview: false,
+            },
+          ],
+        },
+      ],
+    },
+    "",
+  );
+
+  assert.match(text, /^报损日报（2026-05-20）/);
+});

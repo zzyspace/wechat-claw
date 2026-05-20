@@ -241,13 +241,7 @@ export function getAppConfig(): AppConfig {
     channels: channelResolution.channels,
     channelsSource: channelResolution.source,
     channelsParseError: channelResolution.error,
-    summaryPromptTemplate:
-      process.env.WECHATY_SUMMARY_PROMPT_TEMPLATE?.trim() ||
-      [
-        "请按人汇总今天的报损上报情况。",
-        "输出格式：先给总览，再按人列出其报损的物品。",
-        "如果某条记录只有图片、没有明确文字，请直接按识别结果汇总，不要输出待确认字样。",
-      ].join("\n"),
+    summaryPromptTemplate: process.env.WECHATY_SUMMARY_PROMPT_TEMPLATE?.trim() || "",
     lossMergeWindowSeconds: readPositiveNumberEnv("WECHATY_LOSS_MERGE_WINDOW_SECONDS", 60),
     lossExtractionProvider: readOptionalEnv("WECHATY_LOSS_EXTRACTION_PROVIDER"),
     lossExtractionModel: readOptionalEnv("WECHATY_LOSS_EXTRACTION_MODEL"),

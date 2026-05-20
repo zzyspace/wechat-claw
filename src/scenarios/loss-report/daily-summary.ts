@@ -381,6 +381,7 @@ function hasMeaningfulSourceText(textContent: string) {
 }
 
 export function renderLossDailySummaryText(summary: LossDailySummary, promptTemplate: string): string {
+  const promptLines = promptTemplate.trim() ? [promptTemplate, ""] : [];
   const header = [
     `报损日报（${summary.date}）`,
     summary.channelName ? `群聊：${summary.channelName}` : "",
@@ -412,7 +413,7 @@ export function renderLossDailySummaryText(summary: LossDailySummary, promptTemp
     return lines;
   });
 
-  return [promptTemplate, "", ...header, ...reporterLines].join("\n");
+  return [...promptLines, ...header, ...reporterLines].join("\n");
 }
 
 function preferReasonCategory(reasonCategory: string | null, notes: string) {
