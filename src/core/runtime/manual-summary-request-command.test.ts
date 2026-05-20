@@ -18,6 +18,7 @@ function createChannel(code: string): ChannelConfig {
     },
     scenario: "loss-report",
     summarySchedule: "",
+    weeklySummarySchedule: "",
   };
 }
 
@@ -30,6 +31,21 @@ test("parseSendLossSummaryCliArgs applies timezone-based default date", () => {
   assert.equal(options.targetDate, "2026-05-21");
   assert.equal(options.waitTimeoutMs, 20_000);
   assert.equal(options.sendAll, false);
+  assert.equal(options.summaryType, "daily");
+});
+
+test("parseSendLossSummaryCliArgs supports weekly summary type", () => {
+  const options = parseSendLossSummaryCliArgs(["--type", "weekly", "--date", "2026-05-24"]);
+
+  assert.equal(options.summaryType, "weekly");
+  assert.equal(options.targetDate, "2026-05-24");
+});
+
+test("parseSendLossSummaryCliArgs rejects invalid summary type", () => {
+  assert.throws(
+    () => parseSendLossSummaryCliArgs(["--type", "monthly"]),
+    /Invalid --type value/i,
+  );
 });
 
 test("parseSendLossSummaryCliArgs rejects using --all and --channel together", () => {

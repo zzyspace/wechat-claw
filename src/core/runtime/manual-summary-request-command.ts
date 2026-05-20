@@ -1,5 +1,6 @@
 import { getEnabledScenarioChannels } from "../channels/router.js";
 import type { ChannelConfig } from "../channels/types.js";
+import type { SummarySendRequestType } from "./manual-summary-request.js";
 import { formatZonedDate, parseDateString } from "./timezone.js";
 
 const DEFAULT_WAIT_SECONDS = 20;
@@ -8,6 +9,7 @@ export interface SendLossSummaryCliOptions {
   channelCode?: string;
   requestedBy: string;
   sendAll: boolean;
+  summaryType: SummarySendRequestType;
   targetDate: string;
   waitTimeoutMs: number;
 }
@@ -23,6 +25,7 @@ export function parseSendLossSummaryCliArgs(
   let channelCode: string | undefined;
   let requestedBy = "cli";
   let sendAll = false;
+  let summaryType: SummarySendRequestType = "daily";
   let targetDate = formatZonedDate(options?.now ?? new Date(), timeZone);
   let waitSeconds = DEFAULT_WAIT_SECONDS;
 
@@ -71,6 +74,17 @@ export function parseSendLossSummaryCliArgs(
       continue;
     }
 
+    if (arg.startsWith("--type=")) {
+      summaryType = parseSummaryType(arg.slice("--type=".length).trim());
+      continue;
+    }
+
+    if (arg === "--type") {
+      summaryType = parseSummaryType(readNextValue(argv, index, "--type"));
+      index += 1;
+      continue;
+    }
+
     if (arg.startsWith("--requested-by=")) {
       requestedBy = arg.slice("--requested-by=".length).trim();
       continue;
@@ -99,6 +113,7 @@ export function parseSendLossSummaryCliArgs(
     ...(channelCode ? { channelCode } : {}),
     requestedBy,
     sendAll,
+    summaryType,
     targetDate,
     waitTimeoutMs: waitSeconds * 1000,
   };
@@ -137,11 +152,12 @@ export function resolveLossSummaryRequestChannels(
 
 export function buildUsageText() {
   return [
-    "Usage: npm run summary:send -- [--channel <code> | --all] [--date YYYY-MM-DD] [--wait-seconds N]",
+    "Usage: npm run summary:send -- [--channel <code> | --all] [--type daily|weekly] [--date YYYY-MM-DD] [--wait-seconds N]",
     "",
     "Examples:",
     "  npm run summary:send -- --channel loss_a",
     "  npm run summary:send -- --channel loss_a --date 2026-05-20",
+    "  npm run summary:send -- --channel loss_a --type weekly --date 2026-05-24",
     "  npm run summary:send -- --all --wait-seconds 0",
   ].join("\n");
 }
@@ -164,4 +180,12 @@ function parseWaitSeconds(raw: string) {
   }
 
   return Math.floor(value);
+}
+
+function parseSummaryType(raw: string): SummarySendRequestType {
+  if (raw === "daily" || raw === "weekly") {
+    return raw;
+  }
+
+  throw new Error(`Invalid --type value: ${raw}. Expected daily or weekly.`);
 }

@@ -1,6 +1,7 @@
 import { getDatabase } from "../storage/database.js";
 
 export type SummarySendRequestStatus = "pending" | "processing" | "sent" | "failed";
+export type SummarySendRequestType = "daily" | "weekly";
 
 export interface SummarySendRequestRecord {
   channelCode: string;
@@ -10,6 +11,7 @@ export interface SummarySendRequestRecord {
   id: number;
   requestedBy: string;
   scenarioCode: string;
+  summaryType: SummarySendRequestType;
   startedAt?: string;
   status: SummarySendRequestStatus;
   targetDate: string;
@@ -19,6 +21,7 @@ export interface CreateSummarySendRequestInput {
   channelCode: string;
   requestedBy: string;
   scenarioCode: string;
+  summaryType: SummarySendRequestType;
   targetDate: string;
 }
 
@@ -30,6 +33,7 @@ interface SummarySendRequestRow {
   id: number;
   requestedBy: string;
   scenarioCode: string;
+  summaryType: SummarySendRequestType;
   startedAt: string | null;
   status: SummarySendRequestStatus;
   targetDate: string;
@@ -48,6 +52,7 @@ function mapRow(row: SummarySendRequestRow | undefined): SummarySendRequestRecor
     id: row.id,
     requestedBy: row.requestedBy,
     scenarioCode: row.scenarioCode,
+    summaryType: row.summaryType,
     ...(row.startedAt ? { startedAt: row.startedAt } : {}),
     status: row.status,
     targetDate: row.targetDate,
@@ -64,6 +69,7 @@ function getRequestRowById(id: number): SummarySendRequestRow | undefined {
         scenario_code as scenarioCode,
         channel_code as channelCode,
         target_date as targetDate,
+        summary_type as summaryType,
         requested_by as requestedBy,
         status,
         error_message as errorMessage,
@@ -84,14 +90,16 @@ export function createSummarySendRequest(input: CreateSummarySendRequestInput): 
         scenario_code,
         channel_code,
         target_date,
+        summary_type,
         requested_by,
         status
-      ) VALUES (?, ?, ?, ?, 'pending')
+      ) VALUES (?, ?, ?, ?, ?, 'pending')
     `)
     .run(
       input.scenarioCode,
       input.channelCode,
       input.targetDate,
+      input.summaryType,
       input.requestedBy,
     );
 
@@ -117,6 +125,7 @@ export function listPendingSummarySendRequests(limit = 10): SummarySendRequestRe
         scenario_code as scenarioCode,
         channel_code as channelCode,
         target_date as targetDate,
+        summary_type as summaryType,
         requested_by as requestedBy,
         status,
         error_message as errorMessage,

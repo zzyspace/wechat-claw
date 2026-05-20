@@ -224,6 +224,17 @@ npm run summary:loss:recent 10
 npm run summary:send -- --channel loss_a --date 2026-05-20
 ```
 
+命令行立即触发周报发送：
+
+```bash
+npm run summary:send -- --channel loss_a --type weekly --date 2026-05-24
+```
+
+说明：
+
+- `--type` 可选 `daily` 或 `weekly`，默认 `daily`
+- 当 `--type weekly` 时，`--date` 表示“该日期所在周”，最终会汇总该周的周一到周日
+
 一次触发所有启用中的报损 channel：
 
 ```bash
@@ -245,7 +256,7 @@ npm start
 说明：
 
 - `summary:send` 不会自己再启动一个新的 Wechaty 发送进程
-- 它会把“手动发送日报”的请求写入 SQLite，由当前正在运行的 `npm run dev` 或 `npm start` 进程消费并发送
+- 它会把“手动发送日报/周报”的请求写入 SQLite，由当前正在运行的 `npm run dev` 或 `npm start` 进程消费并发送
 - 所以这条命令最好在 bot 常驻进程已经在线、且登录状态正常时使用
 - 如果命令超时但请求已经入队，常驻 bot 后续恢复后仍会继续处理
 - 在服务器上手工执行时，会优先读当前目录 `.env`，如果没有，再自动读取 `/etc/wechat-claw.env`

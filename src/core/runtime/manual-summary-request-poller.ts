@@ -3,7 +3,7 @@ import { getEnabledScenarioChannels } from "../channels/router.js";
 import type { AppConfig } from "../config/env.js";
 import type { Logger } from "../logging/logger.js";
 import type { HealthReporter } from "./health.js";
-import { sendLossDailySummary } from "./loss-summary-delivery.js";
+import { sendLossDailySummary, sendLossWeeklySummary } from "./loss-summary-delivery.js";
 import {
   claimSummarySendRequest,
   listPendingSummarySendRequests,
@@ -40,15 +40,16 @@ export function startManualSummaryRequestPoller(input: {
 
       if (pendingRequests.length > 0 && !bot.isLoggedIn) {
         if (!loginBlockedLogged) {
-          const error = new Error("Bot is not logged in. Manual daily summary requests are waiting in queue.");
+          const error = new Error("Bot is not logged in. Manual summary requests are waiting in queue.");
           healthReporter.markError(error, {
             category: "login_state_invalid",
             status: "degraded",
           });
-          logger.warn("Manual daily summary requests are waiting because bot is not logged in", {
+          logger.warn("Manual summary requests are waiting because bot is not logged in", {
             pendingRequests: pendingRequests.map((request) => ({
               channelCode: request.channelCode,
               requestId: request.id,
+              summaryType: request.summaryType,
               targetDate: request.targetDate,
             })),
           });
@@ -72,32 +73,43 @@ export function startManualSummaryRequestPoller(input: {
         if (!channel) {
           const errorMessage = `Enabled loss-report channel not found: ${request.channelCode}`;
           markSummarySendRequestFailed(request.id, errorMessage);
-          logger.warn("Manual daily summary request failed", {
+          logger.warn(`Manual ${request.summaryType} summary request failed`, {
             channelCode: request.channelCode,
             errorMessage,
             requestId: request.id,
+            summaryType: request.summaryType,
             targetDate: request.targetDate,
           });
           continue;
         }
 
         try {
-          const result = await sendLossDailySummary({
-            bot,
-            channel,
-            config,
-            logger,
-            targetDate: request.targetDate,
-          });
+          const result =
+            request.summaryType === "weekly"
+              ? await sendLossWeeklySummary({
+                  bot,
+                  channel,
+                  config,
+                  logger,
+                  targetDate: request.targetDate,
+                })
+              : await sendLossDailySummary({
+                  bot,
+                  channel,
+                  config,
+                  logger,
+                  targetDate: request.targetDate,
+                });
 
           markSummarySendRequestSent(request.id);
           healthReporter.markSummary();
-          logger.info("Manual daily summary request completed", {
+          logger.info(`Manual ${request.summaryType} summary request completed`, {
             channelCode: result.channelCode,
             channelName: result.channelName,
             deliveredTargets: result.deliveredTargets,
             requestId: request.id,
             requestedBy: request.requestedBy,
+            summaryType: request.summaryType,
             targetDate: result.targetDate,
             totalTargets: result.totalTargets,
           });
@@ -108,10 +120,11 @@ export function startManualSummaryRequestPoller(input: {
           healthReporter.markError(error, {
             status: "degraded",
           });
-          logger.error("Manual daily summary request failed", {
+          logger.error(`Manual ${request.summaryType} summary request failed`, {
             channelCode: request.channelCode,
             message: errorMessage,
             requestId: request.id,
+            summaryType: request.summaryType,
             targetDate: request.targetDate,
           });
         }

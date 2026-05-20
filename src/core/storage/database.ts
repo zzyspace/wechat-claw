@@ -64,6 +64,7 @@ function migrate(db: Database.Database) {
       scenario_code TEXT NOT NULL,
       channel_code TEXT NOT NULL,
       target_date TEXT NOT NULL,
+      summary_type TEXT NOT NULL DEFAULT 'daily',
       requested_by TEXT NOT NULL DEFAULT 'cli',
       status TEXT NOT NULL,
       error_message TEXT,
@@ -79,6 +80,8 @@ function migrate(db: Database.Database) {
   const columns = db.prepare(`PRAGMA table_info(raw_messages)`).all() as Array<{ name: string }>;
   const hasEventReceivedAt = columns.some((column) => column.name === "event_received_at");
   const hasChannelCode = columns.some((column) => column.name === "channel_code");
+  const summaryRequestColumns = db.prepare(`PRAGMA table_info(summary_send_requests)`).all() as Array<{ name: string }>;
+  const hasSummaryType = summaryRequestColumns.some((column) => column.name === "summary_type");
 
   if (!hasEventReceivedAt) {
     db.exec(`
@@ -92,6 +95,15 @@ function migrate(db: Database.Database) {
   if (!hasChannelCode) {
     db.exec(`
       ALTER TABLE raw_messages ADD COLUMN channel_code TEXT;
+    `);
+  }
+
+  if (!hasSummaryType) {
+    db.exec(`
+      ALTER TABLE summary_send_requests ADD COLUMN summary_type TEXT NOT NULL DEFAULT 'daily';
+      UPDATE summary_send_requests
+      SET summary_type = 'daily'
+      WHERE summary_type IS NULL OR summary_type = '';
     `);
   }
 

@@ -14,6 +14,7 @@ import {
   createSummarySendRequest,
   getSummarySendRequestById,
   type SummarySendRequestRecord,
+  type SummarySendRequestType,
 } from "../core/runtime/manual-summary-request.js";
 import { getManualSummaryRequestGateResult } from "../core/runtime/manual-summary-request-gate.js";
 import { assertStateDirWritable } from "../core/runtime/state-paths.js";
@@ -90,9 +91,10 @@ async function main() {
   }
 
   const gateResult = getManualSummaryRequestGateResult(config);
+  const summaryTypeLabel = formatSummaryTypeLabel(cliOptions.summaryType);
 
   if (!gateResult.allowed) {
-    logger.warn("Manual daily summary request discarded", {
+    logger.warn(`Manual ${summaryTypeLabel} summary request discarded`, {
       message: gateResult.reason,
       runtimeStatus: gateResult.status ?? "unknown",
     });
@@ -105,17 +107,19 @@ async function main() {
       channelCode: channel.code,
       requestedBy,
       scenarioCode: "loss-report",
+      summaryType: cliOptions.summaryType,
       targetDate: cliOptions.targetDate,
     }),
   );
   const channelNameByCode = new Map(selectedChannels.map((channel) => [channel.code, getChannelDisplayName(channel)]));
 
-  logger.info("Manual daily summary request queued", {
+  logger.info(`Manual ${summaryTypeLabel} summary request queued`, {
     requests: requests.map((request) => ({
       channelCode: request.channelCode,
       channelName: channelNameByCode.get(request.channelCode) ?? request.channelCode,
       requestId: request.id,
       requestedBy,
+      summaryType: request.summaryType,
       targetDate: request.targetDate,
     })),
   });
@@ -139,6 +143,7 @@ async function main() {
         channelCode: request.channelCode,
         requestId: request.id,
         status: request.status,
+        summaryType: request.summaryType,
         targetDate: request.targetDate,
       })),
       waitTimeoutMs: cliOptions.waitTimeoutMs,
@@ -153,6 +158,7 @@ async function main() {
         channelCode: request.channelCode,
         errorMessage: request.errorMessage,
         requestId: request.id,
+        summaryType: request.summaryType,
         targetDate: request.targetDate,
       })),
     });
@@ -166,6 +172,7 @@ async function main() {
       channelName: channelNameByCode.get(request.channelCode) ?? request.channelCode,
       requestId: request.id,
       status: request.status,
+      summaryType: request.summaryType,
       targetDate: request.targetDate,
     })),
   });
@@ -195,6 +202,10 @@ function sleep(delayMs: number) {
   return new Promise<void>((resolve) => {
     setTimeout(resolve, delayMs);
   });
+}
+
+function formatSummaryTypeLabel(summaryType: SummarySendRequestType) {
+  return summaryType === "weekly" ? "weekly" : "daily";
 }
 
 void main();
