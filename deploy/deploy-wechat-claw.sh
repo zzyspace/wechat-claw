@@ -8,7 +8,6 @@ ENV_FILE="/etc/wechat-claw.env"
 SERVICE_NAME="wechat-claw"
 SYSTEMD_UNIT_DIR="/etc/systemd/system"
 NEEDRESTART_CONF_DIR="/etc/needrestart/conf.d"
-NPM_SIGNATURE_FILE="${APP_DIR}/node_modules/.wechat-claw-deps.sha256"
 WITH_ENV_SOURCE=""
 
 usage() {
@@ -45,7 +44,7 @@ if [[ "${EUID}" -ne 0 ]]; then
   exit 1
 fi
 
-for cmd in git install npm systemctl sudo; do
+for cmd in git install node npm systemctl sudo; do
   if ! command -v "${cmd}" >/dev/null 2>&1; then
     echo "Missing required command: ${cmd}" >&2
     exit 1
@@ -82,67 +81,78 @@ run_as_app_user() {
   sudo -u "${APP_USER}" -H bash -lc "cd '${APP_DIR}' && $*"
 }
 
-compute_sha256() {
-  if command -v sha256sum >/dev/null 2>&1; then
-    sha256sum "$@"
-    return
-  fi
+compute_normalized_lock_signature() {
+  local lockfile_path="$1"
 
-  if command -v shasum >/dev/null 2>&1; then
-    shasum -a 256 "$@"
-    return
-  fi
+  LOCKFILE_PATH="${lockfile_path}" node <<'EOF'
+const fs = require("node:fs");
+const crypto = require("node:crypto");
 
-  echo "Missing required command: sha256sum or shasum" >&2
-  exit 1
+function stable(value) {
+  if (Array.isArray(value)) {
+    return value.map(stable);
+  }
+
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.keys(value)
+        .sort()
+        .map((key) => [key, stable(value[key])]),
+    );
+  }
+
+  return value;
 }
 
-compute_dependency_signature() {
-  local digest
-  local inputs=("package.json" "package-lock.json")
+const lockfilePath = process.env.LOCKFILE_PATH;
+const lockfile = JSON.parse(fs.readFileSync(lockfilePath, "utf8"));
 
+if (lockfile.packages) {
+  delete lockfile.packages[""];
+}
+
+const normalized = JSON.stringify(stable(lockfile));
+const hash = crypto.createHash("sha256").update(normalized).digest("hex");
+process.stdout.write(`${hash}\n`);
+EOF
+}
+
+refresh_postinstall_patch() {
   if [[ -f "${APP_DIR}/scripts/patch-wechaty-puppet-wechat.mjs" ]]; then
-    inputs+=("scripts/patch-wechaty-puppet-wechat.mjs")
+    echo "[deploy] Refreshing Wechaty patch on existing node_modules"
+    run_as_app_user "node scripts/patch-wechaty-puppet-wechat.mjs"
   fi
-
-  digest="$(
-    (
-      cd "${APP_DIR}"
-      compute_sha256 "${inputs[@]}"
-    ) | compute_sha256
-  )"
-
-  printf '%s\n' "${digest%% *}"
 }
 
 install_dependencies_if_needed() {
-  local current_signature install_reason stored_signature
+  local current_lock_signature install_reason installed_lock_signature
 
-  current_signature="$(compute_dependency_signature)"
+  current_lock_signature="$(compute_normalized_lock_signature "${APP_DIR}/package-lock.json")"
 
   if [[ ! -d "${APP_DIR}/node_modules" ]]; then
     install_reason="node_modules is missing"
+  elif [[ ! -f "${APP_DIR}/node_modules/.package-lock.json" ]]; then
+    install_reason="installed dependency lock is missing"
   elif [[ ! -x "${APP_DIR}/node_modules/.bin/tsc" ]]; then
     install_reason="TypeScript build tool is missing"
   elif [[ ! -f "${APP_DIR}/node_modules/wechaty-puppet-wechat/package.json" ]]; then
     install_reason="wechaty-puppet-wechat is missing"
-  elif [[ ! -f "${NPM_SIGNATURE_FILE}" ]]; then
-    install_reason="dependency signature is missing"
   else
-    read -r stored_signature < "${NPM_SIGNATURE_FILE}"
-    if [[ "${stored_signature}" != "${current_signature}" ]]; then
-      install_reason="dependency inputs changed"
+    installed_lock_signature="$(compute_normalized_lock_signature "${APP_DIR}/node_modules/.package-lock.json")"
+    if [[ "${installed_lock_signature}" != "${current_lock_signature}" ]]; then
+      install_reason="dependency tree changed"
     fi
   fi
 
   if [[ -n "${install_reason:-}" ]]; then
     echo "[deploy] Installing Node.js dependencies with npm ci (${install_reason})"
     run_as_app_user "npm ci"
-    run_as_app_user "printf '%s\n' '${current_signature}' > 'node_modules/.wechat-claw-deps.sha256'"
+    refresh_postinstall_patch
     return
   fi
 
-  echo "[deploy] Skipping npm ci (dependency inputs unchanged)"
+  echo "[deploy] Skipping npm ci (installed dependency tree matches package-lock.json)"
+  refresh_postinstall_patch
 }
 
 echo "[deploy] Pulling latest code from origin/main"
