@@ -2,11 +2,10 @@ import { getChannelDisplayName, getEnabledScenarioChannels } from "../channels/r
 import type { AppConfig } from "../config/env.js";
 import type { Logger } from "../logging/logger.js";
 import type { WechatyInstance } from "../../bot/types.js";
-import { countSuccessfulDeliveries, sendTextToTargets } from "../../bot/delivery-contact.js";
-import { renderLossDailySummaryForDate } from "../../scenarios/loss-report/summary-service.js";
 import { formatZonedDate } from "./timezone.js";
 import { startCronScheduler } from "./cron-scheduler.js";
 import type { HealthReporter } from "./health.js";
+import { sendLossDailySummary } from "./loss-summary-delivery.js";
 
 export function startLossSummaryScheduler(input: {
   bot: WechatyInstance;
@@ -55,52 +54,43 @@ export function startLossSummaryScheduler(input: {
         });
       },
       async task() {
-        if (!bot.isLoggedIn) {
-          const error = new Error(`Bot is not logged in. Daily summary will not be sent for ${channel.code}.`);
-          healthReporter.markError(error, {
-            status: "degraded",
-            category: "login_state_invalid",
-          });
-          logger.warn("Daily summary skipped because bot is not logged in", {
-            channelCode: channel.code,
-            targetDate: formatZonedDate(new Date(), config.timeZone),
-          });
-          return;
-        }
-
         const targetDate = formatZonedDate(new Date(), config.timeZone);
-        const summaryText = renderLossDailySummaryForDate(targetDate, {
-          summaryCron: channel.summarySchedule,
-          summaryPromptTemplate: config.summaryPromptTemplate,
-          mergeWindowSeconds: config.lossMergeWindowSeconds,
-          timeZone: config.timeZone,
-          channelCode: channel.code,
-          channelName: getChannelDisplayName(channel),
-        });
-        const deliveryResults = await sendTextToTargets(
-          bot,
-          channel.deliveryTargets,
-          summaryText,
-          logger,
-        );
-        const deliveredCount = countSuccessfulDeliveries(deliveryResults);
 
-        if (deliveredCount === 0) {
-          const error = new Error(`Daily summary delivery failed for all targets on channel ${channel.code}`);
+        try {
+          const result = await sendLossDailySummary({
+            bot,
+            channel,
+            config,
+            logger,
+            targetDate,
+          });
+
+          healthReporter.markSummary();
+          logger.info("Daily summary sent", {
+            channelCode: result.channelCode,
+            channelName: result.channelName,
+            deliveredTargets: result.deliveredTargets,
+            targetDate: result.targetDate,
+            totalTargets: result.totalTargets,
+          });
+        } catch (error) {
+          if (error instanceof Error && error.message.includes("Bot is not logged in")) {
+            healthReporter.markError(error, {
+              status: "degraded",
+              category: "login_state_invalid",
+            });
+            logger.warn("Daily summary skipped because bot is not logged in", {
+              channelCode: channel.code,
+              targetDate,
+            });
+            return;
+          }
+
           healthReporter.markError(error, {
             status: "degraded",
           });
-          return;
+          throw error;
         }
-
-        healthReporter.markSummary();
-        logger.info("Daily summary sent", {
-          channelCode: channel.code,
-          channelName: getChannelDisplayName(channel),
-          deliveredTargets: deliveredCount,
-          targetDate,
-          totalTargets: deliveryResults.length,
-        });
       },
     });
   });

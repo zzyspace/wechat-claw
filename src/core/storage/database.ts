@@ -58,6 +58,22 @@ function migrate(db: Database.Database) {
 
     CREATE INDEX IF NOT EXISTS idx_scenario_extractions_raw_message_id
       ON scenario_extractions(raw_message_id);
+
+    CREATE TABLE IF NOT EXISTS summary_send_requests (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      scenario_code TEXT NOT NULL,
+      channel_code TEXT NOT NULL,
+      target_date TEXT NOT NULL,
+      requested_by TEXT NOT NULL DEFAULT 'cli',
+      status TEXT NOT NULL,
+      error_message TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      started_at TEXT,
+      finished_at TEXT
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_summary_send_requests_status_id
+      ON summary_send_requests(status, id);
   `);
 
   const columns = db.prepare(`PRAGMA table_info(raw_messages)`).all() as Array<{ name: string }>;

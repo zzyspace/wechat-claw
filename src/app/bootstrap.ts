@@ -1,6 +1,7 @@
 import { getAppConfig } from "../core/config/env.js";
 import { logger } from "../core/logging/logger.js";
 import { HealthReporter } from "../core/runtime/health.js";
+import { startManualSummaryRequestPoller } from "../core/runtime/manual-summary-request-poller.js";
 import { assertStateDirWritable } from "../core/runtime/state-paths.js";
 import { startLossSummaryScheduler } from "../core/runtime/summary-scheduler.js";
 import { startBot } from "../bot/wechaty-client.js";
@@ -37,6 +38,9 @@ async function main() {
   let stopScheduler = () => {
     // no-op
   };
+  let stopManualSummaryRequestPoller = () => {
+    // no-op
+  };
   let shuttingDown = false;
   let healthReporter: HealthReporter | undefined;
   let shutdownPromise: Promise<void> | undefined;
@@ -51,6 +55,7 @@ async function main() {
 
       logger.info("Received shutdown signal", { signal });
       stopScheduler();
+      stopManualSummaryRequestPoller();
 
       if (bot) {
         try {
@@ -129,6 +134,14 @@ async function main() {
       healthReporter,
     });
     stopScheduler = () => scheduler.stop();
+
+    const manualSummaryRequestPoller = startManualSummaryRequestPoller({
+      bot,
+      config,
+      logger,
+      healthReporter,
+    });
+    stopManualSummaryRequestPoller = () => manualSummaryRequestPoller.stop();
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     healthReporter?.markError(error, {

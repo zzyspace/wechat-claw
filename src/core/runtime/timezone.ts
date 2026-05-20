@@ -22,7 +22,7 @@ function pad(value: number): string {
   return String(value).padStart(2, "0");
 }
 
-function parseDateString(date: string) {
+export function parseDateString(date: string) {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
 
   if (!match) {

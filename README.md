@@ -188,6 +188,14 @@ npm run inspect:messages
 npm run summary:loss
 ```
 
+命令行立即触发日报发送：
+
+```bash
+npm run summary:send -- --channel loss_a
+```
+
+如果只有一个启用中的 `loss-report` channel，也可以省略 `--channel`。
+
 生成最近 N 分钟报损汇总：
 
 ```bash
@@ -200,11 +208,36 @@ npm run summary:loss:recent
 npm run summary:loss:recent 10
 ```
 
+发送指定日期日报：
+
+```bash
+npm run summary:send -- --channel loss_a --date 2026-05-20
+```
+
+一次触发所有启用中的报损 channel：
+
+```bash
+npm run summary:send -- --all
+```
+
+只入队、不等待发送完成：
+
+```bash
+npm run summary:send -- --channel loss_a --wait-seconds 0
+```
+
 生产运行：
 
 ```bash
 npm start
 ```
+
+说明：
+
+- `summary:send` 不会自己再启动一个新的 Wechaty 发送进程
+- 它会把“手动发送日报”的请求写入 SQLite，由当前正在运行的 `npm run dev` 或 `npm start` 进程消费并发送
+- 所以这条命令最好在 bot 常驻进程已经在线、且登录状态正常时使用
+- 如果命令超时但请求已经入队，常驻 bot 后续恢复后仍会继续处理
 
 ## 本地联调步骤
 
