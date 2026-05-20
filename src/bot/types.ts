@@ -14,6 +14,9 @@ export interface WechatyInstance {
   Contact?: {
     find(query: Record<string, unknown>): Promise<any>;
   };
+  Room?: {
+    find(query: Record<string, unknown>): Promise<any>;
+  };
   isLoggedIn?: boolean;
   on(event: string, listener: (...args: any[]) => unknown): WechatyInstance;
   start(): Promise<void>;

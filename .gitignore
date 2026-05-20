@@ -3,6 +3,8 @@ dist/
 .env
 .DS_Store
 storage/
+!src/core/storage/
+!src/core/storage/*.ts
 *.log
 *.sqlite
 *.memory-card.json

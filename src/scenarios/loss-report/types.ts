@@ -41,6 +41,8 @@ export interface LossReportHeuristicResult {
 export interface LossReporterDailySummaryItem {
   rawMessageId: number;
   rawMessageIds?: number[];
+  channelCode?: string;
+  channelName?: string;
   reportedAt: string;
   eventReceivedAt?: string;
   evidenceType: "text" | "image" | "image+text";
@@ -60,6 +62,8 @@ export interface LossReporterDailySummary {
 
 export interface LossDailySummary {
   date: string;
+  channelCode?: string;
+  channelName?: string;
   totalRelevantMessages: number;
   totalReporters: number;
   totalNeedsReview: number;

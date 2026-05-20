@@ -1,4 +1,5 @@
 import { getAppConfig, validateAppConfig } from "../core/config/env.js";
+import { getEnabledChannels } from "../core/channels/router.js";
 import { logger } from "../core/logging/logger.js";
 import { parseCronExpression } from "../core/runtime/cron-scheduler.js";
 import { assertStateDirWritable } from "../core/runtime/state-paths.js";
@@ -7,16 +8,24 @@ import { loadPuppetModule, loadWechatyModule } from "../bot/wechaty-loader.js";
 async function main() {
   const config = getAppConfig();
   const validation = validateAppConfig(config);
+  const enabledChannels = getEnabledChannels(config.channels);
 
   logger.info("Config summary", {
     botName: config.botName,
+    channels: config.channels.map((channel) => ({
+      code: channel.code,
+      deliveryTargets: channel.deliveryTargets,
+      enabled: channel.enabled,
+      roomTopic: channel.match.value,
+      scenario: channel.scenario,
+      summarySchedule: channel.summarySchedule || "(disabled)",
+    })),
+    channelsSource: config.channelsSource,
     puppet: config.puppet ?? "(empty)",
     puppetServiceTokenConfigured: Boolean(config.puppetServiceToken),
     stateDir: config.stateDir,
     timeZone: config.timeZone,
-    targetRoomTopic: config.targetRoomTopic ?? "(empty)",
-    deliveryContactName: config.deliveryContactName ?? "(empty)",
-    summaryCron: config.summaryCron || "(disabled)",
+    enabledChannels: enabledChannels.length,
   });
 
   for (const warning of validation.warnings) {
@@ -43,15 +52,23 @@ async function main() {
   }
 
   try {
-    if (config.summaryCron) {
-      parseCronExpression(config.summaryCron);
-      logger.info("Summary cron check passed", {
-        summaryCron: config.summaryCron,
-        timeZone: config.timeZone,
+    const scheduledChannels = enabledChannels.filter((channel) => channel.summarySchedule);
+
+    if (scheduledChannels.length === 0) {
+      logger.warn("Summary cron check skipped", {
+        reason: "no enabled channel summary schedule configured",
       });
     } else {
-      logger.warn("Summary cron check skipped", {
-        reason: "scheduler disabled",
+      for (const channel of scheduledChannels) {
+        parseCronExpression(channel.summarySchedule);
+      }
+
+      logger.info("Summary cron check passed", {
+        channels: scheduledChannels.map((channel) => ({
+          code: channel.code,
+          summarySchedule: channel.summarySchedule,
+        })),
+        timeZone: config.timeZone,
       });
     }
   } catch (error) {

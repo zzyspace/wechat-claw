@@ -13,6 +13,7 @@ function main() {
     console.log("----");
     console.log(`id=${message.id}`);
     console.log(`event_received_at=${message.eventReceivedAt}`);
+    console.log(`channel_code=${message.channelCode ?? "(empty)"}`);
     console.log(`channel=${message.channelName}`);
     console.log(`sender=${message.senderName}`);
     console.log(`type=${message.messageType}`);

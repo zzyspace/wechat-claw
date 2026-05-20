@@ -4,6 +4,7 @@ import type { StoredAttachment, StoredRawMessageInput } from "../storage/types.j
 
 export interface NormalizeMessageInput {
   messageExternalId: string;
+  channelCode?: string;
   channelExternalId?: string;
   channelName: string;
   senderExternalId?: string;
@@ -17,6 +18,8 @@ export interface NormalizeMessageInput {
 function computeDedupeKey(input: NormalizeMessageInput): string {
   const hash = crypto.createHash("sha256");
   hash.update(input.messageExternalId);
+  hash.update("|");
+  hash.update(input.channelCode ?? "");
   hash.update("|");
   hash.update(input.channelExternalId ?? "");
   hash.update("|");
@@ -37,6 +40,7 @@ function computeDedupeKey(input: NormalizeMessageInput): string {
 export function normalizeMessage(input: NormalizeMessageInput): StoredRawMessageInput {
   return {
     messageExternalId: input.messageExternalId,
+    channelCode: input.channelCode,
     channelExternalId: input.channelExternalId,
     channelName: input.channelName,
     senderExternalId: input.senderExternalId,

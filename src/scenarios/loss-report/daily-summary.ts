@@ -2,6 +2,8 @@ import type { ScenarioExtractionRecord } from "../../core/scenarios/scenario-ext
 import type { LossDailySummary, LossReporterDailySummary, LossReporterDailySummaryItem } from "./types.js";
 
 interface ExtractionRow {
+  channelCode?: string;
+  channelName: string;
   senderName: string;
   textContent: string;
   eventReceivedAt: string;
@@ -10,6 +12,8 @@ interface ExtractionRow {
 
 interface DraftGroup {
   rawMessageIds: number[];
+  channelCode?: string;
+  channelName: string;
   reportedAt: string;
   eventReceivedAt: string;
   evidenceType: "text" | "image" | "image+text";
@@ -37,16 +41,17 @@ export function buildLossDailySummaryWithMergeWindow(
   mergeWindowSeconds: number,
 ): LossDailySummary {
   const sortedRows = [...rows].sort((a, b) => {
+    if ((a.channelCode ?? a.channelName) !== (b.channelCode ?? b.channelName)) {
+      return (a.channelCode ?? a.channelName).localeCompare(b.channelCode ?? b.channelName);
+    }
+
     if (a.senderName !== b.senderName) {
       return a.senderName.localeCompare(b.senderName);
     }
 
     return new Date(a.eventReceivedAt).getTime() - new Date(b.eventReceivedAt).getTime();
   });
-  const reporterMap = new Map<
-    string,
-    LossReporterDailySummary & { currentDraft?: DraftGroup; lastGroupEventReceivedAt?: string }
-  >();
+  const reporterMap = new Map<string, LossReporterDailySummary & { currentDraft?: DraftGroup; lastGroupEventReceivedAt?: string }>();
   const mergeWindowMs = mergeWindowSeconds * 1000;
 
   for (const row of sortedRows) {
@@ -62,8 +67,9 @@ export function buildLossDailySummaryWithMergeWindow(
     };
 
     const reporter = row.senderName;
+    const reporterKey = `${row.channelCode ?? row.channelName}::${reporter}`;
     const existing =
-      reporterMap.get(reporter) ??
+      reporterMap.get(reporterKey) ??
       ({
         reporter,
         messageCount: 0,
@@ -88,7 +94,7 @@ export function buildLossDailySummaryWithMergeWindow(
       existing.lastGroupEventReceivedAt = row.eventReceivedAt;
     }
 
-    reporterMap.set(reporter, existing);
+    reporterMap.set(reporterKey, existing);
   }
 
   for (const reporter of reporterMap.values()) {
@@ -110,6 +116,8 @@ export function buildLossDailySummaryWithMergeWindow(
 
   return {
     date,
+    channelCode: rows[0]?.channelCode,
+    channelName: rows[0]?.channelName,
     totalRelevantMessages: reporters.reduce((count, reporter) => count + reporter.reportItems.length, 0),
     totalReporters: reporters.length,
     totalNeedsReview,
@@ -132,6 +140,8 @@ function createDraftFromRow(
 ): DraftGroup {
   return {
     rawMessageIds: [result.rawMessageId],
+    channelCode: row.channelCode,
+    channelName: row.channelName,
     reportedAt: result.reportedAt,
     eventReceivedAt: row.eventReceivedAt,
     evidenceType: result.evidenceType,
@@ -183,6 +193,10 @@ function canMergeDraft(
     evidenceType: "text" | "image" | "image+text";
   },
 ) {
+  if ((draft.channelCode ?? draft.channelName) !== (row.channelCode ?? row.channelName)) {
+    return false;
+  }
+
   const draftAlreadyHasImage = draft.evidenceType === "image" || draft.evidenceType === "image+text";
   const currentIsImage = result.evidenceType === "image" || result.evidenceType === "image+text";
 
@@ -206,6 +220,8 @@ function finalizeDraft(
     reporter.reportItems.push({
       rawMessageId: draft.rawMessageIds[0],
       rawMessageIds: draft.rawMessageIds,
+      channelCode: draft.channelCode,
+      channelName: draft.channelName,
       reportedAt: draft.reportedAt,
       eventReceivedAt: draft.eventReceivedAt,
       evidenceType: draft.evidenceType,
@@ -367,6 +383,7 @@ function hasMeaningfulSourceText(textContent: string) {
 export function renderLossDailySummaryText(summary: LossDailySummary, promptTemplate: string): string {
   const header = [
     `报损日报（${summary.date}）`,
+    summary.channelName ? `群聊：${summary.channelName}` : "",
     "",
     `总计 ${summary.totalReporters} 人上报，${summary.totalRelevantMessages} 条相关记录。`,
     "",
@@ -387,8 +404,9 @@ export function renderLossDailySummaryText(summary: LossDailySummary, promptTemp
           : simplifyReporterSummary(item.reporterSummary, item.reasonCategory);
 
       const displayReason = buildDisplayReason(item);
+      const channelPrefix = !summary.channelName && item.channelName ? `[${item.channelName}] ` : "";
       const reasonSuffix = displayReason ? `；原因：${displayReason}` : "";
-      lines.push(`- ${itemText}${reasonSuffix}`);
+      lines.push(`- ${channelPrefix}${itemText}${reasonSuffix}`);
     }
 
     return lines;

@@ -1,8 +1,9 @@
+import { collectChannelDeliveryTargets, getChannelDisplayName, getEnabledChannels } from "../core/channels/router.js";
 import { getAppConfig, validateAppConfig } from "../core/config/env.js";
 import type { Logger } from "../core/logging/logger.js";
 import { getMemoryCardFilePath } from "../core/runtime/state-paths.js";
 import { loadWechatyModule } from "./wechaty-loader.js";
-import { sendTextToNamedContact } from "./delivery-contact.js";
+import { countSuccessfulDeliveries, sendTextToTargets } from "./delivery-contact.js";
 import { handleMessage } from "./message-handler.js";
 import { writeLatestQrcodeArtifact } from "./qrcode-artifact.js";
 import { renderTerminalQrcode } from "./terminal-qrcode.js";
@@ -43,15 +44,22 @@ export async function startBot(
 
   const { WechatyBuilder, ScanStatus, log } = await loadWechatyModule();
   const { MemoryCard } = await import("memory-card");
+  const enabledChannels = getEnabledChannels(config.channels);
 
   log.info("Wechaty", "Starting bot with configured puppet");
   logger.info("Startup config loaded", {
     botName: config.botName,
+    channels: enabledChannels.map((channel) => ({
+      code: channel.code,
+      deliveryTargets: channel.deliveryTargets,
+      roomTopic: channel.match.value,
+      scenario: channel.scenario,
+      summarySchedule: channel.summarySchedule || "(disabled)",
+    })),
+    channelsSource: config.channelsSource,
     puppet: config.puppet,
     stateDir: config.stateDir,
     timeZone: config.timeZone,
-    targetRoomTopic: config.targetRoomTopic,
-    deliveryContactName: config.deliveryContactName,
     puppetServiceTokenConfigured: Boolean(config.puppetServiceToken),
   });
 
@@ -106,30 +114,31 @@ export async function startBot(
 
   bot.on("login", async (user: any) => {
     const name = user && typeof user.name === "function" ? user.name() : "unknown";
+    const onlineNoticeTargets = collectChannelDeliveryTargets(enabledChannels);
+
     logger.info("Bot logged in", { name });
     hooks.onLogin?.({ name });
 
-    if (!config.deliveryContactName) {
+    if (onlineNoticeTargets.length === 0) {
       return;
     }
 
-    try {
-      const delivered = await sendTextToNamedContact(
-        bot,
-        config.deliveryContactName,
-        `[wechat-claw] bot 已上线\n监听群: ${config.targetRoomTopic}\n当前账号: ${name}`,
-        logger,
-      );
+    const deliveryResults = await sendTextToTargets(
+      bot,
+      onlineNoticeTargets,
+      [
+        "[wechat-claw] bot 已上线",
+        `当前账号: ${name}`,
+        "监听群:",
+        ...enabledChannels.map((channel) => `- ${getChannelDisplayName(channel)} (${channel.code})`),
+      ].join("\n"),
+      logger,
+    );
 
-      if (delivered) {
-        logger.info("Sent online notice", {
-          deliveryContactName: config.deliveryContactName,
-        });
-      }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      logger.error("Failed to send online notice", { message });
-    }
+    logger.info("Sent online notice", {
+      deliveredTargets: countSuccessfulDeliveries(deliveryResults),
+      totalTargets: deliveryResults.length,
+    });
   });
 
   bot.on("logout", (user: any) => {
@@ -152,8 +161,11 @@ export async function startBot(
       await handleMessage(
         message,
         {
-          targetRoomTopic: config.targetRoomTopic,
-          deliveryContactName: config.deliveryContactName,
+          channels: config.channels,
+          lossExtractionProvider: config.lossExtractionProvider,
+          lossExtractionModel: config.lossExtractionModel,
+          lossExtractionApiKey: config.lossExtractionApiKey,
+          lossExtractionBaseUrl: config.lossExtractionBaseUrl,
         },
         logger,
       );
@@ -165,6 +177,10 @@ export async function startBot(
 
   await bot.start();
   logger.info("Bot started", {
+    listeningChannels: enabledChannels.map((channel) => ({
+      code: channel.code,
+      roomTopic: channel.match.value,
+    })),
     nextStep: "Scan the QR code with the bot account and wait for the online notice.",
   });
 

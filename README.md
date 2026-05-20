@@ -3,8 +3,8 @@
 一个面向微信群业务汇总的机器人骨架工程。当前阶段先跑通：
 
 - Wechaty 启动
-- 指定群消息监听
-- 将群消息回发给指定联系人
+- 多群消息监听
+- 将群消息回发给指定联系人或群
 - 原始消息落 SQLite
 - 图片附件落本地文件
 - 进程内定时发送报损日报
@@ -15,13 +15,13 @@
 - 从环境变量读取 bot 配置
 - 启动 Wechaty 实例
 - 监听群消息
-- 按群名过滤目标群
-- 将收到的消息转发给指定联系人，作为联调验证
+- 按 `room_topic` 路由多个目标群
+- 将收到的消息转发给联系人或群，作为联调验证
 - 将原始群消息写入 `WECHATY_STATE_DIR/wechat-claw.sqlite`
 - 将图片消息落到 `WECHATY_STATE_DIR/raw/YYYY/MM/DD/`
 - 对报损消息做第一版启发式结构化提取
-- 支持按人生成报损日报文本骨架
-- 支持按 cron 在 bot 进程内直接发送日报
+- 支持按群生成报损日报文本骨架
+- 支持按 channel 独立 cron 在 bot 进程内直接发送日报
 - 将二维码、登录态、健康状态统一写入 `WECHATY_STATE_DIR`
 
 ## 环境要求
@@ -51,15 +51,13 @@ WECHATY_PUPPET=wechaty-puppet-wechat
 WECHATY_PUPPET_SERVICE_TOKEN=
 WECHATY_STATE_DIR=/var/lib/wechat-claw
 WECHATY_TIMEZONE=Asia/Shanghai
-WECHATY_SUMMARY_CRON=0 22 * * *
 WECHATY_LOSS_MERGE_WINDOW_SECONDS=60
 WECHATY_LOSS_EXTRACTION_PROVIDER=
 WECHATY_LOSS_EXTRACTION_MODEL=
 WECHATY_LOSS_EXTRACTION_API_KEY=
 WECHATY_LOSS_EXTRACTION_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 WECHATY_BOT_NAME=wechat-loss-bot
-WECHATY_TARGET_ROOM_TOPIC=门店食材报损群
-WECHATY_DELIVERY_CONTACT_NAME=你的主微信昵称
+WECHATY_CHANNELS_JSON=[{"code":"loss_a","enabled":true,"scenario":"loss-report","match":{"type":"room_topic","value":"门店食材报损群A"},"deliveryTargets":[{"type":"contact_name","value":"你的主微信昵称"},{"type":"room_topic","value":"门店A日报群"}],"summarySchedule":"0 22 * * *"},{"code":"loss_b","enabled":true,"scenario":"loss-report","match":{"type":"room_topic","value":"门店食材报损群B"},"deliveryTargets":[{"type":"contact_name","value":"你的主微信昵称"}],"summarySchedule":"0 22 * * *"}]
 ```
 
 字段说明：
@@ -68,7 +66,7 @@ WECHATY_DELIVERY_CONTACT_NAME=你的主微信昵称
 - `WECHATY_PUPPET_SERVICE_TOKEN`: 仅 `wechaty-puppet-service` 等 service 模式需要
 - `WECHATY_STATE_DIR`: 统一状态目录，包含 SQLite、附件、二维码、health、memory-card
 - `WECHATY_TIMEZONE`: 日期边界和 cron 解释时区，默认 `Asia/Shanghai`
-- `WECHATY_SUMMARY_CRON`: 日报汇总周期，默认每天 `22:00`，留空表示关闭定时日报
+- `WECHATY_CHANNELS_JSON`: 推荐的多群配置入口，支持多个监听群、多个发送目标、每个 channel 独立日报周期
 - `WECHATY_SUMMARY_PROMPT_TEMPLATE`: 总结提示词模板，可自定义
 - `WECHATY_LOSS_MERGE_WINDOW_SECONDS`: 同一人图文消息合并窗口，默认 `60` 秒
   当前规则：
@@ -80,8 +78,31 @@ WECHATY_DELIVERY_CONTACT_NAME=你的主微信昵称
 - `WECHATY_LOSS_EXTRACTION_API_KEY`: 报损提取模型 API Key
 - `WECHATY_LOSS_EXTRACTION_BASE_URL`: 报损提取模型接口地址
 - `WECHATY_BOT_NAME`: 本地 bot 名称
-- `WECHATY_TARGET_ROOM_TOPIC`: 需要监听的群名
-- `WECHATY_DELIVERY_CONTACT_NAME`: 收测试回传消息的联系人昵称
+- `WECHATY_SUMMARY_CRON`: 仅旧版单群兼容配置使用的默认日报周期
+
+`WECHATY_CHANNELS_JSON` 的结构：
+
+```json
+[
+  {
+    "code": "loss_a",
+    "enabled": true,
+    "scenario": "loss-report",
+    "match": { "type": "room_topic", "value": "门店食材报损群A" },
+    "deliveryTargets": [
+      { "type": "contact_name", "value": "你的主微信昵称" },
+      { "type": "room_topic", "value": "门店A日报群" }
+    ],
+    "summarySchedule": "0 22 * * *"
+  }
+]
+```
+
+兼容说明：
+
+- 未配置 `WECHATY_CHANNELS_JSON` 时，会回退到旧版 `WECHATY_TARGET_ROOM_TOPIC` + `WECHATY_DELIVERY_CONTACT_NAME`
+- 旧版回退只会生成一个默认 channel
+- 新增多群时，优先改 `WECHATY_CHANNELS_JSON`
 
 推荐先试两种模式中的一种：
 
@@ -94,8 +115,7 @@ WECHATY_PUPPET_WECHAT_PUPPETEER_UOS=1
 WECHATY_BOT_NAME=wechat-loss-bot
 WECHATY_STATE_DIR=/private/tmp/wechat-claw-state
 WECHATY_TIMEZONE=Asia/Shanghai
-WECHATY_TARGET_ROOM_TOPIC=AI测试群
-WECHATY_DELIVERY_CONTACT_NAME=你的主微信昵称
+WECHATY_CHANNELS_JSON=[{"code":"loss_test","enabled":true,"scenario":"loss-report","match":{"type":"room_topic","value":"AI测试群"},"deliveryTargets":[{"type":"contact_name","value":"你的主微信昵称"},{"type":"room_topic","value":"AI测试日报群"}],"summarySchedule":"0 22 * * *"}]
 ```
 
 说明：
@@ -111,14 +131,13 @@ WECHATY_PUPPET_SERVICE_TOKEN=puppet_paimon_xxx
 WECHATY_BOT_NAME=wechat-loss-bot
 WECHATY_STATE_DIR=/private/tmp/wechat-claw-state
 WECHATY_TIMEZONE=Asia/Shanghai
-WECHATY_TARGET_ROOM_TOPIC=AI测试群
-WECHATY_DELIVERY_CONTACT_NAME=你的主微信昵称
+WECHATY_CHANNELS_JSON=[{"code":"loss_test","enabled":true,"scenario":"loss-report","match":{"type":"room_topic","value":"AI测试群"},"deliveryTargets":[{"type":"contact_name","value":"你的主微信昵称"}],"summarySchedule":"0 22 * * *"}]
 ```
 
 建议：
 
-- `WECHATY_DELIVERY_CONTACT_NAME` 先填你自己的主微信昵称
-- `WECHATY_TARGET_ROOM_TOPIC` 必须和微信群当前显示名称完全一致
+- `WECHATY_CHANNELS_JSON` 先只配 1 个测试 channel 跑通，再扩到 2 个或更多
+- `match.value` 和 `room_topic` 类型的发送目标都必须和微信群当前显示名称完全一致
 - 当前 bot 登录的微信号建议使用专门测试号
 
 ## 运行
@@ -191,11 +210,10 @@ npm start
 
 1. 准备一个机器人微信号，并把它拉进目标报损群。
 2. 确保你的主微信号和机器人号互为联系人。
-3. 填好 `.env` 中的四个关键字段：
+3. 填好 `.env` 中的关键字段：
    - `WECHATY_PUPPET`
    - `WECHATY_PUPPET_SERVICE_TOKEN`
-   - `WECHATY_TARGET_ROOM_TOPIC`
-   - `WECHATY_DELIVERY_CONTACT_NAME`
+   - `WECHATY_CHANNELS_JSON`
    如果你试的是 `wechaty-puppet-wechat`，`WECHATY_PUPPET_SERVICE_TOKEN` 留空即可。
    同时建议增加：
    - `WECHATY_PUPPET_WECHAT_PUPPETEER_UOS=1`
@@ -206,9 +224,9 @@ npm start
    - 否则日志里会打印二维码链接
    - 同时程序会写入 `WECHATY_STATE_DIR/latest-qrcode.txt`
 7. 用机器人微信号扫码登录。
-8. 登录成功后，程序会向 `WECHATY_DELIVERY_CONTACT_NAME` 发送一条 bot 上线通知。
+8. 登录成功后，程序会向所有已配置的 `deliveryTargets` 发送一条 bot 上线通知。
 9. 在目标群里发一条测试消息。
-10. 程序应将该消息摘要再次发给 `WECHATY_DELIVERY_CONTACT_NAME`。
+10. 程序应将该消息摘要再次发给当前 channel 的 `deliveryTargets`。
 
 ## 联调通过标准
 
@@ -342,9 +360,7 @@ WECHATY_PUPPET_WECHAT_PUPPETEER_UOS=1
 WECHATY_BOT_NAME=wechat-loss-bot
 WECHATY_STATE_DIR=/var/lib/wechat-claw
 WECHATY_TIMEZONE=Asia/Shanghai
-WECHATY_SUMMARY_CRON=0 22 * * *
-WECHATY_TARGET_ROOM_TOPIC=AI测试群
-WECHATY_DELIVERY_CONTACT_NAME=你的主微信昵称
+WECHATY_CHANNELS_JSON=[{"code":"loss_prod","enabled":true,"scenario":"loss-report","match":{"type":"room_topic","value":"AI测试群"},"deliveryTargets":[{"type":"contact_name","value":"你的主微信昵称"}],"summarySchedule":"0 22 * * *"}]
 ```
 
 常用排障入口：
@@ -363,11 +379,11 @@ WECHATY_DELIVERY_CONTACT_NAME=你的主微信昵称
 
 ## 下一步
 
-当前只是接入验证骨架。后续开发会继续补：
+当前已经具备多 channel 路由骨架。后续开发会继续补：
 
-- 场景路由
-- 多模态报损结构化提取
-- 日报汇总与发送
+- 新场景处理器
+- 更强的多模态报损结构化提取
+- 更丰富的日报模板与补跑能力
 
 说明：
 
@@ -411,6 +427,7 @@ WECHATY_LOSS_EXTRACTION_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/
 
 优先排查：
 
-- `WECHATY_TARGET_ROOM_TOPIC` 是否和群名完全一致
-- `WECHATY_DELIVERY_CONTACT_NAME` 是否和联系人昵称完全一致
+- `WECHATY_CHANNELS_JSON` 是否是合法 JSON
+- `match.value` 是否和群名完全一致
+- `deliveryTargets` 里的联系人昵称或群名是否完全一致
 - 机器人号是否真的在目标群里

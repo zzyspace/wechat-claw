@@ -1,16 +1,20 @@
+import type { ChannelConfig } from "../core/channels/types.js";
+import { matchChannelByRoomTopic } from "../core/channels/router.js";
 import type { Logger } from "../core/logging/logger.js";
 import { saveImageAttachment } from "../core/attachments/save-image-attachment.js";
-import { getAppConfig } from "../core/config/env.js";
 import { normalizeMessage } from "../core/messages/normalize-message.js";
 import { saveScenarioExtraction } from "../core/scenarios/scenario-extraction-repository.js";
 import { saveRawMessage } from "../core/storage/raw-message-repository.js";
-import { sendTextToNamedContact } from "./delivery-contact.js";
 import { extractLossReportHeuristically } from "../scenarios/loss-report/heuristic-extractor.js";
 import { extractLossReportByModel } from "../scenarios/loss-report/model-provider.js";
+import { countSuccessfulDeliveries, sendTextToTargets } from "./delivery-contact.js";
 
 export interface MessageContext {
-  targetRoomTopic?: string;
-  deliveryContactName?: string;
+  channels: ChannelConfig[];
+  lossExtractionProvider?: string;
+  lossExtractionModel?: string;
+  lossExtractionApiKey?: string;
+  lossExtractionBaseUrl: string;
 }
 
 export async function handleMessage(message: any, context: MessageContext, logger: Logger) {
@@ -25,8 +29,9 @@ export async function handleMessage(message: any, context: MessageContext, logge
   }
 
   const roomTopic = typeof room.topic === "function" ? await room.topic() : "";
+  const channel = matchChannelByRoomTopic(context.channels, roomTopic);
 
-  if (context.targetRoomTopic && roomTopic !== context.targetRoomTopic) {
+  if (!channel || channel.scenario !== "loss-report") {
     return;
   }
 
@@ -37,11 +42,11 @@ export async function handleMessage(message: any, context: MessageContext, logge
   const normalizedText = normalizeMessageText(text, typeValue);
   const messageId = typeof message.id === "function" ? message.id() : message.id || cryptoRandomId();
   const eventReceivedAt = new Date().toISOString();
-
   const attachments = [];
 
   if (isImageLikeMessage(typeValue, normalizedText)) {
     const imageAttachment = await saveImageAttachment(message);
+
     if (imageAttachment) {
       attachments.push(imageAttachment);
     }
@@ -49,6 +54,7 @@ export async function handleMessage(message: any, context: MessageContext, logge
 
   const normalized = normalizeMessage({
     messageExternalId: String(messageId),
+    channelCode: channel.code,
     channelExternalId: typeof room.id === "function" ? room.id() : undefined,
     channelName: roomTopic,
     senderExternalId: talker && typeof talker.id === "function" ? talker.id() : undefined,
@@ -60,7 +66,6 @@ export async function handleMessage(message: any, context: MessageContext, logge
   });
 
   const saveResult = saveRawMessage(normalized);
-  const appConfig = getAppConfig();
   const modelExtraction = await extractLossReportByModel(
     {
       rawMessageId: saveResult.rawMessageId,
@@ -72,10 +77,10 @@ export async function handleMessage(message: any, context: MessageContext, logge
     },
     {
       enabled: true,
-      provider: appConfig.lossExtractionProvider,
-      model: appConfig.lossExtractionModel,
-      apiKey: appConfig.lossExtractionApiKey,
-      baseUrl: appConfig.lossExtractionBaseUrl,
+      provider: context.lossExtractionProvider,
+      model: context.lossExtractionModel,
+      apiKey: context.lossExtractionApiKey,
+      baseUrl: context.lossExtractionBaseUrl,
     },
   );
   const lossReportExtraction =
@@ -101,6 +106,7 @@ export async function handleMessage(message: any, context: MessageContext, logge
 
   logger.info("Received room message", {
     attachmentsCount: attachments.length,
+    channelCode: channel.code,
     inserted: saveResult.inserted,
     rawMessageId: saveResult.rawMessageId,
     roomTopic,
@@ -110,22 +116,36 @@ export async function handleMessage(message: any, context: MessageContext, logge
     typeValue,
   });
 
-  if (!context.deliveryContactName) {
-    return;
-  }
-
   const bot = typeof message.wechaty === "function" ? message.wechaty() : message.wechaty;
   if (!bot) {
-    logger.warn("Wechaty instance unavailable for delivery contact notification");
+    logger.warn("Wechaty instance unavailable for delivery target notification", {
+      channelCode: channel.code,
+    });
     return;
   }
 
-  await sendTextToNamedContact(
+  const deliveryResults = await sendTextToTargets(
     bot,
-    context.deliveryContactName,
-    `[wechat-claw] 已收到群消息\n群聊: ${roomTopic}\n发送人: ${senderName}\n消息类型: ${String(typeValue)}\n内容: ${normalizedText}\n附件数: ${attachments.length}\n入库: ${saveResult.inserted ? "新消息" : "已去重"}\n报损提取: ${savedExtraction.status} / review=${savedExtraction.needsReview ? "是" : "否"}`,
+    channel.deliveryTargets,
+    [
+      "[wechat-claw] 已收到群消息",
+      `逻辑频道: ${channel.code}`,
+      `群聊: ${roomTopic}`,
+      `发送人: ${senderName}`,
+      `消息类型: ${String(typeValue)}`,
+      `内容: ${normalizedText}`,
+      `附件数: ${attachments.length}`,
+      `入库: ${saveResult.inserted ? "新消息" : "已去重"}`,
+      `报损提取: ${savedExtraction.status} / review=${savedExtraction.needsReview ? "是" : "否"}`,
+    ].join("\n"),
     logger,
   );
+
+  logger.info("Sent room message delivery notifications", {
+    channelCode: channel.code,
+    deliveredTargets: countSuccessfulDeliveries(deliveryResults),
+    totalTargets: deliveryResults.length,
+  });
 }
 
 function cryptoRandomId() {

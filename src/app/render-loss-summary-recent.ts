@@ -1,5 +1,5 @@
 import { getAppConfig } from "../core/config/env.js";
-import { getLossReportScenarioConfig } from "../scenarios/loss-report/config.js";
+import { getChannelDisplayName, getEnabledScenarioChannels } from "../core/channels/router.js";
 import { renderRecentLossSummary } from "../scenarios/loss-report/summary-service.js";
 
 function resolveMinutesArg(): number {
@@ -10,23 +10,35 @@ function resolveMinutesArg(): number {
 function main() {
   const recentMinutes = resolveMinutesArg();
   const config = getAppConfig();
-  const scenarioConfig = getLossReportScenarioConfig({
-    summaryCron: config.summaryCron,
-    summaryPromptTemplate: config.summaryPromptTemplate,
-    mergeWindowSeconds: config.lossMergeWindowSeconds,
-  });
-  const summary = renderRecentLossSummary(recentMinutes, {
-    summaryCron: scenarioConfig.summaryCron,
-    summaryPromptTemplate: scenarioConfig.summaryPromptTemplate,
-    mergeWindowSeconds: scenarioConfig.mergeWindowSeconds,
-    timeZone: config.timeZone,
-  });
+  const channels = getEnabledScenarioChannels(config.channels, "loss-report");
+
+  if (channels.length === 0) {
+    console.log("No enabled loss-report channels configured.");
+    process.exitCode = 1;
+    return;
+  }
 
   console.log(`summary_recent_minutes=${recentMinutes}`);
-  console.log(`summary_from=${summary.summaryFromIso}`);
   console.log(`timezone=${config.timeZone}`);
-  console.log(`merge_window_seconds=${scenarioConfig.mergeWindowSeconds}`);
-  console.log(summary.text);
+  console.log(`merge_window_seconds=${config.lossMergeWindowSeconds}`);
+  console.log(`channels=${channels.length}`);
+
+  for (const channel of channels) {
+    const summary = renderRecentLossSummary(recentMinutes, {
+      summaryCron: channel.summarySchedule,
+      summaryPromptTemplate: config.summaryPromptTemplate,
+      mergeWindowSeconds: config.lossMergeWindowSeconds,
+      timeZone: config.timeZone,
+      channelCode: channel.code,
+      channelName: getChannelDisplayName(channel),
+    });
+
+    console.log("----");
+    console.log(`channel_code=${channel.code}`);
+    console.log(`channel_name=${getChannelDisplayName(channel)}`);
+    console.log(`summary_from=${summary.summaryFromIso}`);
+    console.log(summary.text);
+  }
 }
 
 main();

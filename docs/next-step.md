@@ -47,9 +47,7 @@ WECHATY_PUPPET_WECHAT_PUPPETEER_UOS=1
 WECHATY_BOT_NAME=wechat-loss-bot
 WECHATY_STATE_DIR=/private/tmp/wechat-claw-state
 WECHATY_TIMEZONE=Asia/Shanghai
-WECHATY_SUMMARY_CRON=0 22 * * *
-WECHATY_TARGET_ROOM_TOPIC=AI测试群
-WECHATY_DELIVERY_CONTACT_NAME=Ryan。
+WECHATY_CHANNELS_JSON=[{"code":"loss_test","enabled":true,"scenario":"loss-report","match":{"type":"room_topic","value":"AI测试群"},"deliveryTargets":[{"type":"contact_name","value":"Ryan。"}],"summarySchedule":"0 22 * * *"}]
 ```
 
 ## 5. 如果要继续测试 bot
