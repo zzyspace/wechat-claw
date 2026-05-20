@@ -352,6 +352,33 @@ deploy/sync-wechat-claw-env.sh root@139.196.140.215
 deploy/sync-wechat-claw-env.sh --deploy root@139.196.140.215
 ```
 
+如果你后续只改了服务器上的 `/etc/wechat-claw.env`，不需要重新部署代码，但需要重启服务才能生效：
+
+```bash
+sudo systemctl restart wechat-claw
+```
+
+原因：
+
+- `wechat-claw` 只在进程启动时读取 `/etc/wechat-claw.env`
+- 直接修改 env 文件不会让正在运行的进程自动重新加载配置
+
+可以按下面规则判断：
+
+- 只改 `/etc/wechat-claw.env`：执行 `sudo systemctl restart wechat-claw`
+- 改了代码：执行 `sudo deploy-wechat-claw`
+- 改了代码和 `/etc/wechat-claw.env`：直接执行 `sudo deploy-wechat-claw`
+
+如果想在重启前先验证配置，可以执行：
+
+```bash
+cd /opt/wechat-claw/current
+set -a
+. /etc/wechat-claw.env
+set +a
+sudo -u wechatclaw -E -H bash -lc 'cd /opt/wechat-claw/current && npm run doctor'
+```
+
 `/etc/wechat-claw.env` 最少包含：
 
 ```env
