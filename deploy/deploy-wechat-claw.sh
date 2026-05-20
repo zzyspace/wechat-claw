@@ -8,6 +8,7 @@ ENV_FILE="/etc/wechat-claw.env"
 SERVICE_NAME="wechat-claw"
 SYSTEMD_UNIT_DIR="/etc/systemd/system"
 NEEDRESTART_CONF_DIR="/etc/needrestart/conf.d"
+PUPPETEER_CACHE_DIR="${APP_DIR}/.cache/puppeteer"
 WITH_ENV_SOURCE=""
 
 usage() {
@@ -124,6 +125,12 @@ refresh_postinstall_patch() {
   fi
 }
 
+prepare_puppeteer_cache() {
+  echo "[deploy] Preparing persistent Puppeteer cache"
+  run_as_app_user "mkdir -p '${PUPPETEER_CACHE_DIR}'"
+  run_as_app_user "if [[ -d 'node_modules/puppeteer/.local-chromium' ]] && [[ -z \"\$(ls -A '${PUPPETEER_CACHE_DIR}' 2>/dev/null)\" ]]; then cp -R 'node_modules/puppeteer/.local-chromium/.' '${PUPPETEER_CACHE_DIR}/'; fi"
+}
+
 install_dependencies_if_needed() {
   local install_reason tree_validation_output
 
@@ -141,7 +148,8 @@ install_dependencies_if_needed() {
 
   if [[ -n "${install_reason:-}" ]]; then
     echo "[deploy] Installing Node.js dependencies with npm ci (${install_reason})"
-    run_as_app_user "npm ci"
+    prepare_puppeteer_cache
+    run_as_app_user "PUPPETEER_DOWNLOAD_PATH='${PUPPETEER_CACHE_DIR}' npm ci --include=dev"
     refresh_postinstall_patch
     return
   fi
