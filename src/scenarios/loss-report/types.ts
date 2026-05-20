@@ -60,12 +60,20 @@ export interface LossReporterDailySummary {
   reportItems: LossReporterDailySummaryItem[];
 }
 
-export interface LossDailySummary {
-  date: string;
+interface LossPeriodicSummaryBase {
   channelCode?: string;
   channelName?: string;
   totalRelevantMessages: number;
   totalReporters: number;
   totalNeedsReview: number;
   reporters: LossReporterDailySummary[];
+}
+
+export interface LossDailySummary extends LossPeriodicSummaryBase {
+  date: string;
+}
+
+export interface LossWeeklySummary extends LossPeriodicSummaryBase {
+  startDate: string;
+  endDate: string;
 }

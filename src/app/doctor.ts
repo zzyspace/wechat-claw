@@ -20,6 +20,7 @@ async function main() {
       roomTopic: channel.match.value,
       scenario: channel.scenario,
       summarySchedule: channel.summarySchedule || "(disabled)",
+      weeklySummarySchedule: channel.weeklySummarySchedule || "(disabled)",
     })),
     channelsSource: config.channelsSource,
     puppet: config.puppet ?? "(empty)",
@@ -53,21 +54,30 @@ async function main() {
   }
 
   try {
-    const scheduledChannels = enabledChannels.filter((channel) => channel.summarySchedule);
+    const scheduledChannels = enabledChannels.filter(
+      (channel) => channel.summarySchedule || channel.weeklySummarySchedule,
+    );
 
     if (scheduledChannels.length === 0) {
       logger.warn("Summary cron check skipped", {
-        reason: "no enabled channel summary schedule configured",
+        reason: "no enabled channel daily or weekly summary schedule configured",
       });
     } else {
       for (const channel of scheduledChannels) {
-        parseCronExpression(channel.summarySchedule);
+        if (channel.summarySchedule) {
+          parseCronExpression(channel.summarySchedule);
+        }
+
+        if (channel.weeklySummarySchedule) {
+          parseCronExpression(channel.weeklySummarySchedule);
+        }
       }
 
       logger.info("Summary cron check passed", {
         channels: scheduledChannels.map((channel) => ({
           code: channel.code,
           summarySchedule: channel.summarySchedule,
+          weeklySummarySchedule: channel.weeklySummarySchedule ?? "",
         })),
         timeZone: config.timeZone,
       });

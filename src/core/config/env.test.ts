@@ -64,6 +64,7 @@ test("getAppConfig parses WECHATY_CHANNELS_JSON with mixed delivery targets", ()
           { type: "room_topic", value: "门店A日报群" },
         ],
         summarySchedule: "0 22 * * *",
+        weeklySummarySchedule: "10 22 * * 0",
       },
       {
         code: "loss_b",
@@ -88,6 +89,7 @@ test("getAppConfig parses WECHATY_CHANNELS_JSON with mixed delivery targets", ()
     type: "room_topic",
     value: "门店A日报群",
   });
+  assert.equal(config.channels[0]?.weeklySummarySchedule, "10 22 * * 0");
 });
 
 test("validateAppConfig rejects duplicate channel code and invalid target type", () => {
@@ -109,6 +111,7 @@ test("validateAppConfig rejects duplicate channel code and invalid target type",
         match: { type: "room_topic", value: "报损群A" },
         deliveryTargets: [{ type: "invalid_target", value: "X" }],
         summarySchedule: "bad cron",
+        weeklySummarySchedule: "bad weekly cron",
       },
     ]),
   });
@@ -119,6 +122,7 @@ test("validateAppConfig rejects duplicate channel code and invalid target type",
   assert(validation.errors.some((error) => error.includes("Duplicate enabled room_topic match: 报损群A")));
   assert(validation.errors.some((error) => error.includes("Unsupported delivery target type")));
   assert(validation.errors.some((error) => error.includes("Invalid summarySchedule")));
+  assert(validation.errors.some((error) => error.includes("Invalid weeklySummarySchedule")));
 });
 
 test("getAppConfig falls back to legacy single-channel env vars", () => {
@@ -137,6 +141,7 @@ test("getAppConfig falls back to legacy single-channel env vars", () => {
   assert.equal(config.channels.length, 1);
   assert.equal(config.channels[0]?.code, "default_loss_report");
   assert.equal(config.channels[0]?.summarySchedule, "15 21 * * *");
+  assert.equal(config.channels[0]?.weeklySummarySchedule, "");
   assert.deepEqual(config.channels[0]?.deliveryTargets, [{ type: "contact_name", value: "Ryan" }]);
   assert.deepEqual(validation.errors, []);
   assert(validation.warnings.some((warning) => warning.includes("Prefer WECHATY_CHANNELS_JSON")));

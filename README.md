@@ -7,7 +7,7 @@
 - 将群消息回发给指定联系人或群
 - 原始消息落 SQLite
 - 图片附件落本地文件
-- 进程内定时发送报损日报
+- 进程内定时发送报损日报、周报
 - 显式登录态与运行状态目录
 
 ## 当前能力
@@ -21,7 +21,7 @@
 - 将图片消息落到 `WECHATY_STATE_DIR/raw/YYYY/MM/DD/`
 - 对报损消息做第一版启发式结构化提取
 - 支持按群生成报损日报文本骨架
-- 支持按 channel 独立 cron 在 bot 进程内直接发送日报
+- 支持按 channel 独立 cron 在 bot 进程内直接发送日报、周报
 - 将二维码、登录态、健康状态统一写入 `WECHATY_STATE_DIR`
 
 ## 环境要求
@@ -58,7 +58,7 @@ WECHATY_LOSS_EXTRACTION_MODEL=
 WECHATY_LOSS_EXTRACTION_API_KEY=
 WECHATY_LOSS_EXTRACTION_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 WECHATY_BOT_NAME=wechat-loss-bot
-WECHATY_CHANNELS_JSON=[{"code":"loss_a","enabled":true,"scenario":"loss-report","match":{"type":"room_topic","value":"门店食材报损群A"},"deliveryTargets":[{"type":"contact_name","value":"你的主微信昵称"},{"type":"room_topic","value":"门店A日报群"}],"summarySchedule":"0 22 * * *"},{"code":"loss_b","enabled":true,"scenario":"loss-report","match":{"type":"room_topic","value":"门店食材报损群B"},"deliveryTargets":[{"type":"contact_name","value":"你的主微信昵称"}],"summarySchedule":"0 22 * * *"}]
+WECHATY_CHANNELS_JSON=[{"code":"loss_a","enabled":true,"scenario":"loss-report","match":{"type":"room_topic","value":"门店食材报损群A"},"deliveryTargets":[{"type":"contact_name","value":"你的主微信昵称"},{"type":"room_topic","value":"门店A日报群"}],"summarySchedule":"0 22 * * *","weeklySummarySchedule":"10 22 * * 0"},{"code":"loss_b","enabled":true,"scenario":"loss-report","match":{"type":"room_topic","value":"门店食材报损群B"},"deliveryTargets":[{"type":"contact_name","value":"你的主微信昵称"}],"summarySchedule":"0 22 * * *"}]
 ```
 
 字段说明：
@@ -68,7 +68,7 @@ WECHATY_CHANNELS_JSON=[{"code":"loss_a","enabled":true,"scenario":"loss-report",
 - `WECHATY_STATE_DIR`: 统一状态目录，包含 SQLite、附件、二维码、health、memory-card
 - `WECHATY_TIMEZONE`: 日期边界和 cron 解释时区，默认 `Asia/Shanghai`
 - `WECHATY_DEBUG_CONTACT_NAME`: 所有 `"[wechat-claw]"` 调试信息统一发送到这个联系人，不参与业务日报发送
-- `WECHATY_CHANNELS_JSON`: 推荐的多群配置入口，支持多个监听群、多个发送目标、每个 channel 独立日报周期
+- `WECHATY_CHANNELS_JSON`: 推荐的多群配置入口，支持多个监听群、多个发送目标、每个 channel 独立日报/周报周期
 - `WECHATY_SUMMARY_PROMPT_TEMPLATE`: 总结提示词模板，可自定义
 - `WECHATY_LOSS_MERGE_WINDOW_SECONDS`: 同一人图文消息合并窗口，默认 `60` 秒
   当前规则：
@@ -95,10 +95,16 @@ WECHATY_CHANNELS_JSON=[{"code":"loss_a","enabled":true,"scenario":"loss-report",
       { "type": "contact_name", "value": "你的主微信昵称" },
       { "type": "room_topic", "value": "门店A日报群" }
     ],
-    "summarySchedule": "0 22 * * *"
+    "summarySchedule": "0 22 * * *",
+    "weeklySummarySchedule": "10 22 * * 0"
   }
 ]
 ```
+
+说明：
+
+- `summarySchedule`: 日报 cron，例如每天 `22:00` 用 `0 22 * * *`
+- `weeklySummarySchedule`: 周报 cron，例如每周日 `22:10` 用 `10 22 * * 0`
 
 兼容说明：
 

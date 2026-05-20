@@ -17,4 +17,5 @@ export interface ChannelConfig {
   match: ChannelMatch;
   deliveryTargets: DeliveryTarget[];
   summarySchedule: string;
+  weeklySummarySchedule?: string;
 }

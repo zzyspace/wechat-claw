@@ -22,6 +22,10 @@ function pad(value: number): string {
   return String(value).padStart(2, "0");
 }
 
+function formatDateString(year: number, month: number, day: number): string {
+  return `${year}-${pad(month)}-${pad(day)}`;
+}
+
 export function parseDateString(date: string) {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
 
@@ -65,7 +69,7 @@ export function getZonedDateParts(date: Date, timeZone: string): ZonedDateParts 
 
 export function formatZonedDate(date: Date, timeZone: string): string {
   const parts = getZonedDateParts(date, timeZone);
-  return `${parts.year}-${pad(parts.month)}-${pad(parts.day)}`;
+  return formatDateString(parts.year, parts.month, parts.day);
 }
 
 export function formatZonedMinuteKey(date: Date, timeZone: string): string {
@@ -126,20 +130,55 @@ export function zonedDateTimeToUtc(
   return candidate;
 }
 
-export function getUtcRangeForZonedDate(date: string, timeZone: string) {
-  const start = parseDateString(date);
-  const nextDayUtc = new Date(Date.UTC(start.year, start.month - 1, start.day + 1, 0, 0, 0));
+export function addDaysToDateString(date: string, days: number): string {
+  const parts = parseDateString(date);
+  const shifted = new Date(Date.UTC(parts.year, parts.month - 1, parts.day + days, 12, 0, 0));
 
-  const startUtc = zonedDateTimeToUtc(start.year, start.month, start.day, 0, 0, 0, timeZone);
-  const endParts = {
-    year: nextDayUtc.getUTCFullYear(),
-    month: nextDayUtc.getUTCMonth() + 1,
-    day: nextDayUtc.getUTCDate(),
-  };
-  const endUtc = zonedDateTimeToUtc(endParts.year, endParts.month, endParts.day, 0, 0, 0, timeZone);
+  return formatDateString(
+    shifted.getUTCFullYear(),
+    shifted.getUTCMonth() + 1,
+    shifted.getUTCDate(),
+  );
+}
+
+function getUtcStartOfZonedDate(date: string, timeZone: string) {
+  const parts = parseDateString(date);
+  return zonedDateTimeToUtc(parts.year, parts.month, parts.day, 0, 0, 0, timeZone);
+}
+
+export function getUtcRangeForZonedDate(date: string, timeZone: string) {
+  const startUtc = getUtcStartOfZonedDate(date, timeZone);
+  const endUtc = getUtcStartOfZonedDate(addDaysToDateString(date, 1), timeZone);
 
   return {
     startInclusiveIso: startUtc.toISOString(),
     endExclusiveIso: endUtc.toISOString(),
+  };
+}
+
+export function getWeekRangeForDate(date: string) {
+  parseDateString(date);
+  const anchor = new Date(`${date}T12:00:00.000Z`);
+  const weekday = anchor.getUTCDay();
+  const diffToMonday = (weekday + 6) % 7;
+  const startDate = addDaysToDateString(date, -diffToMonday);
+  const endDate = addDaysToDateString(startDate, 6);
+  const endExclusiveDate = addDaysToDateString(startDate, 7);
+
+  return {
+    startDate,
+    endDate,
+    endExclusiveDate,
+  };
+}
+
+export function getUtcRangeForZonedWeek(date: string, timeZone: string) {
+  const { startDate, endDate, endExclusiveDate } = getWeekRangeForDate(date);
+
+  return {
+    startDate,
+    endDate,
+    startInclusiveIso: getUtcStartOfZonedDate(startDate, timeZone).toISOString(),
+    endExclusiveIso: getUtcStartOfZonedDate(endExclusiveDate, timeZone).toISOString(),
   };
 }

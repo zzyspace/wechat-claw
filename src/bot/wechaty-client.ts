@@ -56,6 +56,7 @@ export async function startBot(
       roomTopic: channel.match.value,
       scenario: channel.scenario,
       summarySchedule: channel.summarySchedule || "(disabled)",
+      weeklySummarySchedule: channel.weeklySummarySchedule || "(disabled)",
     })),
     channelsSource: config.channelsSource,
     puppet: config.puppet,

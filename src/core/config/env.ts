@@ -140,6 +140,8 @@ function normalizeChannelConfig(value: unknown): ChannelConfig {
         .filter((target) => target.value.length > 0),
     ),
     summarySchedule: typeof record.summarySchedule === "string" ? record.summarySchedule.trim() : "",
+    weeklySummarySchedule:
+      typeof record.weeklySummarySchedule === "string" ? record.weeklySummarySchedule.trim() : "",
   };
 }
 
@@ -162,6 +164,7 @@ function buildLegacyChannel(input: {
     },
     deliveryTargets: dedupeDeliveryTargets(targets),
     summarySchedule: input.summarySchedule,
+    weeklySummarySchedule: "",
   };
 }
 
@@ -337,6 +340,12 @@ export function validateAppConfig(config: AppConfig): ConfigValidationResult {
     if (!isValidCronExpression(channel.summarySchedule)) {
       errors.push(
         `Invalid summarySchedule for channel ${channel.code || "(missing-code)"}: ${channel.summarySchedule}`,
+      );
+    }
+
+    if (!isValidCronExpression(channel.weeklySummarySchedule ?? "")) {
+      errors.push(
+        `Invalid weeklySummarySchedule for channel ${channel.code || "(missing-code)"}: ${channel.weeklySummarySchedule}`,
       );
     }
   }

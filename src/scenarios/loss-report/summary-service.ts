@@ -1,6 +1,11 @@
 import { getDatabase } from "../../core/storage/database.js";
-import { formatZonedDate, getUtcRangeForZonedDate } from "../../core/runtime/timezone.js";
-import { buildLossDailySummaryWithMergeWindow, renderLossDailySummaryText } from "./daily-summary.js";
+import { formatZonedDate, getUtcRangeForZonedDate, getUtcRangeForZonedWeek } from "../../core/runtime/timezone.js";
+import {
+  buildLossDailySummaryWithMergeWindow,
+  buildLossWeeklySummaryWithMergeWindow,
+  renderLossDailySummaryText,
+  renderLossWeeklySummaryText,
+} from "./daily-summary.js";
 import { getLossReportScenarioConfig } from "./config.js";
 
 interface SummaryRow {
@@ -112,6 +117,29 @@ export function renderLossDailySummaryForDate(
   summary.channelName = options.channelName ?? summary.channelName;
 
   return renderLossDailySummaryText(summary, scenarioConfig.summaryPromptTemplate);
+}
+
+export function renderLossWeeklySummaryForDate(
+  targetDate: string,
+  options: LossSummaryRenderOptions,
+): string {
+  const scenarioConfig = getLossReportScenarioConfig({
+    summaryCron: options.summaryCron,
+    summaryPromptTemplate: options.summaryPromptTemplate,
+    mergeWindowSeconds: options.mergeWindowSeconds,
+  });
+  const range = getUtcRangeForZonedWeek(targetDate, options.timeZone);
+  const rows = queryRowsByUtcRange(range.startInclusiveIso, range.endExclusiveIso, options.channelCode);
+  const summary = buildLossWeeklySummaryWithMergeWindow(
+    range.startDate,
+    range.endDate,
+    mapRows(rows),
+    scenarioConfig.mergeWindowSeconds,
+  );
+  summary.channelCode = options.channelCode ?? summary.channelCode;
+  summary.channelName = options.channelName ?? summary.channelName;
+
+  return renderLossWeeklySummaryText(summary, scenarioConfig.summaryPromptTemplate);
 }
 
 export function renderRecentLossSummary(

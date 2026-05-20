@@ -1,5 +1,10 @@
 import type { ScenarioExtractionRecord } from "../../core/scenarios/scenario-extraction-repository.js";
-import type { LossDailySummary, LossReporterDailySummary, LossReporterDailySummaryItem } from "./types.js";
+import type {
+  LossDailySummary,
+  LossReporterDailySummary,
+  LossReporterDailySummaryItem,
+  LossWeeklySummary,
+} from "./types.js";
 
 interface ExtractionRow {
   channelCode?: string;
@@ -40,6 +45,29 @@ export function buildLossDailySummaryWithMergeWindow(
   rows: ExtractionRow[],
   mergeWindowSeconds: number,
 ): LossDailySummary {
+  return {
+    date,
+    ...buildLossSummaryBaseWithMergeWindow(rows, mergeWindowSeconds),
+  };
+}
+
+export function buildLossWeeklySummaryWithMergeWindow(
+  startDate: string,
+  endDate: string,
+  rows: ExtractionRow[],
+  mergeWindowSeconds: number,
+): LossWeeklySummary {
+  return {
+    startDate,
+    endDate,
+    ...buildLossSummaryBaseWithMergeWindow(rows, mergeWindowSeconds),
+  };
+}
+
+function buildLossSummaryBaseWithMergeWindow(
+  rows: ExtractionRow[],
+  mergeWindowSeconds: number,
+) {
   const sortedRows = [...rows].sort((a, b) => {
     if ((a.channelCode ?? a.channelName) !== (b.channelCode ?? b.channelName)) {
       return (a.channelCode ?? a.channelName).localeCompare(b.channelCode ?? b.channelName);
@@ -115,7 +143,6 @@ export function buildLossDailySummaryWithMergeWindow(
   );
 
   return {
-    date,
     channelCode: rows[0]?.channelCode,
     channelName: rows[0]?.channelName,
     totalRelevantMessages: reporters.reduce((count, reporter) => count + reporter.reportItems.length, 0),
@@ -381,9 +408,44 @@ function hasMeaningfulSourceText(textContent: string) {
 }
 
 export function renderLossDailySummaryText(summary: LossDailySummary, promptTemplate: string): string {
+  return renderLossSummaryText(
+    {
+      title: `报损日报（${summary.date}）`,
+      channelName: summary.channelName,
+      totalRelevantMessages: summary.totalRelevantMessages,
+      totalReporters: summary.totalReporters,
+      reporters: summary.reporters,
+    },
+    promptTemplate,
+  );
+}
+
+export function renderLossWeeklySummaryText(summary: LossWeeklySummary, promptTemplate: string): string {
+  return renderLossSummaryText(
+    {
+      title: `报损周报（${summary.startDate} ~ ${summary.endDate}）`,
+      channelName: summary.channelName,
+      totalRelevantMessages: summary.totalRelevantMessages,
+      totalReporters: summary.totalReporters,
+      reporters: summary.reporters,
+    },
+    promptTemplate,
+  );
+}
+
+function renderLossSummaryText(
+  summary: {
+    title: string;
+    channelName?: string;
+    totalRelevantMessages: number;
+    totalReporters: number;
+    reporters: LossDailySummary["reporters"];
+  },
+  promptTemplate: string,
+) {
   const promptLines = promptTemplate.trim() ? [promptTemplate, ""] : [];
   const header = [
-    `报损日报（${summary.date}）`,
+    summary.title,
     summary.channelName ? `群聊：${summary.channelName}` : "",
     "",
     `总计 ${summary.totalReporters} 人上报，${summary.totalRelevantMessages} 条相关记录。`,
