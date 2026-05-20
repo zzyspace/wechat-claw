@@ -293,6 +293,9 @@ sudo deploy-wechat-claw
 这个命令会执行：
 
 - `git pull --ff-only origin main`
+- 安装最新的 `systemd` service 文件
+- 安装 `needrestart` 豁免，避免系统自动升级时重启 bot
+- `systemctl daemon-reload`
 - `npm ci`
 - `npm run build`
 - `npm run doctor`
@@ -351,6 +354,12 @@ WECHATY_DELIVERY_CONTACT_NAME=你的主微信昵称
 - `/var/lib/wechat-claw/latest-qrcode.txt`
 
 首次登录或掉线重登时，直接查看二维码文件并扫码即可。
+
+自动升级说明：
+
+- Ubuntu 的 `unattended-upgrades` 会配合 `needrestart` 重启使用旧系统库的服务
+- 仓库里的 `deploy/needrestart-wechat-claw.conf` 会把 `wechat-claw.service` 排除掉，避免早晨自动补丁时 bot 被反复拉起
+- 如果你手工维护服务器，也可以确认服务器存在 `/etc/needrestart/conf.d/wechat-claw.conf`
 
 ## 下一步
 

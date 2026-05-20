@@ -6,6 +6,8 @@ APP_DIR="/opt/wechat-claw/current"
 APP_USER="wechatclaw"
 ENV_FILE="/etc/wechat-claw.env"
 SERVICE_NAME="wechat-claw"
+SYSTEMD_UNIT_DIR="/etc/systemd/system"
+NEEDRESTART_CONF_DIR="/etc/needrestart/conf.d"
 WITH_ENV_SOURCE=""
 
 usage() {
@@ -42,7 +44,7 @@ if [[ "${EUID}" -ne 0 ]]; then
   exit 1
 fi
 
-for cmd in git npm systemctl sudo; do
+for cmd in git install npm systemctl sudo; do
   if ! command -v "${cmd}" >/dev/null 2>&1; then
     echo "Missing required command: ${cmd}" >&2
     exit 1
@@ -69,12 +71,32 @@ if [[ ! -f "${ENV_FILE}" ]]; then
   exit 1
 fi
 
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+service_source="${script_dir}/wechat-claw.service"
+service_target="${SYSTEMD_UNIT_DIR}/${SERVICE_NAME}.service"
+needrestart_source="${script_dir}/needrestart-wechat-claw.conf"
+needrestart_target="${NEEDRESTART_CONF_DIR}/${SERVICE_NAME}.conf"
+
 run_as_app_user() {
   sudo -u "${APP_USER}" -H bash -lc "cd '${APP_DIR}' && $*"
 }
 
 echo "[deploy] Pulling latest code from origin/main"
 run_as_app_user "git pull --ff-only origin main"
+
+if [[ -f "${service_source}" ]]; then
+  echo "[deploy] Installing systemd unit"
+  install -m 644 -o root -g root "${service_source}" "${service_target}"
+fi
+
+if [[ -f "${needrestart_source}" ]]; then
+  echo "[deploy] Installing needrestart override"
+  install -d -m 755 -o root -g root "${NEEDRESTART_CONF_DIR}"
+  install -m 644 -o root -g root "${needrestart_source}" "${needrestart_target}"
+fi
+
+echo "[deploy] Reloading systemd daemon"
+systemctl daemon-reload
 
 echo "[deploy] Installing production dependencies"
 run_as_app_user "npm ci"

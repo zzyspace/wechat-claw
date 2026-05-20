@@ -10,6 +10,7 @@ EnvironmentFile=/etc/wechat-claw.env
 ExecStart=/usr/bin/node dist/app/bootstrap.js
 Restart=always
 RestartSec=5
+TimeoutStopSec=20
 
 [Install]
 WantedBy=multi-user.target

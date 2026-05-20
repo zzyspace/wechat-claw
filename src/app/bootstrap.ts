@@ -6,6 +6,32 @@ import { startLossSummaryScheduler } from "../core/runtime/summary-scheduler.js"
 import { startBot } from "../bot/wechaty-client.js";
 import type { WechatyInstance } from "../bot/types.js";
 
+const SHUTDOWN_TIMEOUT_MS = 15_000;
+
+function createTimeoutError(timeoutMs: number) {
+  return new Error(`Timed out after ${timeoutMs} ms while waiting for bot shutdown`);
+}
+
+async function stopBotWithTimeout(bot: WechatyInstance, timeoutMs: number) {
+  let timeoutHandle: NodeJS.Timeout | undefined;
+
+  try {
+    await Promise.race([
+      bot.stop(),
+      new Promise<never>((_, reject) => {
+        timeoutHandle = setTimeout(() => {
+          reject(createTimeoutError(timeoutMs));
+        }, timeoutMs);
+        timeoutHandle.unref();
+      }),
+    ]);
+  } finally {
+    if (timeoutHandle) {
+      clearTimeout(timeoutHandle);
+    }
+  }
+}
+
 async function main() {
   let bot: WechatyInstance | undefined;
   let stopScheduler = () => {
@@ -13,33 +39,56 @@ async function main() {
   };
   let shuttingDown = false;
   let healthReporter: HealthReporter | undefined;
+  let shutdownPromise: Promise<void> | undefined;
 
   const shutdown = async (signal: string) => {
-    if (shuttingDown) {
-      return;
+    if (shutdownPromise) {
+      return shutdownPromise;
     }
 
-    shuttingDown = true;
-    logger.info("Received shutdown signal", { signal });
-    stopScheduler();
+    shutdownPromise = (async () => {
+      shuttingDown = true;
 
-    if (bot) {
-      try {
-        await bot.stop();
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        logger.error("Failed to stop bot cleanly", { message });
+      logger.info("Received shutdown signal", { signal });
+      stopScheduler();
+
+      if (bot) {
+        try {
+          await stopBotWithTimeout(bot, SHUTDOWN_TIMEOUT_MS);
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          logger.error("Failed to stop bot cleanly", {
+            message,
+            timeoutMs: SHUTDOWN_TIMEOUT_MS,
+          });
+        }
       }
-    }
 
-    healthReporter?.setStatus("stopped");
+      healthReporter?.setStatus("stopped");
+    })();
+
+    return shutdownPromise;
   };
 
   process.once("SIGINT", () => {
-    void shutdown("SIGINT");
+    void shutdown("SIGINT").then(
+      () => {
+        process.exit(0);
+      },
+      () => {
+        process.exit(1);
+      },
+    );
   });
   process.once("SIGTERM", () => {
-    void shutdown("SIGTERM");
+    void shutdown("SIGTERM").then(
+      () => {
+        process.exit(0);
+      },
+      () => {
+        process.exit(1);
+      },
+    );
   });
 
   try {
@@ -86,7 +135,9 @@ async function main() {
       status: "degraded",
     });
     logger.error("Application failed to start", { message });
-    process.exitCode = 1;
+    if (!shuttingDown) {
+      process.exit(1);
+    }
   }
 }
 
