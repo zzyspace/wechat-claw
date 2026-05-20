@@ -105,6 +105,10 @@ WECHATY_CHANNELS_JSON=[{"code":"loss_a","enabled":true,"scenario":"loss-report",
 
 - `summarySchedule`: 日报 cron，例如每天 `22:00` 用 `0 22 * * *`
 - `weeklySummarySchedule`: 周报 cron，例如每周日 `22:10` 用 `10 22 * * 0`
+- `summarySchedule` 或 `weeklySummarySchedule` 留空 `""`，表示关闭对应的自动发送
+- 也就是说：
+  - `summarySchedule` 留空时，不会自动发送日报
+  - `weeklySummarySchedule` 留空时，不会自动发送周报
 
 兼容说明：
 
@@ -197,6 +201,26 @@ npm run inspect:messages
 ```bash
 npm run summary:loss
 ```
+
+只打印汇总，不做发送：
+
+```bash
+npm run summary:print -- --type daily --date 2026-05-20
+npm run summary:print -- --type weekly --date 2026-05-24
+```
+
+也可以用快捷命令：
+
+```bash
+npm run summary:print:daily -- --channel loss_a --date 2026-05-20
+npm run summary:print:weekly -- --channel loss_a --date 2026-05-24
+```
+
+说明：
+
+- `summary:print` 只在终端打印日报或周报文本，不会发送到微信
+- `--type` 可选 `daily` 或 `weekly`，默认 `daily`
+- 不传 `--channel` 时，会打印所有启用中的 `loss-report` channel
 
 命令行立即触发日报发送：
 
