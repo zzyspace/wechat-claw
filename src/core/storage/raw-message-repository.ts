@@ -7,6 +7,15 @@ export interface SaveRawMessageResult {
   rawMessageId: number;
 }
 
+export interface RecentImageMessageLookupInput {
+  beforeIso: string;
+  channelCode?: string;
+  channelName: string;
+  senderExternalId?: string;
+  senderName: string;
+  sinceIso: string;
+}
+
 export interface RecentRawMessageRecord {
   id: number;
   messageExternalId: string;
@@ -118,6 +127,76 @@ export function saveRawMessage(input: StoredRawMessageInput): SaveRawMessageResu
     inserted: true,
     rawMessageId,
   };
+}
+
+export function hasRecentImageMessage(input: RecentImageMessageLookupInput): boolean {
+  const db = getDatabase();
+
+  if (input.channelCode) {
+    if (input.senderExternalId) {
+      const row = db
+        .prepare(`
+          SELECT 1
+          FROM raw_messages rm
+          INNER JOIN message_attachments ma ON ma.raw_message_id = rm.id
+          WHERE rm.channel_code = ?
+            AND rm.sender_external_id = ?
+            AND rm.event_received_at >= ?
+            AND rm.event_received_at < ?
+          LIMIT 1
+        `)
+        .get(input.channelCode, input.senderExternalId, input.sinceIso, input.beforeIso);
+
+      return Boolean(row);
+    }
+
+    const row = db
+      .prepare(`
+        SELECT 1
+        FROM raw_messages rm
+        INNER JOIN message_attachments ma ON ma.raw_message_id = rm.id
+        WHERE rm.channel_code = ?
+          AND rm.sender_name = ?
+          AND rm.event_received_at >= ?
+          AND rm.event_received_at < ?
+        LIMIT 1
+      `)
+      .get(input.channelCode, input.senderName, input.sinceIso, input.beforeIso);
+
+    return Boolean(row);
+  }
+
+  if (input.senderExternalId) {
+    const row = db
+      .prepare(`
+        SELECT 1
+        FROM raw_messages rm
+        INNER JOIN message_attachments ma ON ma.raw_message_id = rm.id
+        WHERE rm.channel_name = ?
+          AND rm.sender_external_id = ?
+          AND rm.event_received_at >= ?
+          AND rm.event_received_at < ?
+        LIMIT 1
+      `)
+      .get(input.channelName, input.senderExternalId, input.sinceIso, input.beforeIso);
+
+    return Boolean(row);
+  }
+
+  const row = db
+    .prepare(`
+      SELECT 1
+      FROM raw_messages rm
+      INNER JOIN message_attachments ma ON ma.raw_message_id = rm.id
+      WHERE rm.channel_name = ?
+        AND rm.sender_name = ?
+        AND rm.event_received_at >= ?
+        AND rm.event_received_at < ?
+      LIMIT 1
+    `)
+    .get(input.channelName, input.senderName, input.sinceIso, input.beforeIso);
+
+  return Boolean(row);
 }
 
 export function listRecentRawMessages(limit = 10): RecentRawMessageRecord[] {

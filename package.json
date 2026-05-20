@@ -15,7 +15,7 @@
     "summary:loss": "node --loader ts-node/esm src/app/render-loss-summary.ts",
     "summary:send": "node --loader ts-node/esm src/app/send-loss-summary.ts",
     "summary:loss:recent": "node --loader ts-node/esm src/app/render-loss-summary-recent.ts",
-    "test": "npm run build && node --test dist/core/config/env.test.js dist/core/channels/router.test.js dist/bot/delivery-contact.test.js dist/bot/message-handler.test.js dist/scenarios/loss-report/daily-summary.test.js dist/scenarios/loss-report/model-provider.test.js dist/core/runtime/manual-summary-request-command.test.js dist/core/runtime/loss-summary-delivery.test.js",
+    "test": "npm run build && node --test dist/core/config/env.test.js dist/core/channels/router.test.js dist/bot/delivery-contact.test.js dist/bot/message-handler.test.js dist/scenarios/loss-report/daily-summary.test.js dist/scenarios/loss-report/model-provider.test.js dist/core/runtime/manual-summary-request-command.test.js dist/core/runtime/manual-summary-request-gate.test.js dist/core/runtime/loss-summary-delivery.test.js",
     "postinstall": "node scripts/patch-wechaty-puppet-wechat.mjs",
     "start": "node dist/app/bootstrap.js"
   },

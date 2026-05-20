@@ -15,6 +15,7 @@ import {
   getSummarySendRequestById,
   type SummarySendRequestRecord,
 } from "../core/runtime/manual-summary-request.js";
+import { getManualSummaryRequestGateResult } from "../core/runtime/manual-summary-request-gate.js";
 import { assertStateDirWritable } from "../core/runtime/state-paths.js";
 
 const REQUEST_POLL_INTERVAL_MS = 1_000;
@@ -83,6 +84,17 @@ async function main() {
     logger.error("Failed to resolve summary send channels", {
       message,
       usage: buildUsageText(),
+    });
+    process.exitCode = 1;
+    return;
+  }
+
+  const gateResult = getManualSummaryRequestGateResult(config);
+
+  if (!gateResult.allowed) {
+    logger.warn("Manual daily summary request discarded", {
+      message: gateResult.reason,
+      runtimeStatus: gateResult.status ?? "unknown",
     });
     process.exitCode = 1;
     return;

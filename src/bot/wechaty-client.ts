@@ -166,6 +166,7 @@ export async function startBot(
         {
           channels: config.channels,
           debugContactName: config.debugContactName,
+          lossMergeWindowSeconds: config.lossMergeWindowSeconds,
           lossExtractionProvider: config.lossExtractionProvider,
           lossExtractionModel: config.lossExtractionModel,
           lossExtractionApiKey: config.lossExtractionApiKey,

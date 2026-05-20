@@ -4,7 +4,7 @@ import type { Logger } from "../core/logging/logger.js";
 import { saveImageAttachment } from "../core/attachments/save-image-attachment.js";
 import { normalizeMessage } from "../core/messages/normalize-message.js";
 import { saveScenarioExtraction } from "../core/scenarios/scenario-extraction-repository.js";
-import { saveRawMessage } from "../core/storage/raw-message-repository.js";
+import { hasRecentImageMessage, saveRawMessage } from "../core/storage/raw-message-repository.js";
 import { extractLossReportHeuristically } from "../scenarios/loss-report/heuristic-extractor.js";
 import { extractLossReportByModel } from "../scenarios/loss-report/model-provider.js";
 import { sendTextToTarget } from "./delivery-contact.js";
@@ -12,6 +12,7 @@ import { sendTextToTarget } from "./delivery-contact.js";
 export interface MessageContext {
   channels: ChannelConfig[];
   debugContactName?: string;
+  lossMergeWindowSeconds: number;
   lossExtractionProvider?: string;
   lossExtractionModel?: string;
   lossExtractionApiKey?: string;
@@ -53,7 +54,20 @@ export async function handleMessage(message: any, context: MessageContext, logge
     }
   }
 
-  if (isTextOnlyMessage(normalizedText, attachments)) {
+  const senderExternalId = talker && typeof talker.id === "function" ? talker.id() : undefined;
+
+  if (
+    shouldSkipTextOnlyMessage({
+      attachments,
+      channelCode: channel.code,
+      channelName: roomTopic,
+      eventReceivedAt,
+      mergeWindowSeconds: context.lossMergeWindowSeconds,
+      normalizedText,
+      senderExternalId,
+      senderName,
+    })
+  ) {
     logger.info("Skipped text-only room message", {
       channelCode: channel.code,
       roomTopic,
@@ -69,7 +83,7 @@ export async function handleMessage(message: any, context: MessageContext, logge
     channelCode: channel.code,
     channelExternalId: typeof room.id === "function" ? room.id() : undefined,
     channelName: roomTopic,
-    senderExternalId: talker && typeof talker.id === "function" ? talker.id() : undefined,
+    senderExternalId,
     senderName,
     messageType: String(typeValue),
     textContent: normalizedText,
@@ -204,8 +218,36 @@ function normalizeMessageText(text: string, typeValue: unknown) {
   return trimmed;
 }
 
-function isTextOnlyMessage(normalizedText: string, attachments: unknown[]) {
-  return attachments.length === 0 && normalizedText !== "(非文本消息)";
+function shouldSkipTextOnlyMessage(input: {
+  attachments: unknown[];
+  channelCode?: string;
+  channelName: string;
+  eventReceivedAt: string;
+  mergeWindowSeconds: number;
+  normalizedText: string;
+  senderExternalId?: string;
+  senderName: string;
+}) {
+  if (input.attachments.length > 0 || input.normalizedText === "(非文本消息)") {
+    return false;
+  }
+
+  if (input.mergeWindowSeconds <= 0) {
+    return true;
+  }
+
+  const currentTime = new Date(input.eventReceivedAt).getTime();
+  const sinceIso = new Date(currentTime - input.mergeWindowSeconds * 1000).toISOString();
+  const hasRecentImageContext = hasRecentImageMessage({
+    beforeIso: input.eventReceivedAt,
+    channelCode: input.channelCode,
+    channelName: input.channelName,
+    senderExternalId: input.senderExternalId,
+    senderName: input.senderName,
+    sinceIso,
+  });
+
+  return !hasRecentImageContext;
 }
 
 function isXmlImagePayload(text: string, typeValue: unknown) {
