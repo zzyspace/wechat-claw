@@ -111,7 +111,8 @@ npm run dev
 如果服务器已经初始化完成，而你这次没有改本地 `.env`，可以直接执行：
 
 ```bash
-sudo deploy-wechat-claw
+cd /opt/wechat-claw/current
+sudo bash deploy/deploy-wechat-claw.sh
 ```
 
 如果你想避免忘记同步服务器配置，推荐以后统一使用这一条本地发布命令：

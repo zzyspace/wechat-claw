@@ -361,7 +361,8 @@ sudo systemctl restart wechat-claw
 如果服务器已经完成这次初始化，而你这次没有改本地 `.env`，可以直接用：
 
 ```bash
-sudo deploy-wechat-claw
+cd /opt/wechat-claw/current
+sudo bash deploy/deploy-wechat-claw.sh
 ```
 
 这个命令会执行：
@@ -391,6 +392,7 @@ deploy/release-wechat-claw.sh root@139.196.140.215
 
 - `deploy-wechat-claw` 会把依赖签名写到 `node_modules/.wechat-claw-deps.sha256`
 - 如果依赖输入没变化，就会跳过 `npm ci`，避免每次发布都重新下载 `puppeteer` 一类的大包
+- `deploy/sync-wechat-claw-env.sh --deploy` 会直接执行仓库里的 `deploy/deploy-wechat-claw.sh`，避免服务器 PATH 里的旧版 `deploy-wechat-claw` 副本绕过最新逻辑
 
 如果你本地改了 `.env`，但这次只想同步配置、不发布代码，才单独使用：
 
@@ -427,8 +429,8 @@ sudo systemctl restart wechat-claw
 可以按下面规则判断：
 
 - 只改 `/etc/wechat-claw.env`：执行 `sudo systemctl restart wechat-claw`
-- 改了代码：执行 `sudo deploy-wechat-claw`
-- 改了代码和 `/etc/wechat-claw.env`：直接执行 `sudo deploy-wechat-claw`
+- 改了代码：执行 `cd /opt/wechat-claw/current && sudo bash deploy/deploy-wechat-claw.sh`
+- 改了代码和 `/etc/wechat-claw.env`：直接执行 `cd /opt/wechat-claw/current && sudo bash deploy/deploy-wechat-claw.sh`
 
 如果你要在服务器上“清空报损数据库里的所有数据，但保留数据库文件和表结构”，可以直接执行：
 

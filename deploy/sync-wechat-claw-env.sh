@@ -5,6 +5,7 @@ set -euo pipefail
 STATE_DIR="/var/lib/wechat-claw"
 TIMEZONE="Asia/Shanghai"
 REMOTE_ENV_PATH="/etc/wechat-claw.env"
+REMOTE_APP_DIR="/opt/wechat-claw/current"
 RUN_DEPLOY=0
 
 usage() {
@@ -16,7 +17,7 @@ Options:
   --state-dir <path>        Server-side WECHATY_STATE_DIR. Default: /var/lib/wechat-claw
   --timezone <tz>           Server-side WECHATY_TIMEZONE. Default: Asia/Shanghai
   --remote-env-path <path>  Remote target env file. Default: /etc/wechat-claw.env
-  --deploy                  Run `sudo deploy-wechat-claw` on the server after syncing env
+  --deploy                  Run the repo deploy script on the server after syncing env
   -h, --help                Show help
 
 Examples:
@@ -160,5 +161,5 @@ echo "[sync-env] Env sync completed"
 
 if [[ "${RUN_DEPLOY}" -eq 1 ]]; then
   echo "[sync-env] Running remote deploy"
-  ssh -o StrictHostKeyChecking=no "${SSH_TARGET}" "sudo deploy-wechat-claw"
+  ssh -o StrictHostKeyChecking=no "${SSH_TARGET}" "cd '${REMOTE_APP_DIR}' && sudo bash deploy/deploy-wechat-claw.sh"
 fi
