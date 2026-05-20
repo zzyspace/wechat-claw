@@ -474,6 +474,12 @@ sudo bash deploy/clear-wechat-claw-db.sh
 - 重置自增 ID，并执行 `wal_checkpoint + VACUUM`
 - 重新启动 `wechat-claw`
 
+补充说明：
+
+- 脚本会优先使用系统里的 `sqlite3`
+- 如果服务器没装 `sqlite3`，会自动回退到项目里的 `Node.js + better-sqlite3`
+- 如果你更想直接安装系统命令，在 Ubuntu 上执行 `sudo apt-get update && sudo apt-get install -y sqlite3`
+
 如果你不想手工输入确认，可以加 `--yes`：
 
 ```bash
