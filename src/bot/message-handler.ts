@@ -53,6 +53,17 @@ export async function handleMessage(message: any, context: MessageContext, logge
     }
   }
 
+  if (isTextOnlyMessage(normalizedText, attachments)) {
+    logger.info("Skipped text-only room message", {
+      channelCode: channel.code,
+      roomTopic,
+      senderName,
+      text: normalizedText,
+      typeValue,
+    });
+    return;
+  }
+
   const normalized = normalizeMessage({
     messageExternalId: String(messageId),
     channelCode: channel.code,
@@ -191,6 +202,10 @@ function normalizeMessageText(text: string, typeValue: unknown) {
   }
 
   return trimmed;
+}
+
+function isTextOnlyMessage(normalizedText: string, attachments: unknown[]) {
+  return attachments.length === 0 && normalizedText !== "(非文本消息)";
 }
 
 function isXmlImagePayload(text: string, typeValue: unknown) {
