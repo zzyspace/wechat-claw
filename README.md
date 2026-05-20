@@ -408,6 +408,37 @@ sudo systemctl restart wechat-claw
 - 改了代码：执行 `sudo deploy-wechat-claw`
 - 改了代码和 `/etc/wechat-claw.env`：直接执行 `sudo deploy-wechat-claw`
 
+如果你要在服务器上“清空报损数据库里的所有数据，但保留数据库文件和表结构”，可以直接执行：
+
+```bash
+cd /opt/wechat-claw/current
+sudo bash deploy/clear-wechat-claw-db.sh
+```
+
+这个脚本会按顺序执行：
+
+- 停掉 `wechat-claw` 服务
+- 从 `/etc/wechat-claw.env` 读取 `WECHATY_STATE_DIR`
+- 定位 `${WECHATY_STATE_DIR}/wechat-claw.sqlite`
+- 先备份一份 SQLite 到 `${WECHATY_STATE_DIR}/backups/`
+- 清空 `raw_messages`、`message_attachments`、`scenario_extractions`、`summary_send_requests`
+- 重置自增 ID，并执行 `wal_checkpoint + VACUUM`
+- 重新启动 `wechat-claw`
+
+如果你不想手工输入确认，可以加 `--yes`：
+
+```bash
+cd /opt/wechat-claw/current
+sudo bash deploy/clear-wechat-claw-db.sh --yes
+```
+
+补充说明：
+
+- 这个脚本只清空 SQLite 里的业务数据，不会删除数据库文件本身
+- 它也不会删除 `WECHATY_STATE_DIR/raw/` 里的历史图片附件文件
+- 如果你连附件文件也想一起清理，建议先确认是否还需要保留原始取证材料，再单独删除
+- 如果服务名或数据库路径不是默认值，可以执行 `sudo bash deploy/clear-wechat-claw-db.sh --help`
+
 如果想在重启前先验证配置，可以执行：
 
 ```bash
