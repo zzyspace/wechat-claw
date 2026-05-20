@@ -81,39 +81,39 @@ run_as_app_user() {
   sudo -u "${APP_USER}" -H bash -lc "cd '${APP_DIR}' && $*"
 }
 
-compute_normalized_lock_signature() {
-  local lockfile_path="$1"
-
-  LOCKFILE_PATH="${lockfile_path}" node <<'EOF'
+validate_installed_dependency_tree() {
+  APP_DIR_ENV="${APP_DIR}" node <<'EOF'
 const fs = require("node:fs");
-const crypto = require("node:crypto");
+const path = require("node:path");
 
-function stable(value) {
-  if (Array.isArray(value)) {
-    return value.map(stable);
+const appDir = process.env.APP_DIR_ENV;
+const lockfile = JSON.parse(
+  fs.readFileSync(path.join(appDir, "package-lock.json"), "utf8"),
+);
+
+for (const [relativePath, pkg] of Object.entries(lockfile.packages || {})) {
+  if (!relativePath) {
+    continue;
   }
 
-  if (value && typeof value === "object") {
-    return Object.fromEntries(
-      Object.keys(value)
-        .sort()
-        .map((key) => [key, stable(value[key])]),
+  const packageJsonPath = path.join(appDir, relativePath, "package.json");
+  if (!fs.existsSync(packageJsonPath)) {
+    if (pkg.optional) {
+      continue;
+    }
+
+    console.log(`missing ${relativePath}/package.json`);
+    process.exit(1);
+  }
+
+  const installedPkg = JSON.parse(fs.readFileSync(packageJsonPath, "utf8"));
+  if (pkg.version && installedPkg.version !== pkg.version) {
+    console.log(
+      `version mismatch at ${relativePath}: expected ${pkg.version}, found ${installedPkg.version ?? "(missing)"}`,
     );
+    process.exit(1);
   }
-
-  return value;
 }
-
-const lockfilePath = process.env.LOCKFILE_PATH;
-const lockfile = JSON.parse(fs.readFileSync(lockfilePath, "utf8"));
-
-if (lockfile.packages) {
-  delete lockfile.packages[""];
-}
-
-const normalized = JSON.stringify(stable(lockfile));
-const hash = crypto.createHash("sha256").update(normalized).digest("hex");
-process.stdout.write(`${hash}\n`);
 EOF
 }
 
@@ -125,22 +125,17 @@ refresh_postinstall_patch() {
 }
 
 install_dependencies_if_needed() {
-  local current_lock_signature install_reason installed_lock_signature
-
-  current_lock_signature="$(compute_normalized_lock_signature "${APP_DIR}/package-lock.json")"
+  local install_reason tree_validation_output
 
   if [[ ! -d "${APP_DIR}/node_modules" ]]; then
     install_reason="node_modules is missing"
-  elif [[ ! -f "${APP_DIR}/node_modules/.package-lock.json" ]]; then
-    install_reason="installed dependency lock is missing"
   elif [[ ! -x "${APP_DIR}/node_modules/.bin/tsc" ]]; then
     install_reason="TypeScript build tool is missing"
   elif [[ ! -f "${APP_DIR}/node_modules/wechaty-puppet-wechat/package.json" ]]; then
     install_reason="wechaty-puppet-wechat is missing"
   else
-    installed_lock_signature="$(compute_normalized_lock_signature "${APP_DIR}/node_modules/.package-lock.json")"
-    if [[ "${installed_lock_signature}" != "${current_lock_signature}" ]]; then
-      install_reason="dependency tree changed"
+    if ! tree_validation_output="$(validate_installed_dependency_tree 2>&1)"; then
+      install_reason="${tree_validation_output}"
     fi
   fi
 

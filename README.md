@@ -395,7 +395,7 @@ sudo bash deploy/deploy-wechat-claw.sh
 - 安装最新的 `systemd` service 文件
 - 安装 `needrestart` 豁免，避免系统自动升级时重启 bot
 - `systemctl daemon-reload`
-- 仅当当前 `package-lock.json` 和已安装的 `node_modules/.package-lock.json` 不一致时执行 `npm ci`
+- 仅当当前 `package-lock.json` 和已安装依赖树不一致时执行 `npm ci`
 - `npm run build`
 - `npm run doctor`
 - `systemctl restart wechat-claw`
@@ -414,7 +414,7 @@ deploy/release-wechat-claw.sh root@139.196.140.215
 
 说明：
 
-- `deploy-wechat-claw` 会直接比对当前锁文件和已安装依赖树，不再依赖额外的签名初始化
+- `deploy-wechat-claw` 会直接比对当前锁文件和已安装依赖树，不依赖 `node_modules/.package-lock.json` 这类额外文件
 - 如果 `node_modules` 已经和当前 `package-lock.json` 一致，就会跳过 `npm ci`，避免每次发布都重新下载 `puppeteer` 一类的大包
 - `deploy/sync-wechat-claw-env.sh --deploy` 会直接执行仓库里的 `deploy/deploy-wechat-claw.sh`，避免服务器 PATH 里的旧版 `deploy-wechat-claw` 副本绕过最新逻辑
 
