@@ -8,6 +8,7 @@ ENV_FILE="/etc/wechat-claw.env"
 SERVICE_NAME="wechat-claw"
 SYSTEMD_UNIT_DIR="/etc/systemd/system"
 NEEDRESTART_CONF_DIR="/etc/needrestart/conf.d"
+NPM_SIGNATURE_FILE="${APP_DIR}/node_modules/.wechat-claw-deps.sha256"
 WITH_ENV_SOURCE=""
 
 usage() {
@@ -81,6 +82,69 @@ run_as_app_user() {
   sudo -u "${APP_USER}" -H bash -lc "cd '${APP_DIR}' && $*"
 }
 
+compute_sha256() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$@"
+    return
+  fi
+
+  if command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$@"
+    return
+  fi
+
+  echo "Missing required command: sha256sum or shasum" >&2
+  exit 1
+}
+
+compute_dependency_signature() {
+  local digest
+  local inputs=("package.json" "package-lock.json")
+
+  if [[ -f "${APP_DIR}/scripts/patch-wechaty-puppet-wechat.mjs" ]]; then
+    inputs+=("scripts/patch-wechaty-puppet-wechat.mjs")
+  fi
+
+  digest="$(
+    (
+      cd "${APP_DIR}"
+      compute_sha256 "${inputs[@]}"
+    ) | compute_sha256
+  )"
+
+  printf '%s\n' "${digest%% *}"
+}
+
+install_dependencies_if_needed() {
+  local current_signature install_reason stored_signature
+
+  current_signature="$(compute_dependency_signature)"
+
+  if [[ ! -d "${APP_DIR}/node_modules" ]]; then
+    install_reason="node_modules is missing"
+  elif [[ ! -x "${APP_DIR}/node_modules/.bin/tsc" ]]; then
+    install_reason="TypeScript build tool is missing"
+  elif [[ ! -f "${APP_DIR}/node_modules/wechaty-puppet-wechat/package.json" ]]; then
+    install_reason="wechaty-puppet-wechat is missing"
+  elif [[ ! -f "${NPM_SIGNATURE_FILE}" ]]; then
+    install_reason="dependency signature is missing"
+  else
+    read -r stored_signature < "${NPM_SIGNATURE_FILE}"
+    if [[ "${stored_signature}" != "${current_signature}" ]]; then
+      install_reason="dependency inputs changed"
+    fi
+  fi
+
+  if [[ -n "${install_reason:-}" ]]; then
+    echo "[deploy] Installing Node.js dependencies with npm ci (${install_reason})"
+    run_as_app_user "npm ci"
+    run_as_app_user "printf '%s\n' '${current_signature}' > 'node_modules/.wechat-claw-deps.sha256'"
+    return
+  fi
+
+  echo "[deploy] Skipping npm ci (dependency inputs unchanged)"
+}
+
 echo "[deploy] Pulling latest code from origin/main"
 run_as_app_user "git pull --ff-only origin main"
 
@@ -98,8 +162,7 @@ fi
 echo "[deploy] Reloading systemd daemon"
 systemctl daemon-reload
 
-echo "[deploy] Installing production dependencies"
-run_as_app_user "npm ci"
+install_dependencies_if_needed
 
 echo "[deploy] Building TypeScript output"
 run_as_app_user "npm run build"

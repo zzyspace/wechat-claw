@@ -353,7 +353,7 @@ sudo deploy-wechat-claw
 - 安装最新的 `systemd` service 文件
 - 安装 `needrestart` 豁免，避免系统自动升级时重启 bot
 - `systemctl daemon-reload`
-- `npm ci`
+- 仅当 `package.json`、`package-lock.json` 或安装补丁脚本变化时执行 `npm ci`
 - `npm run build`
 - `npm run doctor`
 - `systemctl restart wechat-claw`
@@ -368,7 +368,12 @@ deploy/release-wechat-claw.sh root@139.196.140.215
 
 - 同步本地 `.env` 到服务器 `/etc/wechat-claw.env`
 - 自动补齐服务器专用字段
-- 触发远程 `git pull + npm ci + build + doctor + restart`
+- 触发远程 `git pull + 条件式 npm ci + build + doctor + restart`
+
+说明：
+
+- `deploy-wechat-claw` 会把依赖签名写到 `node_modules/.wechat-claw-deps.sha256`
+- 如果依赖输入没变化，就会跳过 `npm ci`，避免每次发布都重新下载 `puppeteer` 一类的大包
 
 如果你本地改了 `.env`，但这次只想同步配置、不发布代码，才单独使用：
 
