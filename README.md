@@ -52,6 +52,7 @@ WECHATY_PUPPET_SERVICE_TOKEN=
 WECHATY_STATE_DIR=/var/lib/wechat-claw
 WECHATY_TIMEZONE=Asia/Shanghai
 WECHATY_DEBUG_CONTACT_NAME=你的主微信昵称
+WECHATY_ATTACHMENT_RETENTION_DAYS=60
 WECHATY_COLD_START_IGNORE_WINDOW_SECONDS=60
 WECHATY_LOSS_MERGE_WINDOW_SECONDS=60
 WECHATY_LOSS_EXTRACTION_PROVIDER=
@@ -70,6 +71,7 @@ WECHATY_CHANNELS_JSON=[{"code":"loss_a","enabled":true,"scenario":"loss-report",
 - `WECHATY_TIMEZONE`: 日期边界和 cron 解释时区，默认 `Asia/Shanghai`
 - `WECHATY_DEBUG_CONTACT_NAME`: 所有 `"[wechat-claw]"` 调试信息统一发送到这个联系人，不参与业务日报发送
 - `WECHATY_CHANNELS_JSON`: 推荐的多群配置入口，支持多个监听群、多个发送目标、每个 channel 独立日报/周报周期
+- `WECHATY_ATTACHMENT_RETENTION_DAYS`: raw 图片附件保留天数，默认 `60` 天；启动后会先清理一次，并在后台定期清理更早的历史目录，设为 `0` 可关闭
 - `WECHATY_COLD_START_IGNORE_WINDOW_SECONDS`: 冷启动忽略窗口，默认 `60` 秒；会忽略发送时间早于“bot 启动时间 - 窗口”的历史消息，设为 `0` 可关闭
 - `WECHATY_SUMMARY_PROMPT_TEMPLATE`: 总结提示词模板，可自定义
 - `WECHATY_LOSS_MERGE_WINDOW_SECONDS`: 同一人图文消息合并窗口，默认 `60` 秒
@@ -492,7 +494,8 @@ sudo bash deploy/clear-wechat-claw-db.sh --yes
 补充说明：
 
 - 这个脚本只清空 SQLite 里的业务数据，不会删除数据库文件本身
-- 它也不会删除 `WECHATY_STATE_DIR/raw/` 里的历史图片附件文件
+- 它也不会直接删除 `WECHATY_STATE_DIR/raw/` 里的历史图片附件文件
+- 如果启用了 `WECHATY_ATTACHMENT_RETENTION_DAYS`，bot 运行后会按保留天数自动清理更早的 raw 图片目录
 - 如果你连附件文件也想一起清理，建议先确认是否还需要保留原始取证材料，再单独删除
 - 如果服务名或数据库路径不是默认值，可以执行 `sudo bash deploy/clear-wechat-claw-db.sh --help`
 

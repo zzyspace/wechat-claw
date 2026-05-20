@@ -115,6 +115,7 @@ test("sendLossDailySummary renders and delivers the summary text", async () => {
     summarySchedule: "",
   };
   const config: AppConfig = {
+    attachmentRetentionDays: 60,
     botName: "wechat-loss-bot",
     channels: [channel],
     channelsSource: "json",
@@ -157,6 +158,7 @@ test("sendLossWeeklySummary renders a Sunday weekly report for the current week"
     weeklySummarySchedule: "10 22 * * 0",
   };
   const config: AppConfig = {
+    attachmentRetentionDays: 60,
     botName: "wechat-loss-bot",
     channels: [channel],
     channelsSource: "json",

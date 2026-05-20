@@ -42,6 +42,7 @@ export interface AppConfig {
   channelsSource: ChannelsSource;
   channelsParseError?: string;
   summaryPromptTemplate: string;
+  attachmentRetentionDays: number;
   coldStartIgnoreWindowSeconds: number;
   lossMergeWindowSeconds: number;
   lossExtractionProvider?: string;
@@ -256,6 +257,7 @@ export function getAppConfig(): AppConfig {
     channelsSource: channelResolution.source,
     channelsParseError: channelResolution.error,
     summaryPromptTemplate: process.env.WECHATY_SUMMARY_PROMPT_TEMPLATE?.trim() || "",
+    attachmentRetentionDays: readNonNegativeNumberEnv("WECHATY_ATTACHMENT_RETENTION_DAYS", 60),
     coldStartIgnoreWindowSeconds: readNonNegativeNumberEnv(
       "WECHATY_COLD_START_IGNORE_WINDOW_SECONDS",
       60,

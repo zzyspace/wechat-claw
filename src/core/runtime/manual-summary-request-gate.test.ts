@@ -10,6 +10,7 @@ import { getHealthArtifactPath } from "./state-paths.js";
 
 function createConfig(stateDir: string): AppConfig {
   return {
+    attachmentRetentionDays: 60,
     botName: "wechat-loss-bot",
     channels: [],
     channelsSource: "json",

@@ -1,5 +1,6 @@
 import { getAppConfig } from "../core/config/env.js";
 import { logger } from "../core/logging/logger.js";
+import { startRawAttachmentRetentionManager } from "../core/runtime/raw-attachment-retention.js";
 import { HealthReporter } from "../core/runtime/health.js";
 import { startManualSummaryRequestPoller } from "../core/runtime/manual-summary-request-poller.js";
 import { assertStateDirWritable } from "../core/runtime/state-paths.js";
@@ -41,6 +42,9 @@ async function main() {
   let stopManualSummaryRequestPoller = () => {
     // no-op
   };
+  let stopRawAttachmentRetentionManager = () => {
+    // no-op
+  };
   let shuttingDown = false;
   let healthReporter: HealthReporter | undefined;
   let shutdownPromise: Promise<void> | undefined;
@@ -56,6 +60,7 @@ async function main() {
       logger.info("Received shutdown signal", { signal });
       stopScheduler();
       stopManualSummaryRequestPoller();
+      stopRawAttachmentRetentionManager();
 
       if (bot) {
         try {
@@ -142,6 +147,12 @@ async function main() {
       healthReporter,
     });
     stopManualSummaryRequestPoller = () => manualSummaryRequestPoller.stop();
+
+    const rawAttachmentRetentionManager = startRawAttachmentRetentionManager({
+      config,
+      logger,
+    });
+    stopRawAttachmentRetentionManager = () => rawAttachmentRetentionManager.stop();
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     healthReporter?.markError(error, {
