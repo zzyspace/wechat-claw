@@ -3,7 +3,31 @@ import { config as loadEnv } from "dotenv";
 import { dedupeDeliveryTargets } from "../channels/router.js";
 import type { ChannelConfig, ChannelMatch, DeliveryTarget } from "../channels/types.js";
 
-loadEnv();
+const DEFAULT_ENV_FILE_PATHS = [".env", "/etc/wechat-claw.env"];
+
+export function loadEnvironmentFiles(paths?: string[]) {
+  const candidates = paths ?? resolveEnvFilePaths();
+  const seen = new Set<string>();
+
+  for (const candidate of candidates) {
+    const path = candidate?.trim();
+
+    if (!path || seen.has(path)) {
+      continue;
+    }
+
+    loadEnv({ path, override: false });
+    seen.add(path);
+  }
+}
+
+function resolveEnvFilePaths() {
+  const explicitEnvPath = process.env.WECHATY_ENV_FILE?.trim();
+
+  return explicitEnvPath ? [explicitEnvPath, ...DEFAULT_ENV_FILE_PATHS] : DEFAULT_ENV_FILE_PATHS;
+}
+
+loadEnvironmentFiles();
 
 export type ChannelsSource = "json" | "legacy" | "none";
 
