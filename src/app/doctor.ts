@@ -12,6 +12,7 @@ async function main() {
 
   logger.info("Config summary", {
     botName: config.botName,
+    debugContactName: config.debugContactName ?? "(empty)",
     channels: config.channels.map((channel) => ({
       code: channel.code,
       deliveryTargets: channel.deliveryTargets,

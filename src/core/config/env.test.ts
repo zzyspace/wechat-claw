@@ -15,6 +15,7 @@ const managedEnvKeys = [
   "WECHATY_CHANNELS_JSON",
   "WECHATY_TARGET_ROOM_TOPIC",
   "WECHATY_DELIVERY_CONTACT_NAME",
+  "WECHATY_DEBUG_CONTACT_NAME",
   "WECHATY_ENV_FILE",
 ];
 const originalEnv = new Map(managedEnvKeys.map((key) => [key, process.env[key]]));
@@ -50,6 +51,7 @@ afterEach(() => {
 test("getAppConfig parses WECHATY_CHANNELS_JSON with mixed delivery targets", () => {
   applyEnv({
     WECHATY_PUPPET: "wechaty-puppet-wechat",
+    WECHATY_DEBUG_CONTACT_NAME: "调试联系人",
     WECHATY_CHANNELS_JSON: JSON.stringify([
       {
         code: "loss_a",
@@ -78,6 +80,7 @@ test("getAppConfig parses WECHATY_CHANNELS_JSON with mixed delivery targets", ()
   const validation = validateAppConfig(config);
 
   assert.equal(config.channelsSource, "json");
+  assert.equal(config.debugContactName, "调试联系人");
   assert.equal(config.channels.length, 2);
   assert.deepEqual(validation.errors, []);
   assert.equal(config.channels[0]?.deliveryTargets.length, 2);
@@ -142,6 +145,7 @@ test("getAppConfig falls back to legacy single-channel env vars", () => {
 test("loadEnvironmentFiles loads config from a specified env file without overriding existing env", () => {
   applyEnv({
     WECHATY_PUPPET: undefined,
+    WECHATY_DEBUG_CONTACT_NAME: undefined,
     WECHATY_CHANNELS_JSON: undefined,
     WECHATY_TIMEZONE: "Asia/Shanghai",
     WECHATY_ENV_FILE: undefined,
@@ -154,6 +158,7 @@ test("loadEnvironmentFiles loads config from a specified env file without overri
     envPath,
     [
       "WECHATY_PUPPET=wechaty-puppet-wechat",
+      "WECHATY_DEBUG_CONTACT_NAME=文件调试联系人",
       'WECHATY_CHANNELS_JSON=[{"code":"loss_file","enabled":true,"scenario":"loss-report","match":{"type":"room_topic","value":"文件群"},"deliveryTargets":[{"type":"contact_name","value":"店长"}],"summarySchedule":"0 22 * * *"}]',
       "WECHATY_TIMEZONE=UTC",
     ].join("\n"),
@@ -166,6 +171,7 @@ test("loadEnvironmentFiles loads config from a specified env file without overri
   const config = getAppConfig();
 
   assert.equal(config.puppet, "wechaty-puppet-wechat");
+  assert.equal(config.debugContactName, "文件调试联系人");
   assert.equal(config.channels[0]?.code, "loss_file");
   assert.equal(config.timeZone, "Asia/Shanghai");
 });

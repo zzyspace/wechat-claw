@@ -76,8 +76,8 @@ function normalizeEvidenceType(input: LossReportModelExtractionInput): "text" | 
 function buildPrompt(input: LossReportModelExtractionInput) {
   return [
     "你是门店报损提取助手。",
-    "请根据图片和文字，判断这是否是一条报损上报。",
-    "如果是，尽量提取报损物品、数量、单位、原因；如果图片里无法确定数量，不要猜。",
+    "这条消息来自报损群，默认就是报损上报，不需要再判断是否相关。",
+    "请固定返回 is_relevant=true，并尽量提取报损物品、数量、单位、原因；如果图片里无法确定数量，不要猜。",
     "如果图片内容与文字说明冲突，优先参考文字说明，不要自行脑补商品名称、生产日期、价格、重量、配方等细节。",
     "上报时间就是本条消息的真实时间，只能使用我提供的上报时间，不要假设当前年份或当前日期。",
     "除非图片里清晰可见且能够确认，否则不要输出生产日期、净含量、电子秤读数、价格等额外信息。",
@@ -232,7 +232,9 @@ export async function extractLossReportByModel(
   const completedItems =
     normalizedItems.length > 0 ? normalizedItems : inferFallbackItemFromSummary(reporterSummary);
 
-  const relevant = result?.is_relevant ?? (imageExists || normalizedItems.length > 0);
+  // Messages routed into the loss-report channel are already in-scope.
+  // The model is only used for extraction, not for vetoing relevance.
+  const relevant = true;
   const hasHumanText = input.textContent !== "(非文本消息)" && input.textContent.trim().length > 0;
 
   return {

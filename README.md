@@ -51,6 +51,7 @@ WECHATY_PUPPET=wechaty-puppet-wechat
 WECHATY_PUPPET_SERVICE_TOKEN=
 WECHATY_STATE_DIR=/var/lib/wechat-claw
 WECHATY_TIMEZONE=Asia/Shanghai
+WECHATY_DEBUG_CONTACT_NAME=你的主微信昵称
 WECHATY_LOSS_MERGE_WINDOW_SECONDS=60
 WECHATY_LOSS_EXTRACTION_PROVIDER=
 WECHATY_LOSS_EXTRACTION_MODEL=
@@ -66,6 +67,7 @@ WECHATY_CHANNELS_JSON=[{"code":"loss_a","enabled":true,"scenario":"loss-report",
 - `WECHATY_PUPPET_SERVICE_TOKEN`: 仅 `wechaty-puppet-service` 等 service 模式需要
 - `WECHATY_STATE_DIR`: 统一状态目录，包含 SQLite、附件、二维码、health、memory-card
 - `WECHATY_TIMEZONE`: 日期边界和 cron 解释时区，默认 `Asia/Shanghai`
+- `WECHATY_DEBUG_CONTACT_NAME`: 所有 `"[wechat-claw]"` 调试信息统一发送到这个联系人，不参与业务日报发送
 - `WECHATY_CHANNELS_JSON`: 推荐的多群配置入口，支持多个监听群、多个发送目标、每个 channel 独立日报周期
 - `WECHATY_SUMMARY_PROMPT_TEMPLATE`: 总结提示词模板，可自定义
 - `WECHATY_LOSS_MERGE_WINDOW_SECONDS`: 同一人图文消息合并窗口，默认 `60` 秒
@@ -115,6 +117,7 @@ WECHATY_PUPPET_WECHAT_PUPPETEER_UOS=1
 WECHATY_BOT_NAME=wechat-loss-bot
 WECHATY_STATE_DIR=/private/tmp/wechat-claw-state
 WECHATY_TIMEZONE=Asia/Shanghai
+WECHATY_DEBUG_CONTACT_NAME=你的主微信昵称
 WECHATY_CHANNELS_JSON=[{"code":"loss_test","enabled":true,"scenario":"loss-report","match":{"type":"room_topic","value":"AI测试群"},"deliveryTargets":[{"type":"contact_name","value":"你的主微信昵称"},{"type":"room_topic","value":"AI测试日报群"}],"summarySchedule":"0 22 * * *"}]
 ```
 
@@ -131,6 +134,7 @@ WECHATY_PUPPET_SERVICE_TOKEN=puppet_paimon_xxx
 WECHATY_BOT_NAME=wechat-loss-bot
 WECHATY_STATE_DIR=/private/tmp/wechat-claw-state
 WECHATY_TIMEZONE=Asia/Shanghai
+WECHATY_DEBUG_CONTACT_NAME=你的主微信昵称
 WECHATY_CHANNELS_JSON=[{"code":"loss_test","enabled":true,"scenario":"loss-report","match":{"type":"room_topic","value":"AI测试群"},"deliveryTargets":[{"type":"contact_name","value":"你的主微信昵称"}],"summarySchedule":"0 22 * * *"}]
 ```
 
@@ -247,6 +251,7 @@ npm start
 3. 填好 `.env` 中的关键字段：
    - `WECHATY_PUPPET`
    - `WECHATY_PUPPET_SERVICE_TOKEN`
+   - `WECHATY_DEBUG_CONTACT_NAME`
    - `WECHATY_CHANNELS_JSON`
    如果你试的是 `wechaty-puppet-wechat`，`WECHATY_PUPPET_SERVICE_TOKEN` 留空即可。
    同时建议增加：
@@ -258,9 +263,9 @@ npm start
    - 否则日志里会打印二维码链接
    - 同时程序会写入 `WECHATY_STATE_DIR/latest-qrcode.txt`
 7. 用机器人微信号扫码登录。
-8. 登录成功后，程序会向所有已配置的 `deliveryTargets` 发送一条 bot 上线通知。
+8. 登录成功后，程序会向 `WECHATY_DEBUG_CONTACT_NAME` 发送一条 bot 上线通知。
 9. 在目标群里发一条测试消息。
-10. 程序应将该消息摘要再次发给当前 channel 的 `deliveryTargets`。
+10. 程序应将该消息摘要再次发给 `WECHATY_DEBUG_CONTACT_NAME`。
 
 ## 联调通过标准
 
@@ -421,6 +426,7 @@ WECHATY_PUPPET_WECHAT_PUPPETEER_UOS=1
 WECHATY_BOT_NAME=wechat-loss-bot
 WECHATY_STATE_DIR=/var/lib/wechat-claw
 WECHATY_TIMEZONE=Asia/Shanghai
+WECHATY_DEBUG_CONTACT_NAME=你的主微信昵称
 WECHATY_CHANNELS_JSON=[{"code":"loss_prod","enabled":true,"scenario":"loss-report","match":{"type":"room_topic","value":"AI测试群"},"deliveryTargets":[{"type":"contact_name","value":"你的主微信昵称"}],"summarySchedule":"0 22 * * *"}]
 ```
 

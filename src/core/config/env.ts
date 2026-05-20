@@ -37,6 +37,7 @@ export interface AppConfig {
   botName: string;
   stateDir: string;
   timeZone: string;
+  debugContactName?: string;
   channels: ChannelConfig[];
   channelsSource: ChannelsSource;
   channelsParseError?: string;
@@ -236,6 +237,7 @@ export function getAppConfig(): AppConfig {
     botName: process.env.WECHATY_BOT_NAME?.trim() || "wechat-loss-bot",
     stateDir: readStringEnv("WECHATY_STATE_DIR", "/var/lib/wechat-claw") || "/var/lib/wechat-claw",
     timeZone: readStringEnv("WECHATY_TIMEZONE", "Asia/Shanghai") || "Asia/Shanghai",
+    debugContactName: readOptionalEnv("WECHATY_DEBUG_CONTACT_NAME"),
     channels: channelResolution.channels,
     channelsSource: channelResolution.source,
     channelsParseError: channelResolution.error,

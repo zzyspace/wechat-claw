@@ -1,9 +1,9 @@
-import { collectChannelDeliveryTargets, getChannelDisplayName, getEnabledChannels } from "../core/channels/router.js";
+import { getChannelDisplayName, getEnabledChannels } from "../core/channels/router.js";
 import { getAppConfig, validateAppConfig } from "../core/config/env.js";
 import type { Logger } from "../core/logging/logger.js";
 import { getMemoryCardFilePath } from "../core/runtime/state-paths.js";
 import { loadWechatyModule } from "./wechaty-loader.js";
-import { countSuccessfulDeliveries, sendTextToTargets } from "./delivery-contact.js";
+import { sendTextToTarget } from "./delivery-contact.js";
 import { handleMessage } from "./message-handler.js";
 import { writeLatestQrcodeArtifact } from "./qrcode-artifact.js";
 import { renderTerminalQrcode } from "./terminal-qrcode.js";
@@ -49,6 +49,7 @@ export async function startBot(
   log.info("Wechaty", "Starting bot with configured puppet");
   logger.info("Startup config loaded", {
     botName: config.botName,
+    debugContactName: config.debugContactName ?? "(empty)",
     channels: enabledChannels.map((channel) => ({
       code: channel.code,
       deliveryTargets: channel.deliveryTargets,
@@ -114,18 +115,20 @@ export async function startBot(
 
   bot.on("login", async (user: any) => {
     const name = user && typeof user.name === "function" ? user.name() : "unknown";
-    const onlineNoticeTargets = collectChannelDeliveryTargets(enabledChannels);
 
     logger.info("Bot logged in", { name });
     hooks.onLogin?.({ name });
 
-    if (onlineNoticeTargets.length === 0) {
+    if (!config.debugContactName) {
       return;
     }
 
-    const deliveryResults = await sendTextToTargets(
+    const deliveryResult = await sendTextToTarget(
       bot,
-      onlineNoticeTargets,
+      {
+        type: "contact_name",
+        value: config.debugContactName,
+      },
       [
         "[wechat-claw] bot 已上线",
         `当前账号: ${name}`,
@@ -136,8 +139,8 @@ export async function startBot(
     );
 
     logger.info("Sent online notice", {
-      deliveredTargets: countSuccessfulDeliveries(deliveryResults),
-      totalTargets: deliveryResults.length,
+      debugContactName: config.debugContactName,
+      delivered: deliveryResult.delivered,
     });
   });
 
@@ -162,6 +165,7 @@ export async function startBot(
         message,
         {
           channels: config.channels,
+          debugContactName: config.debugContactName,
           lossExtractionProvider: config.lossExtractionProvider,
           lossExtractionModel: config.lossExtractionModel,
           lossExtractionApiKey: config.lossExtractionApiKey,

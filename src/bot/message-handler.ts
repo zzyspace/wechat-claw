@@ -7,10 +7,11 @@ import { saveScenarioExtraction } from "../core/scenarios/scenario-extraction-re
 import { saveRawMessage } from "../core/storage/raw-message-repository.js";
 import { extractLossReportHeuristically } from "../scenarios/loss-report/heuristic-extractor.js";
 import { extractLossReportByModel } from "../scenarios/loss-report/model-provider.js";
-import { countSuccessfulDeliveries, sendTextToTargets } from "./delivery-contact.js";
+import { sendTextToTarget } from "./delivery-contact.js";
 
 export interface MessageContext {
   channels: ChannelConfig[];
+  debugContactName?: string;
   lossExtractionProvider?: string;
   lossExtractionModel?: string;
   lossExtractionApiKey?: string;
@@ -124,9 +125,16 @@ export async function handleMessage(message: any, context: MessageContext, logge
     return;
   }
 
-  const deliveryResults = await sendTextToTargets(
+  if (!context.debugContactName) {
+    return;
+  }
+
+  const deliveryResult = await sendTextToTarget(
     bot,
-    channel.deliveryTargets,
+    {
+      type: "contact_name",
+      value: context.debugContactName,
+    },
     [
       "[wechat-claw] 已收到群消息",
       `逻辑频道: ${channel.code}`,
@@ -143,8 +151,8 @@ export async function handleMessage(message: any, context: MessageContext, logge
 
   logger.info("Sent room message delivery notifications", {
     channelCode: channel.code,
-    deliveredTargets: countSuccessfulDeliveries(deliveryResults),
-    totalTargets: deliveryResults.length,
+    debugContactName: context.debugContactName,
+    delivered: deliveryResult.delivered,
   });
 }
 
