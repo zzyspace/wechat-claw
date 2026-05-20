@@ -42,6 +42,7 @@ export interface AppConfig {
   channelsSource: ChannelsSource;
   channelsParseError?: string;
   summaryPromptTemplate: string;
+  coldStartIgnoreWindowSeconds: number;
   lossMergeWindowSeconds: number;
   lossExtractionProvider?: string;
   lossExtractionModel?: string;
@@ -88,6 +89,16 @@ function readPositiveNumberEnv(name: string, fallback: number): number {
 
   const value = Number(raw);
   return Number.isFinite(value) && value > 0 ? value : fallback;
+}
+
+function readNonNegativeNumberEnv(name: string, fallback: number): number {
+  const raw = process.env[name]?.trim();
+  if (!raw) {
+    return fallback;
+  }
+
+  const value = Number(raw);
+  return Number.isFinite(value) && value >= 0 ? value : fallback;
 }
 
 function isValidTimeZone(timeZone: string): boolean {
@@ -245,6 +256,10 @@ export function getAppConfig(): AppConfig {
     channelsSource: channelResolution.source,
     channelsParseError: channelResolution.error,
     summaryPromptTemplate: process.env.WECHATY_SUMMARY_PROMPT_TEMPLATE?.trim() || "",
+    coldStartIgnoreWindowSeconds: readNonNegativeNumberEnv(
+      "WECHATY_COLD_START_IGNORE_WINDOW_SECONDS",
+      60,
+    ),
     lossMergeWindowSeconds: readPositiveNumberEnv("WECHATY_LOSS_MERGE_WINDOW_SECONDS", 60),
     lossExtractionProvider: readOptionalEnv("WECHATY_LOSS_EXTRACTION_PROVIDER"),
     lossExtractionModel: readOptionalEnv("WECHATY_LOSS_EXTRACTION_MODEL"),

@@ -16,6 +16,7 @@ const managedEnvKeys = [
   "WECHATY_TARGET_ROOM_TOPIC",
   "WECHATY_DELIVERY_CONTACT_NAME",
   "WECHATY_DEBUG_CONTACT_NAME",
+  "WECHATY_COLD_START_IGNORE_WINDOW_SECONDS",
   "WECHATY_ENV_FILE",
 ];
 const originalEnv = new Map(managedEnvKeys.map((key) => [key, process.env[key]]));
@@ -51,6 +52,7 @@ afterEach(() => {
 test("getAppConfig parses WECHATY_CHANNELS_JSON with mixed delivery targets", () => {
   applyEnv({
     WECHATY_PUPPET: "wechaty-puppet-wechat",
+    WECHATY_COLD_START_IGNORE_WINDOW_SECONDS: "45",
     WECHATY_DEBUG_CONTACT_NAME: "调试联系人",
     WECHATY_CHANNELS_JSON: JSON.stringify([
       {
@@ -81,6 +83,7 @@ test("getAppConfig parses WECHATY_CHANNELS_JSON with mixed delivery targets", ()
   const validation = validateAppConfig(config);
 
   assert.equal(config.channelsSource, "json");
+  assert.equal(config.coldStartIgnoreWindowSeconds, 45);
   assert.equal(config.debugContactName, "调试联系人");
   assert.equal(config.channels.length, 2);
   assert.deepEqual(validation.errors, []);

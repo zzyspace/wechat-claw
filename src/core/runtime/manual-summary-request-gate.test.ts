@@ -13,6 +13,7 @@ function createConfig(stateDir: string): AppConfig {
     botName: "wechat-loss-bot",
     channels: [],
     channelsSource: "json",
+    coldStartIgnoreWindowSeconds: 60,
     debugContactName: "Ryan。",
     lossExtractionApiKey: undefined,
     lossExtractionBaseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1",

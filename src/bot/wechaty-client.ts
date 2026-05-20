@@ -2,6 +2,7 @@ import { getChannelDisplayName, getEnabledChannels } from "../core/channels/rout
 import { getAppConfig, validateAppConfig } from "../core/config/env.js";
 import type { Logger } from "../core/logging/logger.js";
 import { getMemoryCardFilePath } from "../core/runtime/state-paths.js";
+import { shouldIgnoreColdStartMessage } from "./cold-start-filter.js";
 import { loadWechatyModule } from "./wechaty-loader.js";
 import { sendTextToTarget } from "./delivery-contact.js";
 import { handleMessage } from "./message-handler.js";
@@ -33,6 +34,7 @@ export async function startBot(
 ): Promise<WechatyInstance> {
   const config = getAppConfig();
   const validation = validateAppConfig(config);
+  const botStartedAt = new Date().toISOString();
 
   for (const warning of validation.warnings) {
     logger.warn("Startup config warning", { warning });
@@ -59,6 +61,7 @@ export async function startBot(
       weeklySummarySchedule: channel.weeklySummarySchedule || "(disabled)",
     })),
     channelsSource: config.channelsSource,
+    coldStartIgnoreWindowSeconds: config.coldStartIgnoreWindowSeconds,
     puppet: config.puppet,
     stateDir: config.stateDir,
     timeZone: config.timeZone,
@@ -161,6 +164,25 @@ export async function startBot(
 
   bot.on("message", async (message: any) => {
     hooks.onMessage?.();
+
+    const coldStartDecision = shouldIgnoreColdStartMessage(message, {
+      botStartedAt,
+      coldStartIgnoreWindowSeconds: config.coldStartIgnoreWindowSeconds,
+    });
+
+    if (coldStartDecision.ignored) {
+      const messageId = typeof message.id === "function" ? message.id() : message?.id;
+      logger.info("Ignored message during cold start window", {
+        botStartedAt,
+        coldStartIgnoreWindowSeconds: config.coldStartIgnoreWindowSeconds,
+        cutoffAt: coldStartDecision.cutoffAt,
+        messageAgeSeconds: coldStartDecision.messageAgeSeconds,
+        messageId: messageId ? String(messageId) : "(unknown)",
+        messageSentAt: coldStartDecision.messageSentAt,
+      });
+      return;
+    }
+
     try {
       await handleMessage(
         message,
