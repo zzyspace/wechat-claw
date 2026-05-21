@@ -132,3 +132,11 @@ deploy/sync-wechat-claw-env.sh root@139.196.140.215
 ```bash
 deploy/sync-wechat-claw-env.sh --deploy root@139.196.140.215
 ```
+
+如果你只是在服务器上想方便地改 `WECHATY_CHANNELS_JSON`，可以执行：
+
+```bash
+cd /opt/wechat-claw/current
+EDITOR=vim sudo bash deploy/edit-wechat-claw-channels-json.sh
+sudo systemctl restart wechat-claw
+```

@@ -20,6 +20,8 @@
 - 将原始群消息写入 `WECHATY_STATE_DIR/wechat-claw.sqlite`
 - 将图片消息落到 `WECHATY_STATE_DIR/raw/YYYY/MM/DD/`
 - 对报损消息做第一版启发式结构化提取
+- 监听报账群，将报账图片落到 `WECHATY_STATE_DIR/reimbursement/raw/YYYY/MM/DD/`
+- 对报账图片和文字提取金额、报账人、票据日期和支出类别
 - 支持按群生成报损日报文本骨架
 - 支持按 channel 独立 cron 在 bot 进程内直接发送日报、周报
 - 将二维码、登录态、健康状态统一写入 `WECHATY_STATE_DIR`
@@ -59,8 +61,12 @@ WECHATY_LOSS_EXTRACTION_PROVIDER=
 WECHATY_LOSS_EXTRACTION_MODEL=
 WECHATY_LOSS_EXTRACTION_API_KEY=
 WECHATY_LOSS_EXTRACTION_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
+WECHATY_REIMBURSEMENT_EXTRACTION_PROVIDER=qwen
+WECHATY_REIMBURSEMENT_EXTRACTION_MODEL=qwen-vl-ocr-2025-11-20
+WECHATY_REIMBURSEMENT_EXTRACTION_API_KEY=
+WECHATY_REIMBURSEMENT_EXTRACTION_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 WECHATY_BOT_NAME=wechat-loss-bot
-WECHATY_CHANNELS_JSON=[{"code":"loss_a","enabled":true,"scenario":"loss-report","match":{"type":"room_topic","value":"门店食材报损群A"},"deliveryTargets":[{"type":"contact_name","value":"你的主微信昵称"},{"type":"room_topic","value":"门店A日报群"}],"summarySchedule":"0 22 * * *","weeklySummarySchedule":"10 22 * * 0"},{"code":"loss_b","enabled":true,"scenario":"loss-report","match":{"type":"room_topic","value":"门店食材报损群B"},"deliveryTargets":[{"type":"contact_name","value":"你的主微信昵称"}],"summarySchedule":"0 22 * * *"}]
+WECHATY_CHANNELS_JSON=[{"code":"loss_a","enabled":true,"scenario":"loss-report","match":{"type":"room_topic","value":"门店食材报损群A"},"deliveryTargets":[{"type":"contact_name","value":"你的主微信昵称"},{"type":"room_topic","value":"门店A日报群"}],"summarySchedule":"0 22 * * *","weeklySummarySchedule":"10 22 * * 0"},{"code":"reimbursement_a","enabled":true,"scenario":"reimbursement","match":{"type":"room_topic","value":"门店报账群A"},"deliveryTargets":[],"summarySchedule":""}]
 ```
 
 字段说明：
@@ -70,19 +76,24 @@ WECHATY_CHANNELS_JSON=[{"code":"loss_a","enabled":true,"scenario":"loss-report",
 - `WECHATY_STATE_DIR`: 统一状态目录，包含 SQLite、附件、二维码、health、memory-card
 - `WECHATY_TIMEZONE`: 日期边界和 cron 解释时区，默认 `Asia/Shanghai`
 - `WECHATY_DEBUG_CONTACT_NAME`: 所有 `"[wechat-claw]"` 调试信息统一发送到这个联系人，不参与业务日报发送
-- `WECHATY_CHANNELS_JSON`: 推荐的多群配置入口，支持多个监听群、多个发送目标、每个 channel 独立日报/周报周期
-- `WECHATY_ATTACHMENT_RETENTION_DAYS`: raw 图片附件保留天数，默认 `60` 天；启动后会先清理一次，并在后台定期清理更早的历史目录，设为 `0` 可关闭
+- `WECHATY_CHANNELS_JSON`: 推荐的多群配置入口，支持 `loss-report` 和 `reimbursement` 场景
+- `WECHATY_ATTACHMENT_RETENTION_DAYS`: 图片附件保留天数，默认 `60` 天；会清理 `raw/` 和 `reimbursement/raw/` 下更早的历史目录，设为 `0` 可关闭
 - `WECHATY_COLD_START_IGNORE_WINDOW_SECONDS`: 冷启动忽略窗口，默认 `60` 秒；会忽略发送时间早于“bot 启动时间 - 窗口”的历史消息，设为 `0` 可关闭
 - `WECHATY_SUMMARY_PROMPT_TEMPLATE`: 总结提示词模板，可自定义
-- `WECHATY_LOSS_MERGE_WINDOW_SECONDS`: 同一人图文消息合并窗口，默认 `60` 秒
+- `WECHATY_LOSS_MERGE_WINDOW_SECONDS`: 同一人图文消息合并窗口，默认 `60` 秒；报损和报账第一版共用这个窗口
   当前规则：
-  - 图 + 文字：窗口内可合并为一条报损
+  - 报损图 + 文字：窗口内可合并为一条报损
+  - 报账图片后文字：窗口内可作为备注合并到同一份报账
   - 图 + 图：不合并
-  - 一条报损最多保留一张图片
+  - 一条业务记录最多保留一张图片
 - `WECHATY_LOSS_EXTRACTION_PROVIDER`: 报损提取模型提供商
 - `WECHATY_LOSS_EXTRACTION_MODEL`: 报损提取模型名
 - `WECHATY_LOSS_EXTRACTION_API_KEY`: 报损提取模型 API Key
 - `WECHATY_LOSS_EXTRACTION_BASE_URL`: 报损提取模型接口地址
+- `WECHATY_REIMBURSEMENT_EXTRACTION_PROVIDER`: 报账提取模型提供商，默认 `qwen`
+- `WECHATY_REIMBURSEMENT_EXTRACTION_MODEL`: 报账图片 OCR 模型名，默认 `qwen-vl-ocr-2025-11-20`
+- `WECHATY_REIMBURSEMENT_EXTRACTION_API_KEY`: 报账提取模型 API Key
+- `WECHATY_REIMBURSEMENT_EXTRACTION_BASE_URL`: 报账提取模型接口地址
 - `WECHATY_BOT_NAME`: 本地 bot 名称
 - `WECHATY_SUMMARY_CRON`: 仅旧版单群兼容配置使用的默认日报周期
 
@@ -101,6 +112,14 @@ WECHATY_CHANNELS_JSON=[{"code":"loss_a","enabled":true,"scenario":"loss-report",
     ],
     "summarySchedule": "0 22 * * *",
     "weeklySummarySchedule": "10 22 * * 0"
+  },
+  {
+    "code": "reimbursement_a",
+    "enabled": true,
+    "scenario": "reimbursement",
+    "match": { "type": "room_topic", "value": "门店报账群A" },
+    "deliveryTargets": [],
+    "summarySchedule": ""
   }
 ]
 ```
@@ -110,6 +129,7 @@ WECHATY_CHANNELS_JSON=[{"code":"loss_a","enabled":true,"scenario":"loss-report",
 - `summarySchedule`: 日报 cron，例如每天 `22:00` 用 `0 22 * * *`
 - `weeklySummarySchedule`: 周报 cron，例如每周日 `22:10` 用 `10 22 * * 0`
 - `summarySchedule` 或 `weeklySummarySchedule` 留空 `""`，表示关闭对应的自动发送
+- 报账群第一版只做监听、图片保存、金额识别和入库，不要求配置发送目标
 - 也就是说：
   - `summarySchedule` 留空时，不会自动发送日报
   - `weeklySummarySchedule` 留空时，不会自动发送周报
@@ -450,6 +470,26 @@ deploy/sync-wechat-claw-env.sh --deploy root@139.196.140.215
 sudo systemctl restart wechat-claw
 ```
 
+如果你只是想在服务器上方便地改 `WECHATY_CHANNELS_JSON`，可以直接执行：
+
+```bash
+cd /opt/wechat-claw/current
+EDITOR=vim sudo bash deploy/edit-wechat-claw-channels-json.sh
+```
+
+这个脚本会：
+
+- 从 `/etc/wechat-claw.env` 提取 `WECHATY_CHANNELS_JSON`
+- 自动格式化成更容易编辑的多行 JSON
+- 保存前校验它仍然是合法的 JSON 数组
+- 回写成 env 里的单行字符串，并自动备份原文件
+
+改完后仍然需要重启服务：
+
+```bash
+sudo systemctl restart wechat-claw
+```
+
 原因：
 
 - `wechat-claw` 只在进程启动时读取 `/etc/wechat-claw.env`
@@ -589,3 +629,4 @@ WECHATY_LOSS_EXTRACTION_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/
 - `match.value` 是否和群名完全一致
 - `deliveryTargets` 里的联系人昵称或群名是否完全一致
 - 机器人号是否真的在目标群里
+- 如果只是想改这个字段，优先使用 `deploy/edit-wechat-claw-channels-json.sh`
