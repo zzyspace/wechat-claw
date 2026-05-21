@@ -102,7 +102,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-extract_env_value() {
+extract_raw_env_value() {
   local env_file="$1"
 
   awk -v key="${ENV_KEY}" '
@@ -118,6 +118,41 @@ extract_env_value() {
       }
     }
   ' "${env_file}"
+}
+
+decode_shell_env_value() {
+  local raw_value="$1"
+  local tmp_assignment decode_status
+
+  tmp_assignment="$(mktemp /tmp/wechat-claw.env-value.XXXXXX)"
+  printf '%s=%s\n' "${ENV_KEY}" "${raw_value}" > "${tmp_assignment}"
+
+  ENV_KEY_NAME="${ENV_KEY}" TMP_ENV_ASSIGNMENT="${tmp_assignment}" bash -lc '
+    set -euo pipefail
+    key="${ENV_KEY_NAME}"
+    set -a
+    . "${TMP_ENV_ASSIGNMENT}"
+    set +a
+    printf "%s" "${!key}"
+  '
+  decode_status=$?
+  rm -f "${tmp_assignment}"
+
+  return "${decode_status}"
+}
+
+extract_env_value() {
+  local env_file="$1"
+  local raw_value decoded_value
+
+  raw_value="$(extract_raw_env_value "${env_file}")" || return 1
+
+  if decoded_value="$(decode_shell_env_value "${raw_value}" 2>/dev/null)"; then
+    printf '%s' "${decoded_value}"
+    return 0
+  fi
+
+  printf '%s' "${raw_value}"
 }
 
 write_pretty_json() {
