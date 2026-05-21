@@ -192,6 +192,27 @@ minify_json_file() {
   ' "${input_file}"
 }
 
+encode_shell_env_value() {
+  local plain_value="$1"
+
+  ENCODE_ENV_VALUE="${plain_value}" node <<'EOF'
+const value = process.env.ENCODE_ENV_VALUE ?? "";
+
+if (!value.includes("'")) {
+  process.stdout.write(`'${value}'`);
+  process.exit(0);
+}
+
+const escaped = value
+  .replace(/\\/g, "\\\\")
+  .replace(/"/g, '\\"')
+  .replace(/\$/g, "\\$")
+  .replace(/`/g, "\\`");
+
+process.stdout.write(`"${escaped}"`);
+EOF
+}
+
 open_editor() {
   local target_file="$1"
 
@@ -221,6 +242,9 @@ if ! minified_json="$(minify_json_file "${tmp_json}")"; then
   exit 1
 fi
 
+encoded_json="$(encode_shell_env_value "${minified_json}")"
+replacement_line="${ENV_KEY}=${encoded_json}"
+
 if [[ -f "${TARGET_ENV_FILE}" ]]; then
   timestamp="$(date +%Y%m%d%H%M%S)"
   backup_path="${TARGET_ENV_FILE}.bak.${timestamp}"
@@ -228,10 +252,10 @@ if [[ -f "${TARGET_ENV_FILE}" ]]; then
 fi
 
 if [[ -f "${TARGET_ENV_FILE}" ]]; then
-  awk -v key="${ENV_KEY}" -v new_line="${ENV_KEY}=${minified_json}" '
+  REPLACEMENT_LINE="${replacement_line}" awk -v key="${ENV_KEY}" '
     index($0, key "=") == 1 {
       if (!replaced) {
-        print new_line
+        print ENVIRON["REPLACEMENT_LINE"]
       }
       replaced = 1
       next
@@ -243,14 +267,14 @@ if [[ -f "${TARGET_ENV_FILE}" ]]; then
 
     END {
       if (!replaced) {
-        print new_line
+        print ENVIRON["REPLACEMENT_LINE"]
       }
     }
   ' "${TARGET_ENV_FILE}" > "${tmp_env}"
 
   cat "${tmp_env}" > "${TARGET_ENV_FILE}"
 else
-  printf '%s=%s\n' "${ENV_KEY}" "${minified_json}" > "${tmp_env}"
+  printf '%s\n' "${replacement_line}" > "${tmp_env}"
   install -m 600 "${tmp_env}" "${TARGET_ENV_FILE}"
 fi
 
