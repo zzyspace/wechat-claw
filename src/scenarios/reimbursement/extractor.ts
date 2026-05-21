@@ -180,12 +180,16 @@ function buildDataUrl(attachment: StoredAttachment): string | null {
 
 function buildPrompt(input: ReimbursementExtractionInput): string {
   return [
-    "你是门店报账票据 OCR 与金额提取助手。",
-    "这条消息来自报账群，图片通常是付款截图、发票、收据、小票或单据照片。",
+    "你是门店报账图片理解与金额提取助手。",
+    "这条消息来自报账群，图片通常是订单截图、微信付款截图、账单照片、发票、小票或手写单据。",
+    "你的首要任务是分析图中实际付款的总金额，也就是这笔交易最终真实支付出去的总金额。",
+    "图片里可能同时出现商品单价、原价、优惠、折扣、退款、运费、服务费、应付、实付、已优惠、待支付等多个数字，必须优先识别最终实际付款总金额。",
+    "如果图中存在“实付”“已支付”“支付成功金额”“总计”“合计”“微信支付金额”等候选值，优先选择最能表示最终付款完成金额的那个数字。",
+    "不要把商品单价、数量、优惠前金额、退款金额、待支付金额、账户余额、积分抵扣、手续费等误当成最终付款总金额。",
     "请只根据图片和文字提取报账字段，不要猜测不可见信息。",
     "支出类别只能输出 food 或 other。明确是食品原料、门店食材采购才输出 food；非食材或不确定都输出 other。",
     "如果票据日期清晰可见，voucher_date 输出 YYYY-MM-DD；看不到日期则输出 null。",
-    "金额优先提取最终支付、合计、实付、收款或报账金额，不要把单价误当总金额。",
+    "如果无法可靠判断最终付款总金额，amount 输出 null，不要猜测。",
     "必须返回 JSON，不要输出额外解释。",
     "JSON 字段：amount, currency, expense_category, voucher_date, merchant, document_no, voucher_type, ocr_text, confidence。",
     "currency 默认 CNY；confidence 是 0 到 1 的数字。",

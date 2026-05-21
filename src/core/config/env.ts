@@ -358,7 +358,7 @@ export function getAppConfig(): AppConfig {
     reimbursementExtractionProvider:
       readOptionalEnv("WECHATY_REIMBURSEMENT_EXTRACTION_PROVIDER") ?? "qwen",
     reimbursementExtractionModel:
-      readOptionalEnv("WECHATY_REIMBURSEMENT_EXTRACTION_MODEL") ?? "qwen-vl-ocr-2025-11-20",
+      readOptionalEnv("WECHATY_REIMBURSEMENT_EXTRACTION_MODEL") ?? "qwen3.5-flash",
     reimbursementExtractionApiKey: readOptionalEnv("WECHATY_REIMBURSEMENT_EXTRACTION_API_KEY"),
     reimbursementExtractionBaseUrl:
       process.env.WECHATY_REIMBURSEMENT_EXTRACTION_BASE_URL?.trim() ||

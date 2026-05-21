@@ -64,7 +64,7 @@ function createMessageContext(channels: ChannelConfig[]) {
     lossMergeWindowSeconds: 30,
     lossExtractionBaseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1",
     reimbursementExtractionBaseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1",
-    reimbursementExtractionModel: "qwen-vl-ocr-2025-11-20",
+    reimbursementExtractionModel: "qwen3.5-flash",
     reimbursementExtractionProvider: "qwen",
     timeZone: "Asia/Shanghai",
   };

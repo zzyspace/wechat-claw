@@ -104,7 +104,7 @@ test("getAppConfig parses WECHATY_CHANNELS_JSON with mixed delivery targets", ()
         summarySchedule: "",
       },
     ]),
-    WECHATY_REIMBURSEMENT_EXTRACTION_MODEL: "qwen-vl-ocr-2025-11-20",
+    WECHATY_REIMBURSEMENT_EXTRACTION_MODEL: "qwen3.5-flash",
     WECHATY_REIMBURSEMENT_EXTRACTION_API_KEY: "test-key",
   });
 
@@ -128,7 +128,7 @@ test("getAppConfig parses WECHATY_CHANNELS_JSON with mixed delivery targets", ()
   assert.equal(config.channels.length, 2);
   assert.equal(config.channels[1]?.scenario, "reimbursement");
   assert.equal(config.reimbursementExtractionProvider, "qwen");
-  assert.equal(config.reimbursementExtractionModel, "qwen-vl-ocr-2025-11-20");
+  assert.equal(config.reimbursementExtractionModel, "qwen3.5-flash");
   assert.equal(config.reimbursementExtractionApiKey, "test-key");
   assert.deepEqual(validation.errors, []);
   assert.equal(config.channels[0]?.deliveryTargets.length, 2);

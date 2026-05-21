@@ -52,7 +52,7 @@ function createConfig(stateDir: string): AppConfig {
     puppetServiceToken: undefined,
     reimbursementExtractionApiKey: undefined,
     reimbursementExtractionBaseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1",
-    reimbursementExtractionModel: "qwen-vl-ocr-2025-11-20",
+    reimbursementExtractionModel: "qwen3.5-flash",
     reimbursementExtractionProvider: "qwen",
     stateDir,
     summaryPromptTemplate: "",

@@ -12,7 +12,7 @@ afterEach(() => {
   globalThis.fetch = originalFetch;
 });
 
-test("extractReimbursementReport calls qwen OCR and normalizes amount, date, and category", async () => {
+test("extractReimbursementReport calls qwen3.5-flash and normalizes amount, date, and category", async () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "wechat-claw-reimbursement-extractor-"));
   const imagePath = path.join(tempDir, "receipt.jpg");
   let requestedBody: any;
@@ -72,14 +72,14 @@ test("extractReimbursementReport calls qwen OCR and normalizes amount, date, and
       },
       {
         provider: "qwen",
-        model: "qwen-vl-ocr-2025-11-20",
+        model: "qwen3.5-flash",
         apiKey: "test-key",
         baseUrl: "https://example.com",
       },
     );
 
-    assert.equal(requestedBody.model, "qwen-vl-ocr-2025-11-20");
-    assert.equal(result.extractorCode, "model-qwen-qwen-vl-ocr-2025-11-20");
+    assert.equal(requestedBody.model, "qwen3.5-flash");
+    assert.equal(result.extractorCode, "model-qwen-qwen3.5-flash");
     assert.equal(result.resultJson.amount, 128.5);
     assert.equal(result.resultJson.currency, "CNY");
     assert.equal(result.resultJson.expenseCategory, "food");
@@ -105,7 +105,7 @@ test("extractReimbursementReport falls back to message date and other category w
     },
     {
       provider: "qwen",
-      model: "qwen-vl-ocr-2025-11-20",
+      model: "qwen3.5-flash",
       baseUrl: "https://example.com",
     },
   );
