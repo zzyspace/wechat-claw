@@ -29,7 +29,14 @@ function detectMimeType(fileName: string): string {
   }
 }
 
-export async function saveImageAttachment(message: any): Promise<StoredAttachment | null> {
+export interface SaveImageAttachmentOptions {
+  rawStorageDir?: string;
+}
+
+export async function saveImageAttachment(
+  message: any,
+  options?: SaveImageAttachmentOptions,
+): Promise<StoredAttachment | null> {
   if (typeof message.toFileBox !== "function") {
     return null;
   }
@@ -42,7 +49,7 @@ export async function saveImageAttachment(message: any): Promise<StoredAttachmen
   const config = getAppConfig();
   const zonedNow = getZonedDateParts(new Date(), config.timeZone);
   const targetDir = path.join(
-    getRawStorageDir(config),
+    options?.rawStorageDir ?? getRawStorageDir(config),
     String(zonedNow.year),
     String(zonedNow.month).padStart(2, "0"),
     String(zonedNow.day).padStart(2, "0"),

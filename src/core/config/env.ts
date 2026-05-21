@@ -49,6 +49,10 @@ export interface AppConfig {
   lossExtractionModel?: string;
   lossExtractionApiKey?: string;
   lossExtractionBaseUrl: string;
+  reimbursementExtractionProvider?: string;
+  reimbursementExtractionModel?: string;
+  reimbursementExtractionApiKey?: string;
+  reimbursementExtractionBaseUrl: string;
 }
 
 export interface ConfigValidationResult {
@@ -269,6 +273,14 @@ export function getAppConfig(): AppConfig {
     lossExtractionBaseUrl:
       process.env.WECHATY_LOSS_EXTRACTION_BASE_URL?.trim() ||
       "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    reimbursementExtractionProvider:
+      readOptionalEnv("WECHATY_REIMBURSEMENT_EXTRACTION_PROVIDER") ?? "qwen",
+    reimbursementExtractionModel:
+      readOptionalEnv("WECHATY_REIMBURSEMENT_EXTRACTION_MODEL") ?? "qwen-vl-ocr-2025-11-20",
+    reimbursementExtractionApiKey: readOptionalEnv("WECHATY_REIMBURSEMENT_EXTRACTION_API_KEY"),
+    reimbursementExtractionBaseUrl:
+      process.env.WECHATY_REIMBURSEMENT_EXTRACTION_BASE_URL?.trim() ||
+      "https://dashscope.aliyuncs.com/compatible-mode/v1",
   };
 }
 
@@ -320,7 +332,7 @@ export function validateAppConfig(config: AppConfig): ConfigValidationResult {
       seenCodes.add(channel.code);
     }
 
-    if (channel.scenario !== "loss-report") {
+    if (channel.scenario !== "loss-report" && channel.scenario !== "reimbursement") {
       errors.push(`Unsupported scenario for channel ${channel.code || "(missing-code)"}: ${channel.scenario}`);
     }
 
@@ -338,7 +350,7 @@ export function validateAppConfig(config: AppConfig): ConfigValidationResult {
       seenEnabledTopics.add(channel.match.value);
     }
 
-    if (channel.deliveryTargets.length === 0) {
+    if (channel.scenario === "loss-report" && channel.deliveryTargets.length === 0) {
       errors.push(`Channel ${channel.code || "(missing-code)"} must have at least one delivery target.`);
     }
 

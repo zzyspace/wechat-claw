@@ -40,6 +40,10 @@ export function getRawStorageDir(config?: AppConfig): string {
   return path.join(getStateDirPath(config), "raw");
 }
 
+export function getReimbursementRawStorageDir(config?: AppConfig): string {
+  return path.join(getStateDirPath(config), "reimbursement", "raw");
+}
+
 export function getQrcodeArtifactPath(config?: AppConfig): string {
   return path.join(getStateDirPath(config), "latest-qrcode.txt");
 }

@@ -3,7 +3,7 @@ import path from "node:path";
 
 import type { AppConfig } from "../config/env.js";
 import type { Logger } from "../logging/logger.js";
-import { getRawStorageDir } from "./state-paths.js";
+import { getRawStorageDir, getReimbursementRawStorageDir } from "./state-paths.js";
 import { addDaysToDateString, formatZonedDate } from "./timezone.js";
 import { startCronScheduler } from "./cron-scheduler.js";
 
@@ -17,6 +17,7 @@ export interface RawAttachmentCleanupResult {
   deletedYearDirectoryCount: number;
   disabled: boolean;
   rawDir: string;
+  rawDirs: string[];
   retentionDays: number;
   scannedDayDirectoryCount: number;
 }
@@ -26,7 +27,7 @@ export function cleanupExpiredRawAttachments(input: {
   now?: Date;
 }): RawAttachmentCleanupResult {
   const now = input.now ?? new Date();
-  const rawDir = getRawStorageDir(input.config);
+  const rawDirs = [getRawStorageDir(input.config), getReimbursementRawStorageDir(input.config)];
   const retentionDays = input.config.attachmentRetentionDays;
 
   if (retentionDays <= 0) {
@@ -36,7 +37,8 @@ export function cleanupExpiredRawAttachments(input: {
       deletedMonthDirectoryCount: 0,
       deletedYearDirectoryCount: 0,
       disabled: true,
-      rawDir,
+      rawDir: rawDirs[0] ?? "",
+      rawDirs,
       retentionDays,
       scannedDayDirectoryCount: 0,
     };
@@ -44,79 +46,39 @@ export function cleanupExpiredRawAttachments(input: {
 
   const today = formatZonedDate(now, input.config.timeZone);
   const cutoffDate = addDaysToDateString(today, -(retentionDays - 1));
-
-  if (!fs.existsSync(rawDir)) {
-    return {
-      cutoffDate,
-      deletedDayDirectoryCount: 0,
-      deletedFileCount: 0,
-      deletedMonthDirectoryCount: 0,
-      deletedYearDirectoryCount: 0,
-      disabled: false,
-      rawDir,
-      retentionDays,
-      scannedDayDirectoryCount: 0,
-    };
-  }
-
-  let deletedDayDirectoryCount = 0;
-  let deletedFileCount = 0;
-  let deletedMonthDirectoryCount = 0;
-  let deletedYearDirectoryCount = 0;
-  let scannedDayDirectoryCount = 0;
-
-  for (const yearEntry of fs.readdirSync(rawDir, { withFileTypes: true })) {
-    if (!yearEntry.isDirectory() || !/^\d{4}$/.test(yearEntry.name)) {
-      continue;
-    }
-
-    const yearPath = path.join(rawDir, yearEntry.name);
-
-    for (const monthEntry of fs.readdirSync(yearPath, { withFileTypes: true })) {
-      if (!monthEntry.isDirectory() || !/^\d{2}$/.test(monthEntry.name)) {
-        continue;
-      }
-
-      const monthPath = path.join(yearPath, monthEntry.name);
-
-      for (const dayEntry of fs.readdirSync(monthPath, { withFileTypes: true })) {
-        if (!dayEntry.isDirectory() || !/^\d{2}$/.test(dayEntry.name)) {
-          continue;
-        }
-
-        const dayPath = path.join(monthPath, dayEntry.name);
-        const dayDate = `${yearEntry.name}-${monthEntry.name}-${dayEntry.name}`;
-        scannedDayDirectoryCount += 1;
-
-        if (dayDate >= cutoffDate) {
-          continue;
-        }
-
-        deletedFileCount += countFilesRecursively(dayPath);
-        fs.rmSync(dayPath, { force: true, recursive: true });
-        deletedDayDirectoryCount += 1;
-      }
-
-      if (removeDirectoryIfEmpty(monthPath)) {
-        deletedMonthDirectoryCount += 1;
-      }
-    }
-
-    if (removeDirectoryIfEmpty(yearPath)) {
-      deletedYearDirectoryCount += 1;
-    }
-  }
+  const aggregate = rawDirs
+    .map((rawDir) => cleanupExpiredRawAttachmentDir(rawDir, cutoffDate))
+    .reduce(
+      (total, current) => ({
+        deletedDayDirectoryCount: total.deletedDayDirectoryCount + current.deletedDayDirectoryCount,
+        deletedFileCount: total.deletedFileCount + current.deletedFileCount,
+        deletedMonthDirectoryCount:
+          total.deletedMonthDirectoryCount + current.deletedMonthDirectoryCount,
+        deletedYearDirectoryCount:
+          total.deletedYearDirectoryCount + current.deletedYearDirectoryCount,
+        scannedDayDirectoryCount:
+          total.scannedDayDirectoryCount + current.scannedDayDirectoryCount,
+      }),
+      {
+        deletedDayDirectoryCount: 0,
+        deletedFileCount: 0,
+        deletedMonthDirectoryCount: 0,
+        deletedYearDirectoryCount: 0,
+        scannedDayDirectoryCount: 0,
+      },
+    );
 
   return {
     cutoffDate,
-    deletedDayDirectoryCount,
-    deletedFileCount,
-    deletedMonthDirectoryCount,
-    deletedYearDirectoryCount,
+    deletedDayDirectoryCount: aggregate.deletedDayDirectoryCount,
+    deletedFileCount: aggregate.deletedFileCount,
+    deletedMonthDirectoryCount: aggregate.deletedMonthDirectoryCount,
+    deletedYearDirectoryCount: aggregate.deletedYearDirectoryCount,
     disabled: false,
-    rawDir,
+    rawDir: rawDirs[0] ?? "",
+    rawDirs,
     retentionDays,
-    scannedDayDirectoryCount,
+    scannedDayDirectoryCount: aggregate.scannedDayDirectoryCount,
   };
 }
 
@@ -187,6 +149,7 @@ function runCleanup(config: AppConfig, logger: Logger, trigger: "startup" | "sch
       deletedMonthDirectoryCount: result.deletedMonthDirectoryCount,
       deletedYearDirectoryCount: result.deletedYearDirectoryCount,
       rawDir: result.rawDir,
+      rawDirs: result.rawDirs,
       retentionDays: result.retentionDays,
       scannedDayDirectoryCount: result.scannedDayDirectoryCount,
       trigger,
@@ -198,6 +161,74 @@ function runCleanup(config: AppConfig, logger: Logger, trigger: "startup" | "sch
       trigger,
     });
   }
+}
+
+function cleanupExpiredRawAttachmentDir(rawDir: string, cutoffDate: string) {
+  if (!fs.existsSync(rawDir)) {
+    return {
+      deletedDayDirectoryCount: 0,
+      deletedFileCount: 0,
+      deletedMonthDirectoryCount: 0,
+      deletedYearDirectoryCount: 0,
+      scannedDayDirectoryCount: 0,
+    };
+  }
+
+  let deletedDayDirectoryCount = 0;
+  let deletedFileCount = 0;
+  let deletedMonthDirectoryCount = 0;
+  let deletedYearDirectoryCount = 0;
+  let scannedDayDirectoryCount = 0;
+
+  for (const yearEntry of fs.readdirSync(rawDir, { withFileTypes: true })) {
+    if (!yearEntry.isDirectory() || !/^\d{4}$/.test(yearEntry.name)) {
+      continue;
+    }
+
+    const yearPath = path.join(rawDir, yearEntry.name);
+
+    for (const monthEntry of fs.readdirSync(yearPath, { withFileTypes: true })) {
+      if (!monthEntry.isDirectory() || !/^\d{2}$/.test(monthEntry.name)) {
+        continue;
+      }
+
+      const monthPath = path.join(yearPath, monthEntry.name);
+
+      for (const dayEntry of fs.readdirSync(monthPath, { withFileTypes: true })) {
+        if (!dayEntry.isDirectory() || !/^\d{2}$/.test(dayEntry.name)) {
+          continue;
+        }
+
+        const dayPath = path.join(monthPath, dayEntry.name);
+        const dayDate = `${yearEntry.name}-${monthEntry.name}-${dayEntry.name}`;
+        scannedDayDirectoryCount += 1;
+
+        if (dayDate >= cutoffDate) {
+          continue;
+        }
+
+        deletedFileCount += countFilesRecursively(dayPath);
+        fs.rmSync(dayPath, { force: true, recursive: true });
+        deletedDayDirectoryCount += 1;
+      }
+
+      if (removeDirectoryIfEmpty(monthPath)) {
+        deletedMonthDirectoryCount += 1;
+      }
+    }
+
+    if (removeDirectoryIfEmpty(yearPath)) {
+      deletedYearDirectoryCount += 1;
+    }
+  }
+
+  return {
+    deletedDayDirectoryCount,
+    deletedFileCount,
+    deletedMonthDirectoryCount,
+    deletedYearDirectoryCount,
+    scannedDayDirectoryCount,
+  };
 }
 
 function countFilesRecursively(dirPath: string): number {

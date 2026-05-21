@@ -18,6 +18,10 @@ const managedEnvKeys = [
   "WECHATY_DEBUG_CONTACT_NAME",
   "WECHATY_ATTACHMENT_RETENTION_DAYS",
   "WECHATY_COLD_START_IGNORE_WINDOW_SECONDS",
+  "WECHATY_REIMBURSEMENT_EXTRACTION_PROVIDER",
+  "WECHATY_REIMBURSEMENT_EXTRACTION_MODEL",
+  "WECHATY_REIMBURSEMENT_EXTRACTION_API_KEY",
+  "WECHATY_REIMBURSEMENT_EXTRACTION_BASE_URL",
   "WECHATY_ENV_FILE",
 ];
 const originalEnv = new Map(managedEnvKeys.map((key) => [key, process.env[key]]));
@@ -71,14 +75,16 @@ test("getAppConfig parses WECHATY_CHANNELS_JSON with mixed delivery targets", ()
         weeklySummarySchedule: "10 22 * * 0",
       },
       {
-        code: "loss_b",
+        code: "reimbursement_a",
         enabled: true,
-        scenario: "loss-report",
-        match: { type: "room_topic", value: "门店B报损群" },
-        deliveryTargets: [{ type: "contact_name", value: "店长B" }],
+        scenario: "reimbursement",
+        match: { type: "room_topic", value: "门店A报账群" },
+        deliveryTargets: [],
         summarySchedule: "",
       },
     ]),
+    WECHATY_REIMBURSEMENT_EXTRACTION_MODEL: "qwen-vl-ocr-2025-11-20",
+    WECHATY_REIMBURSEMENT_EXTRACTION_API_KEY: "test-key",
   });
 
   const config = getAppConfig();
@@ -89,6 +95,10 @@ test("getAppConfig parses WECHATY_CHANNELS_JSON with mixed delivery targets", ()
   assert.equal(config.coldStartIgnoreWindowSeconds, 45);
   assert.equal(config.debugContactName, "调试联系人");
   assert.equal(config.channels.length, 2);
+  assert.equal(config.channels[1]?.scenario, "reimbursement");
+  assert.equal(config.reimbursementExtractionProvider, "qwen");
+  assert.equal(config.reimbursementExtractionModel, "qwen-vl-ocr-2025-11-20");
+  assert.equal(config.reimbursementExtractionApiKey, "test-key");
   assert.deepEqual(validation.errors, []);
   assert.equal(config.channels[0]?.deliveryTargets.length, 2);
   assert.deepEqual(config.channels[0]?.deliveryTargets[1], {

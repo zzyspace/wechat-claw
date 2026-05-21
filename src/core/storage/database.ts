@@ -75,6 +75,47 @@ function migrate(db: Database.Database) {
 
     CREATE INDEX IF NOT EXISTS idx_summary_send_requests_status_id
       ON summary_send_requests(status, id);
+
+    CREATE TABLE IF NOT EXISTS reimbursement_reports (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      channel_code TEXT,
+      channel_name TEXT NOT NULL,
+      reporter TEXT NOT NULL,
+      amount REAL,
+      currency TEXT NOT NULL DEFAULT 'CNY',
+      expense_category TEXT NOT NULL,
+      voucher_date TEXT NOT NULL,
+      voucher_date_source TEXT NOT NULL,
+      note TEXT NOT NULL DEFAULT '',
+      evidence_type TEXT NOT NULL,
+      merchant TEXT,
+      document_no TEXT,
+      voucher_type TEXT,
+      ocr_text TEXT,
+      confidence REAL NOT NULL,
+      needs_review INTEGER NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS reimbursement_report_sources (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      reimbursement_report_id INTEGER NOT NULL,
+      raw_message_id INTEGER NOT NULL UNIQUE,
+      role TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY(reimbursement_report_id) REFERENCES reimbursement_reports(id) ON DELETE CASCADE,
+      FOREIGN KEY(raw_message_id) REFERENCES raw_messages(id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_reimbursement_reports_channel_date
+      ON reimbursement_reports(channel_code, voucher_date);
+
+    CREATE INDEX IF NOT EXISTS idx_reimbursement_reports_reporter_date
+      ON reimbursement_reports(reporter, voucher_date);
+
+    CREATE INDEX IF NOT EXISTS idx_reimbursement_report_sources_report_id
+      ON reimbursement_report_sources(reimbursement_report_id);
   `);
 
   const columns = db.prepare(`PRAGMA table_info(raw_messages)`).all() as Array<{ name: string }>;

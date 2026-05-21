@@ -189,11 +189,16 @@ export async function startBot(
         {
           channels: config.channels,
           debugContactName: config.debugContactName,
+          timeZone: config.timeZone,
           lossMergeWindowSeconds: config.lossMergeWindowSeconds,
           lossExtractionProvider: config.lossExtractionProvider,
           lossExtractionModel: config.lossExtractionModel,
           lossExtractionApiKey: config.lossExtractionApiKey,
           lossExtractionBaseUrl: config.lossExtractionBaseUrl,
+          reimbursementExtractionProvider: config.reimbursementExtractionProvider,
+          reimbursementExtractionModel: config.reimbursementExtractionModel,
+          reimbursementExtractionApiKey: config.reimbursementExtractionApiKey,
+          reimbursementExtractionBaseUrl: config.reimbursementExtractionBaseUrl,
         },
         logger,
       );

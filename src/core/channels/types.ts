@@ -1,4 +1,4 @@
-export type ScenarioCode = "loss-report";
+export type ScenarioCode = "loss-report" | "reimbursement";
 
 export interface ChannelMatch {
   type: "room_topic";

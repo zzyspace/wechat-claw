@@ -3,20 +3,47 @@ import { matchChannelByRoomTopic } from "../core/channels/router.js";
 import type { Logger } from "../core/logging/logger.js";
 import { saveImageAttachment } from "../core/attachments/save-image-attachment.js";
 import { normalizeMessage } from "../core/messages/normalize-message.js";
+import { getReimbursementRawStorageDir } from "../core/runtime/state-paths.js";
 import { saveScenarioExtraction } from "../core/scenarios/scenario-extraction-repository.js";
 import { hasRecentImageMessage, saveRawMessage } from "../core/storage/raw-message-repository.js";
+import type { StoredAttachment } from "../core/storage/types.js";
 import { extractLossReportHeuristically } from "../scenarios/loss-report/heuristic-extractor.js";
 import { extractLossReportByModel } from "../scenarios/loss-report/model-provider.js";
+import { extractReimbursementReport } from "../scenarios/reimbursement/extractor.js";
+import {
+  attachRemarkToReimbursementReport,
+  findRecentPrimaryImageReimbursementReport,
+  saveReimbursementReport,
+} from "../scenarios/reimbursement/repository.js";
 import { sendTextToTarget } from "./delivery-contact.js";
 
 export interface MessageContext {
   channels: ChannelConfig[];
   debugContactName?: string;
+  timeZone?: string;
   lossMergeWindowSeconds: number;
   lossExtractionProvider?: string;
   lossExtractionModel?: string;
   lossExtractionApiKey?: string;
   lossExtractionBaseUrl: string;
+  reimbursementExtractionProvider?: string;
+  reimbursementExtractionModel?: string;
+  reimbursementExtractionApiKey?: string;
+  reimbursementExtractionBaseUrl?: string;
+}
+
+interface ParsedRoomMessage {
+  attachments: StoredAttachment[];
+  channel: ChannelConfig;
+  channelExternalId?: string;
+  eventReceivedAt: string;
+  messageExternalId: string;
+  messageType: string;
+  normalizedText: string;
+  roomTopic: string;
+  senderExternalId?: string;
+  senderName: string;
+  typeValue: unknown;
 }
 
 export async function handleMessage(message: any, context: MessageContext, logger: Logger) {
@@ -33,7 +60,7 @@ export async function handleMessage(message: any, context: MessageContext, logge
   const roomTopic = typeof room.topic === "function" ? await room.topic() : "";
   const channel = matchChannelByRoomTopic(context.channels, roomTopic);
 
-  if (!channel || channel.scenario !== "loss-report") {
+  if (!channel) {
     return;
   }
 
@@ -44,10 +71,12 @@ export async function handleMessage(message: any, context: MessageContext, logge
   const normalizedText = normalizeMessageText(text, typeValue);
   const messageId = typeof message.id === "function" ? message.id() : message.id || cryptoRandomId();
   const eventReceivedAt = new Date().toISOString();
-  const attachments = [];
+  const attachments: StoredAttachment[] = [];
 
   if (isImageLikeMessage(typeValue, normalizedText)) {
-    const imageAttachment = await saveImageAttachment(message);
+    const imageAttachment = await saveImageAttachment(message, {
+      rawStorageDir: channel.scenario === "reimbursement" ? getReimbursementRawStorageDir() : undefined,
+    });
 
     if (imageAttachment) {
       attachments.push(imageAttachment);
@@ -55,51 +84,80 @@ export async function handleMessage(message: any, context: MessageContext, logge
   }
 
   const senderExternalId = talker && typeof talker.id === "function" ? talker.id() : undefined;
+  const parsed: ParsedRoomMessage = {
+    attachments,
+    channel,
+    channelExternalId: typeof room.id === "function" ? room.id() : undefined,
+    eventReceivedAt,
+    messageExternalId: String(messageId),
+    messageType: String(typeValue),
+    normalizedText,
+    roomTopic,
+    senderExternalId,
+    senderName,
+    typeValue,
+  };
 
+  if (channel.scenario === "loss-report") {
+    await handleLossReportMessage(message, parsed, context, logger);
+    return;
+  }
+
+  if (channel.scenario === "reimbursement") {
+    await handleReimbursementMessage(message, parsed, context, logger);
+  }
+}
+
+async function handleLossReportMessage(
+  message: any,
+  parsed: ParsedRoomMessage,
+  context: MessageContext,
+  logger: Logger,
+) {
   if (
     shouldSkipTextOnlyMessage({
-      attachments,
-      channelCode: channel.code,
-      channelName: roomTopic,
-      eventReceivedAt,
+      attachments: parsed.attachments,
+      channelCode: parsed.channel.code,
+      channelName: parsed.roomTopic,
+      eventReceivedAt: parsed.eventReceivedAt,
       mergeWindowSeconds: context.lossMergeWindowSeconds,
-      normalizedText,
-      senderExternalId,
-      senderName,
+      normalizedText: parsed.normalizedText,
+      senderExternalId: parsed.senderExternalId,
+      senderName: parsed.senderName,
     })
   ) {
     logger.info("Skipped text-only room message", {
-      channelCode: channel.code,
-      roomTopic,
-      senderName,
-      text: normalizedText,
-      typeValue,
+      channelCode: parsed.channel.code,
+      roomTopic: parsed.roomTopic,
+      senderName: parsed.senderName,
+      text: parsed.normalizedText,
+      typeValue: parsed.typeValue,
     });
     return;
   }
 
   const normalized = normalizeMessage({
-    messageExternalId: String(messageId),
-    channelCode: channel.code,
-    channelExternalId: typeof room.id === "function" ? room.id() : undefined,
-    channelName: roomTopic,
-    senderExternalId,
-    senderName,
-    messageType: String(typeValue),
-    textContent: normalizedText,
-    eventReceivedAt,
-    attachments,
+    messageExternalId: parsed.messageExternalId,
+    channelCode: parsed.channel.code,
+    channelExternalId: parsed.channelExternalId,
+    channelName: parsed.roomTopic,
+    senderExternalId: parsed.senderExternalId,
+    senderName: parsed.senderName,
+    messageType: parsed.messageType,
+    textContent: parsed.normalizedText,
+    eventReceivedAt: parsed.eventReceivedAt,
+    attachments: parsed.attachments,
   });
 
   const saveResult = saveRawMessage(normalized);
   const modelExtraction = await extractLossReportByModel(
     {
       rawMessageId: saveResult.rawMessageId,
-      channelName: roomTopic,
-      senderName,
-      textContent: normalizedText,
-      sentAt: eventReceivedAt,
-      attachments,
+      channelName: parsed.roomTopic,
+      senderName: parsed.senderName,
+      textContent: parsed.normalizedText,
+      sentAt: parsed.eventReceivedAt,
+      attachments: parsed.attachments,
     },
     {
       enabled: true,
@@ -113,12 +171,12 @@ export async function handleMessage(message: any, context: MessageContext, logge
     modelExtraction ??
     extractLossReportHeuristically({
       rawMessageId: saveResult.rawMessageId,
-      channelName: roomTopic,
-      senderName,
-      messageType: String(typeValue),
-      textContent: normalizedText,
-      sentAt: eventReceivedAt,
-      attachments,
+      channelName: parsed.roomTopic,
+      senderName: parsed.senderName,
+      messageType: parsed.messageType,
+      textContent: parsed.normalizedText,
+      sentAt: parsed.eventReceivedAt,
+      attachments: parsed.attachments,
     });
   const savedExtraction = saveScenarioExtraction({
     rawMessageId: saveResult.rawMessageId,
@@ -131,26 +189,220 @@ export async function handleMessage(message: any, context: MessageContext, logge
   });
 
   logger.info("Received room message", {
-    attachmentsCount: attachments.length,
-    channelCode: channel.code,
+    attachmentsCount: parsed.attachments.length,
+    channelCode: parsed.channel.code,
     inserted: saveResult.inserted,
     rawMessageId: saveResult.rawMessageId,
-    roomTopic,
+    roomTopic: parsed.roomTopic,
     scenarioStatus: savedExtraction.status,
-    senderName,
-    text: normalizedText,
-    typeValue,
+    senderName: parsed.senderName,
+    text: parsed.normalizedText,
+    typeValue: parsed.typeValue,
   });
+
+  await sendDebugNotification(message, context, logger, parsed.channel, [
+    "[wechat-claw] 已收到群消息",
+    `逻辑频道: ${parsed.channel.code}`,
+    `场景: 报损`,
+    `群聊: ${parsed.roomTopic}`,
+    `发送人: ${parsed.senderName}`,
+    `消息类型: ${parsed.messageType}`,
+    `内容: ${parsed.normalizedText}`,
+    `附件数: ${parsed.attachments.length}`,
+    `入库: ${saveResult.inserted ? "新消息" : "已去重"}`,
+    `报损提取: ${savedExtraction.status} / review=${savedExtraction.needsReview ? "是" : "否"}`,
+  ]);
+}
+
+async function handleReimbursementMessage(
+  message: any,
+  parsed: ParsedRoomMessage,
+  context: MessageContext,
+  logger: Logger,
+) {
+  if (isTextOnlyUrlMessage(parsed)) {
+    logger.info("Skipped reimbursement text-only URL message", {
+      channelCode: parsed.channel.code,
+      roomTopic: parsed.roomTopic,
+      senderName: parsed.senderName,
+      text: parsed.normalizedText,
+      typeValue: parsed.typeValue,
+    });
+    return;
+  }
+
+  const normalized = normalizeMessage({
+    messageExternalId: parsed.messageExternalId,
+    channelCode: parsed.channel.code,
+    channelExternalId: parsed.channelExternalId,
+    channelName: parsed.roomTopic,
+    senderExternalId: parsed.senderExternalId,
+    senderName: parsed.senderName,
+    messageType: parsed.messageType,
+    textContent: parsed.normalizedText,
+    eventReceivedAt: parsed.eventReceivedAt,
+    attachments: parsed.attachments,
+  });
+  const saveResult = saveRawMessage(normalized);
+
+  if (isTextOnlyMessage(parsed) && context.lossMergeWindowSeconds > 0) {
+    const currentTime = new Date(parsed.eventReceivedAt).getTime();
+    const sinceIso = new Date(currentTime - context.lossMergeWindowSeconds * 1000).toISOString();
+    const recentImageReport = findRecentPrimaryImageReimbursementReport({
+      beforeIso: parsed.eventReceivedAt,
+      channelCode: parsed.channel.code,
+      channelName: parsed.roomTopic,
+      senderExternalId: parsed.senderExternalId,
+      senderName: parsed.senderName,
+      sinceIso,
+    });
+
+    if (recentImageReport) {
+      const updatedReport = attachRemarkToReimbursementReport({
+        reimbursementReportId: recentImageReport.id,
+        rawMessageId: saveResult.rawMessageId,
+        note: parsed.normalizedText,
+      });
+      const savedExtraction = saveScenarioExtraction({
+        rawMessageId: saveResult.rawMessageId,
+        scenarioCode: "reimbursement",
+        extractorCode: "remark-link-v1",
+        status: "extracted",
+        confidence: updatedReport.confidence,
+        needsReview: updatedReport.needsReview,
+        resultJson: {
+          eventType: "reimbursement_report_remark",
+          rawMessageId: saveResult.rawMessageId,
+          reimbursementReportId: updatedReport.id,
+          note: parsed.normalizedText,
+        },
+      });
+
+      logger.info("Received reimbursement room message", {
+        attachmentsCount: parsed.attachments.length,
+        channelCode: parsed.channel.code,
+        inserted: saveResult.inserted,
+        rawMessageId: saveResult.rawMessageId,
+        reimbursementReportId: updatedReport.id,
+        roomTopic: parsed.roomTopic,
+        scenarioStatus: savedExtraction.status,
+        senderName: parsed.senderName,
+        text: parsed.normalizedText,
+        typeValue: parsed.typeValue,
+      });
+
+      await sendDebugNotification(message, context, logger, parsed.channel, [
+        "[wechat-claw] 已收到群消息",
+        `逻辑频道: ${parsed.channel.code}`,
+        `场景: 报账`,
+        `群聊: ${parsed.roomTopic}`,
+        `发送人: ${parsed.senderName}`,
+        `消息类型: ${parsed.messageType}`,
+        `内容: ${parsed.normalizedText}`,
+        `附件数: ${parsed.attachments.length}`,
+        `入库: ${saveResult.inserted ? "新消息" : "已去重"}`,
+        `报账处理: 备注合并 / report=${updatedReport.id}`,
+      ]);
+      return;
+    }
+  }
+
+  const extraction = await extractReimbursementReport(
+    {
+      rawMessageId: saveResult.rawMessageId,
+      channelCode: parsed.channel.code,
+      channelName: parsed.roomTopic,
+      reporter: parsed.senderName,
+      textContent: parsed.normalizedText,
+      sentAt: parsed.eventReceivedAt,
+      timeZone: context.timeZone ?? "Asia/Shanghai",
+      attachments: parsed.attachments,
+    },
+    {
+      provider: context.reimbursementExtractionProvider,
+      model: context.reimbursementExtractionModel,
+      apiKey: context.reimbursementExtractionApiKey,
+      baseUrl:
+        context.reimbursementExtractionBaseUrl ??
+        "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    },
+  );
+  const report = saveReimbursementReport({
+    channelCode: parsed.channel.code,
+    channelName: parsed.roomTopic,
+    reporter: parsed.senderName,
+    amount: extraction.resultJson.amount,
+    currency: extraction.resultJson.currency,
+    expenseCategory: extraction.resultJson.expenseCategory,
+    voucherDate: extraction.resultJson.voucherDate,
+    voucherDateSource: extraction.resultJson.voucherDateSource,
+    note: extraction.resultJson.note,
+    evidenceType: extraction.resultJson.evidenceType,
+    merchant: extraction.resultJson.merchant,
+    documentNo: extraction.resultJson.documentNo,
+    voucherType: extraction.resultJson.voucherType,
+    ocrText: extraction.resultJson.ocrText,
+    confidence: extraction.confidence,
+    needsReview: extraction.needsReview,
+    primaryRawMessageId: saveResult.rawMessageId,
+  });
+  const savedExtraction = saveScenarioExtraction({
+    rawMessageId: saveResult.rawMessageId,
+    scenarioCode: extraction.scenarioCode,
+    extractorCode: extraction.extractorCode,
+    status: extraction.status,
+    confidence: extraction.confidence,
+    needsReview: extraction.needsReview,
+    resultJson: {
+      ...extraction.resultJson,
+      reimbursementReportId: report.id,
+    },
+  });
+
+  logger.info("Received reimbursement room message", {
+    amount: report.amount,
+    attachmentsCount: parsed.attachments.length,
+    channelCode: parsed.channel.code,
+    inserted: saveResult.inserted,
+    rawMessageId: saveResult.rawMessageId,
+    reimbursementReportId: report.id,
+    roomTopic: parsed.roomTopic,
+    scenarioStatus: savedExtraction.status,
+    senderName: parsed.senderName,
+    text: parsed.normalizedText,
+    typeValue: parsed.typeValue,
+  });
+
+  await sendDebugNotification(message, context, logger, parsed.channel, [
+    "[wechat-claw] 已收到群消息",
+    `逻辑频道: ${parsed.channel.code}`,
+    `场景: 报账`,
+    `群聊: ${parsed.roomTopic}`,
+    `发送人: ${parsed.senderName}`,
+    `消息类型: ${parsed.messageType}`,
+    `内容: ${parsed.normalizedText}`,
+    `附件数: ${parsed.attachments.length}`,
+    `入库: ${saveResult.inserted ? "新消息" : "已去重"}`,
+    `报账处理: ${savedExtraction.status} / amount=${report.amount ?? "待复核"} / review=${savedExtraction.needsReview ? "是" : "否"}`,
+  ]);
+}
+
+async function sendDebugNotification(
+  message: any,
+  context: MessageContext,
+  logger: Logger,
+  channel: ChannelConfig,
+  lines: string[],
+) {
+  if (!context.debugContactName) {
+    return;
+  }
 
   const bot = typeof message.wechaty === "function" ? message.wechaty() : message.wechaty;
   if (!bot) {
     logger.warn("Wechaty instance unavailable for delivery target notification", {
       channelCode: channel.code,
     });
-    return;
-  }
-
-  if (!context.debugContactName) {
     return;
   }
 
@@ -161,15 +413,7 @@ export async function handleMessage(message: any, context: MessageContext, logge
       value: context.debugContactName,
     },
     [
-      "[wechat-claw] 已收到群消息",
-      `逻辑频道: ${channel.code}`,
-      `群聊: ${roomTopic}`,
-      `发送人: ${senderName}`,
-      `消息类型: ${String(typeValue)}`,
-      `内容: ${normalizedText}`,
-      `附件数: ${attachments.length}`,
-      `入库: ${saveResult.inserted ? "新消息" : "已去重"}`,
-      `报损提取: ${savedExtraction.status} / review=${savedExtraction.needsReview ? "是" : "否"}`,
+      ...lines,
     ].join("\n"),
     logger,
   );
@@ -248,6 +492,18 @@ function shouldSkipTextOnlyMessage(input: {
   });
 
   return !hasRecentImageContext;
+}
+
+function isTextOnlyMessage(input: ParsedRoomMessage) {
+  return input.attachments.length === 0 && input.normalizedText !== "(非文本消息)";
+}
+
+function isTextOnlyUrlMessage(input: ParsedRoomMessage) {
+  return isTextOnlyMessage(input) && containsUrl(input.normalizedText);
+}
+
+function containsUrl(text: string) {
+  return /(https?:\/\/|www\.|[a-z0-9.-]+\.(?:com|cn|net|org|io|top|shop|xyz|me)(?:\/|\b))/i.test(text);
 }
 
 function isXmlImagePayload(text: string, typeValue: unknown) {
