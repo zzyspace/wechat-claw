@@ -487,12 +487,6 @@ export function validateAppConfig(config: AppConfig): ConfigValidationResult {
     errors.push("Missing WECHATY_PUPPET_SERVICE_TOKEN for wechaty-puppet-service");
   }
 
-  if (!isServicePuppet(config.puppet) && !config.puppetServiceToken) {
-    warnings.push(
-      "WECHATY_PUPPET_SERVICE_TOKEN is empty. This is expected for tokenless puppets such as wechaty-puppet-wechat.",
-    );
-  }
-
   if (config.alertEmailEnabled) {
     if (!config.alertSmtpHost) {
       errors.push("Missing WECHATY_ALERT_SMTP_HOST");
