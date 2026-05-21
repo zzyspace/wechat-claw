@@ -243,6 +243,25 @@ npm run build
 npm run inspect:messages
 ```
 
+查看已入库的报账信息：
+
+```bash
+npm run inspect:reimbursements
+```
+
+常用筛选：
+
+```bash
+npm run inspect:reimbursements -- --limit 20
+npm run inspect:reimbursements -- --channel reimbursement_a
+```
+
+说明：
+
+- 每份报账会按一个区块打印，包含金额、类别、票据日期、备注、OCR 文本、是否需要复核
+- 同时会展开来源 raw message 明细，方便排查“图片 + 后续备注文字”是否合并正确
+- 没有报账数据时会打印 `status=empty`
+
 手工执行一次 watchdog 巡检：
 
 ```bash
@@ -375,6 +394,7 @@ npm start
 - `WECHATY_STATE_DIR/logs`
 - `WECHATY_STATE_DIR/raw`
 - `npm run inspect:messages`
+- `npm run inspect:reimbursements`
 - `npm run logs:recent`
 - `npm run summary:loss`
 - `npm run summary:loss:recent 10`
