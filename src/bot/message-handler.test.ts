@@ -15,6 +15,9 @@ process.env.WECHATY_STATE_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "wechat-cl
 
 function createLogger(records: Array<{ level: string; message: string; context?: Record<string, unknown> }>) {
   return {
+    debug(message: string, context?: Record<string, unknown>) {
+      records.push({ level: "debug", message, context });
+    },
     error(message: string, context?: Record<string, unknown>) {
       records.push({ level: "error", message, context });
     },

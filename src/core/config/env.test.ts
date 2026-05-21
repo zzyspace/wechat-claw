@@ -10,6 +10,9 @@ const managedEnvKeys = [
   "WECHATY_PUPPET",
   "WECHATY_PUPPET_SERVICE_TOKEN",
   "WECHATY_STATE_DIR",
+  "WECHATY_LOG_DIR",
+  "WECHATY_LOG_RETENTION_DAYS",
+  "WECHATY_LOG_LEVEL",
   "WECHATY_TIMEZONE",
   "WECHATY_SUMMARY_CRON",
   "WECHATY_CHANNELS_JSON",
@@ -57,6 +60,8 @@ afterEach(() => {
 test("getAppConfig parses WECHATY_CHANNELS_JSON with mixed delivery targets", () => {
   applyEnv({
     WECHATY_ATTACHMENT_RETENTION_DAYS: "90",
+    WECHATY_LOG_LEVEL: "debug",
+    WECHATY_LOG_RETENTION_DAYS: "14",
     WECHATY_PUPPET: "wechaty-puppet-wechat",
     WECHATY_COLD_START_IGNORE_WINDOW_SECONDS: "45",
     WECHATY_DEBUG_CONTACT_NAME: "调试联系人",
@@ -94,6 +99,8 @@ test("getAppConfig parses WECHATY_CHANNELS_JSON with mixed delivery targets", ()
   assert.equal(config.attachmentRetentionDays, 90);
   assert.equal(config.coldStartIgnoreWindowSeconds, 45);
   assert.equal(config.debugContactName, "调试联系人");
+  assert.equal(config.logLevel, "debug");
+  assert.equal(config.logRetentionDays, 14);
   assert.equal(config.channels.length, 2);
   assert.equal(config.channels[1]?.scenario, "reimbursement");
   assert.equal(config.reimbursementExtractionProvider, "qwen");
@@ -161,6 +168,55 @@ test("getAppConfig falls back to legacy single-channel env vars", () => {
   assert.deepEqual(config.channels[0]?.deliveryTargets, [{ type: "contact_name", value: "Ryan" }]);
   assert.deepEqual(validation.errors, []);
   assert(validation.warnings.some((warning) => warning.includes("Prefer WECHATY_CHANNELS_JSON")));
+});
+
+test("getAppConfig defaults log settings from state dir", () => {
+  applyEnv({
+    WECHATY_PUPPET: "wechaty-puppet-wechat",
+    WECHATY_STATE_DIR: "/tmp/wechat-claw-state",
+    WECHATY_CHANNELS_JSON: JSON.stringify([
+      {
+        code: "loss_a",
+        enabled: true,
+        scenario: "loss-report",
+        match: { type: "room_topic", value: "报损群A" },
+        deliveryTargets: [{ type: "contact_name", value: "店长A" }],
+        summarySchedule: "",
+      },
+    ]),
+    WECHATY_LOG_DIR: undefined,
+    WECHATY_LOG_LEVEL: undefined,
+    WECHATY_LOG_RETENTION_DAYS: undefined,
+  });
+
+  const config = getAppConfig();
+
+  assert.equal(config.logDir, "/tmp/wechat-claw-state/logs");
+  assert.equal(config.logLevel, "info");
+  assert.equal(config.logRetentionDays, 7);
+});
+
+test("validateAppConfig rejects invalid log settings", () => {
+  applyEnv({
+    WECHATY_PUPPET: "wechaty-puppet-wechat",
+    WECHATY_CHANNELS_JSON: JSON.stringify([
+      {
+        code: "loss_a",
+        enabled: true,
+        scenario: "loss-report",
+        match: { type: "room_topic", value: "报损群A" },
+        deliveryTargets: [{ type: "contact_name", value: "店长A" }],
+        summarySchedule: "",
+      },
+    ]),
+    WECHATY_LOG_LEVEL: "verbose",
+    WECHATY_LOG_RETENTION_DAYS: "0",
+  });
+
+  const validation = validateAppConfig(getAppConfig());
+
+  assert(validation.errors.some((error) => error.includes("Invalid WECHATY_LOG_LEVEL")));
+  assert(validation.errors.some((error) => error.includes("Invalid WECHATY_LOG_RETENTION_DAYS")));
 });
 
 test("loadEnvironmentFiles loads config from a specified env file without overriding existing env", () => {

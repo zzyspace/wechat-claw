@@ -158,6 +158,7 @@ function runCleanup(config: AppConfig, logger: Logger, trigger: "startup" | "sch
     logger.error("Raw attachment cleanup failed", {
       message: error instanceof Error ? error.message : String(error),
       retentionDays: config.attachmentRetentionDays,
+      stack: error instanceof Error ? error.stack : undefined,
       trigger,
     });
   }

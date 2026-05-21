@@ -124,6 +124,7 @@ export function startManualSummaryRequestPoller(input: {
             channelCode: request.channelCode,
             message: errorMessage,
             requestId: request.id,
+            stack: error instanceof Error ? error.stack : undefined,
             summaryType: request.summaryType,
             targetDate: request.targetDate,
           });

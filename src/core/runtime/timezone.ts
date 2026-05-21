@@ -22,6 +22,10 @@ function pad(value: number): string {
   return String(value).padStart(2, "0");
 }
 
+function padMilliseconds(value: number): string {
+  return String(value).padStart(3, "0");
+}
+
 function formatDateString(year: number, month: number, day: number): string {
   return `${year}-${pad(month)}-${pad(day)}`;
 }
@@ -75,6 +79,12 @@ export function formatZonedDate(date: Date, timeZone: string): string {
 export function formatZonedMinuteKey(date: Date, timeZone: string): string {
   const parts = getZonedDateParts(date, timeZone);
   return `${parts.year}-${pad(parts.month)}-${pad(parts.day)}T${pad(parts.hour)}:${pad(parts.minute)}`;
+}
+
+export function formatZonedTimestamp(date: Date, timeZone: string): string {
+  const parts = getZonedDateParts(date, timeZone);
+
+  return `${parts.year}-${pad(parts.month)}-${pad(parts.day)} ${pad(parts.hour)}:${pad(parts.minute)}:${pad(parts.second)}.${padMilliseconds(date.getMilliseconds())}`;
 }
 
 export function getTimeZoneOffsetMinutes(date: Date, timeZone: string): number {

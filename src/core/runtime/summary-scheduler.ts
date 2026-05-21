@@ -65,6 +65,7 @@ export function startLossSummaryScheduler(input: {
           channelCode: channel.code,
           channelName: getChannelDisplayName(channel),
           message: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined,
         });
       },
       async task() {

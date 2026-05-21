@@ -72,6 +72,13 @@ export class HealthReporter {
     this.persist();
   }
 
+  getSnapshot(): RuntimeHealthSnapshot {
+    return {
+      ...this.snapshot,
+      lastError: this.snapshot.lastError ? { ...this.snapshot.lastError } : null,
+    };
+  }
+
   setStatus(status: RuntimeHealthStatus) {
     this.update({ status });
   }
@@ -124,6 +131,7 @@ export class HealthReporter {
     this.logger.error("Runtime health recorded an error", {
       category,
       message,
+      stack: error instanceof Error ? error.stack : undefined,
     });
   }
 }

@@ -1,9 +1,10 @@
 import { getAppConfig } from "../core/config/env.js";
 import { logger } from "../core/logging/logger.js";
+import { startLogRetentionManager } from "../core/runtime/log-retention.js";
 import { startRawAttachmentRetentionManager } from "../core/runtime/raw-attachment-retention.js";
 import { HealthReporter } from "../core/runtime/health.js";
 import { startManualSummaryRequestPoller } from "../core/runtime/manual-summary-request-poller.js";
-import { assertStateDirWritable } from "../core/runtime/state-paths.js";
+import { assertLogDirWritable, assertStateDirWritable } from "../core/runtime/state-paths.js";
 import { startLossSummaryScheduler } from "../core/runtime/summary-scheduler.js";
 import { startBot } from "../bot/wechaty-client.js";
 import type { WechatyInstance } from "../bot/types.js";
@@ -45,9 +46,13 @@ async function main() {
   let stopRawAttachmentRetentionManager = () => {
     // no-op
   };
+  let stopLogRetentionManager = () => {
+    // no-op
+  };
   let shuttingDown = false;
   let healthReporter: HealthReporter | undefined;
   let shutdownPromise: Promise<void> | undefined;
+  const processStartedAt = Date.now();
 
   const shutdown = async (signal: string) => {
     if (shutdownPromise) {
@@ -61,6 +66,7 @@ async function main() {
       stopScheduler();
       stopManualSummaryRequestPoller();
       stopRawAttachmentRetentionManager();
+      stopLogRetentionManager();
 
       if (bot) {
         try {
@@ -69,12 +75,18 @@ async function main() {
           const message = error instanceof Error ? error.message : String(error);
           logger.error("Failed to stop bot cleanly", {
             message,
+            stack: error instanceof Error ? error.stack : undefined,
             timeoutMs: SHUTDOWN_TIMEOUT_MS,
           });
         }
       }
 
       healthReporter?.setStatus("stopped");
+      logger.info("Runtime shutdown completed", {
+        finalStatus: healthReporter?.getSnapshot().status ?? "stopped",
+        signal,
+        uptimeMs: Date.now() - processStartedAt,
+      });
     })();
 
     return shutdownPromise;
@@ -104,6 +116,17 @@ async function main() {
   try {
     const config = getAppConfig();
     assertStateDirWritable(config);
+    assertLogDirWritable(config);
+
+    logger.info("Runtime starting", {
+      botName: config.botName,
+      enabledChannels: config.channels.filter((channel) => channel.enabled).length,
+      logDir: config.logDir,
+      logLevel: config.logLevel,
+      puppet: config.puppet ?? "(empty)",
+      stateDir: config.stateDir,
+      timeZone: config.timeZone,
+    });
 
     healthReporter = new HealthReporter(config, logger);
     healthReporter.initialize();
@@ -153,12 +176,21 @@ async function main() {
       logger,
     });
     stopRawAttachmentRetentionManager = () => rawAttachmentRetentionManager.stop();
+
+    const logRetentionManager = startLogRetentionManager({
+      config,
+      logger,
+    });
+    stopLogRetentionManager = () => logRetentionManager.stop();
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     healthReporter?.markError(error, {
       status: "degraded",
     });
-    logger.error("Application failed to start", { message });
+    logger.error("Application failed to start", {
+      message,
+      stack: error instanceof Error ? error.stack : undefined,
+    });
     if (!shuttingDown) {
       process.exit(1);
     }

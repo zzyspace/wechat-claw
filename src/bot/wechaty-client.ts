@@ -62,6 +62,8 @@ export async function startBot(
     })),
     channelsSource: config.channelsSource,
     coldStartIgnoreWindowSeconds: config.coldStartIgnoreWindowSeconds,
+    logDir: config.logDir,
+    logLevel: config.logLevel,
     puppet: config.puppet,
     stateDir: config.stateDir,
     timeZone: config.timeZone,
@@ -172,7 +174,7 @@ export async function startBot(
 
     if (coldStartDecision.ignored) {
       const messageId = typeof message.id === "function" ? message.id() : message?.id;
-      logger.info("Ignored message during cold start window", {
+      logger.debug("Ignored message during cold start window", {
         botStartedAt,
         coldStartIgnoreWindowSeconds: config.coldStartIgnoreWindowSeconds,
         cutoffAt: coldStartDecision.cutoffAt,
@@ -204,7 +206,10 @@ export async function startBot(
       );
     } catch (error) {
       const messageText = error instanceof Error ? error.message : String(error);
-      logger.error("Failed to handle message", { message: messageText });
+      logger.error("Failed to handle message", {
+        message: messageText,
+        stack: error instanceof Error ? error.stack : undefined,
+      });
     }
   });
 

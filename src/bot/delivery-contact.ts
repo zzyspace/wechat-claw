@@ -65,6 +65,7 @@ export async function sendTextToTarget(
     const message = error instanceof Error ? error.message : String(error);
     logger.error("Failed to send text to delivery target", {
       message,
+      stack: error instanceof Error ? error.stack : undefined,
       targetType: target.type,
       targetValue: target.value,
     });

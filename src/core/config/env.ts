@@ -36,6 +36,9 @@ export interface AppConfig {
   puppetServiceToken?: string;
   botName: string;
   stateDir: string;
+  logDir: string;
+  logRetentionDays: number;
+  logLevel: LogLevelName;
   timeZone: string;
   debugContactName?: string;
   channels: ChannelConfig[];
@@ -54,6 +57,8 @@ export interface AppConfig {
   reimbursementExtractionApiKey?: string;
   reimbursementExtractionBaseUrl: string;
 }
+
+export type LogLevelName = "debug" | "info" | "warn" | "error";
 
 export interface ConfigValidationResult {
   errors: string[];
@@ -94,6 +99,16 @@ function readPositiveNumberEnv(name: string, fallback: number): number {
 
   const value = Number(raw);
   return Number.isFinite(value) && value > 0 ? value : fallback;
+}
+
+function readConfiguredPositiveNumberEnv(name: string, fallback: number): number {
+  const raw = process.env[name]?.trim();
+
+  if (!raw) {
+    return fallback;
+  }
+
+  return Number(raw);
 }
 
 function readNonNegativeNumberEnv(name: string, fallback: number): number {
@@ -255,6 +270,11 @@ export function getAppConfig(): AppConfig {
     puppetServiceToken: readOptionalEnv("WECHATY_PUPPET_SERVICE_TOKEN"),
     botName: process.env.WECHATY_BOT_NAME?.trim() || "wechat-loss-bot",
     stateDir: readStringEnv("WECHATY_STATE_DIR", "/var/lib/wechat-claw") || "/var/lib/wechat-claw",
+    logDir:
+      readStringEnv("WECHATY_LOG_DIR", "").trim() ||
+      `${readStringEnv("WECHATY_STATE_DIR", "/var/lib/wechat-claw") || "/var/lib/wechat-claw"}/logs`,
+    logRetentionDays: readConfiguredPositiveNumberEnv("WECHATY_LOG_RETENTION_DAYS", 7),
+    logLevel: readLogLevelEnv("WECHATY_LOG_LEVEL", "info"),
     timeZone: readStringEnv("WECHATY_TIMEZONE", "Asia/Shanghai") || "Asia/Shanghai",
     debugContactName: readOptionalEnv("WECHATY_DEBUG_CONTACT_NAME"),
     channels: channelResolution.channels,
@@ -294,6 +314,18 @@ export function validateAppConfig(config: AppConfig): ConfigValidationResult {
 
   if (!config.stateDir.trim()) {
     errors.push("Missing WECHATY_STATE_DIR");
+  }
+
+  if (!config.logDir.trim()) {
+    errors.push("Missing WECHATY_LOG_DIR");
+  }
+
+  if (!Number.isInteger(config.logRetentionDays) || config.logRetentionDays <= 0) {
+    errors.push(`Invalid WECHATY_LOG_RETENTION_DAYS: ${config.logRetentionDays}`);
+  }
+
+  if (!isValidLogLevel(config.logLevel)) {
+    errors.push(`Invalid WECHATY_LOG_LEVEL: ${config.logLevel}`);
   }
 
   if (!config.timeZone.trim()) {
@@ -393,4 +425,18 @@ export function validateAppConfig(config: AppConfig): ConfigValidationResult {
     errors,
     warnings,
   };
+}
+
+function isValidLogLevel(value: string): value is LogLevelName {
+  return value === "debug" || value === "info" || value === "warn" || value === "error";
+}
+
+function readLogLevelEnv(name: string, fallback: LogLevelName): LogLevelName {
+  const value = process.env[name]?.trim().toLowerCase();
+
+  if (!value) {
+    return fallback;
+  }
+
+  return isValidLogLevel(value) ? value : (value as LogLevelName);
 }

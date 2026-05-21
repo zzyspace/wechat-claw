@@ -7,6 +7,7 @@
 - 将群消息回发给指定联系人或群
 - 原始消息落 SQLite
 - 图片附件落本地文件
+- 将易读文本日志写入 `WECHATY_STATE_DIR/logs/`
 - 进程内定时发送报损日报、周报
 - 显式登录态与运行状态目录
 
@@ -24,7 +25,7 @@
 - 对报账图片和文字提取金额、报账人、票据日期和支出类别
 - 支持按群生成报损日报文本骨架
 - 支持按 channel 独立 cron 在 bot 进程内直接发送日报、周报
-- 将二维码、登录态、健康状态统一写入 `WECHATY_STATE_DIR`
+- 将二维码、登录态、健康状态、文本日志统一写入 `WECHATY_STATE_DIR`
 
 ## 环境要求
 
@@ -52,6 +53,9 @@ npm install
 WECHATY_PUPPET=wechaty-puppet-wechat
 WECHATY_PUPPET_SERVICE_TOKEN=
 WECHATY_STATE_DIR=/var/lib/wechat-claw
+WECHATY_LOG_DIR=/var/lib/wechat-claw/logs
+WECHATY_LOG_RETENTION_DAYS=7
+WECHATY_LOG_LEVEL=info
 WECHATY_TIMEZONE=Asia/Shanghai
 WECHATY_DEBUG_CONTACT_NAME=你的主微信昵称
 WECHATY_ATTACHMENT_RETENTION_DAYS=60
@@ -73,7 +77,10 @@ WECHATY_CHANNELS_JSON=[{"code":"loss_a","enabled":true,"scenario":"loss-report",
 
 - `WECHATY_PUPPET`: 具体接入方案名称
 - `WECHATY_PUPPET_SERVICE_TOKEN`: 仅 `wechaty-puppet-service` 等 service 模式需要
-- `WECHATY_STATE_DIR`: 统一状态目录，包含 SQLite、附件、二维码、health、memory-card
+- `WECHATY_STATE_DIR`: 统一状态目录，包含 SQLite、附件、二维码、health、memory-card、logs
+- `WECHATY_LOG_DIR`: 文本日志目录，默认 `${WECHATY_STATE_DIR}/logs`
+- `WECHATY_LOG_RETENTION_DAYS`: 文本日志保留天数，默认 `7` 天；会清理更早的 `app-YYYY-MM-DD.log` 和 `error-YYYY-MM-DD.log`
+- `WECHATY_LOG_LEVEL`: 日志级别，支持 `debug / info / warn / error`，默认 `info`
 - `WECHATY_TIMEZONE`: 日期边界和 cron 解释时区，默认 `Asia/Shanghai`
 - `WECHATY_DEBUG_CONTACT_NAME`: 所有 `"[wechat-claw]"` 调试信息统一发送到这个联系人，不参与业务日报发送
 - `WECHATY_CHANNELS_JSON`: 推荐的多群配置入口，支持 `loss-report` 和 `reimbursement` 场景
@@ -343,8 +350,10 @@ npm start
 如果要额外验证存储链路，再检查：
 
 - `WECHATY_STATE_DIR/wechat-claw.sqlite`
+- `WECHATY_STATE_DIR/logs`
 - `WECHATY_STATE_DIR/raw`
 - `npm run inspect:messages`
+- `npm run logs:recent`
 - `npm run summary:loss`
 - `npm run summary:loss:recent 10`
 
@@ -379,6 +388,32 @@ npm start
 - `lastMessageAt`
 - `lastSummaryAt`
 - `lastError`
+
+## 文本日志
+
+程序会同时输出到：
+
+- 终端 / `journalctl`
+- `WECHATY_STATE_DIR/logs/app-YYYY-MM-DD.log`
+- `WECHATY_STATE_DIR/logs/error-YYYY-MM-DD.log`
+
+日志特点：
+
+- 默认是易读文本格式，不再是 JSON 行
+- 每天自动切一个文件
+- 启动时和每天后台任务都会清理 7 天前日志
+- `error` 会额外写入当天 `error-YYYY-MM-DD.log`
+
+常用查看方式：
+
+```bash
+tail -f /var/lib/wechat-claw/logs/app-$(date +%F).log
+tail -f /var/lib/wechat-claw/logs/error-$(date +%F).log
+journalctl -u wechat-claw -f -o short-iso
+npm run logs:recent
+npm run logs:recent -- --errors
+npm run logs:recent -- --date 2026-05-21 --grep login
+```
 
 ## Linux 单机部署
 
@@ -556,6 +591,9 @@ WECHATY_PUPPET=wechaty-puppet-wechat
 WECHATY_PUPPET_WECHAT_PUPPETEER_UOS=1
 WECHATY_BOT_NAME=wechat-loss-bot
 WECHATY_STATE_DIR=/var/lib/wechat-claw
+WECHATY_LOG_DIR=/var/lib/wechat-claw/logs
+WECHATY_LOG_RETENTION_DAYS=7
+WECHATY_LOG_LEVEL=info
 WECHATY_TIMEZONE=Asia/Shanghai
 WECHATY_DEBUG_CONTACT_NAME=你的主微信昵称
 WECHATY_CHANNELS_JSON=[{"code":"loss_prod","enabled":true,"scenario":"loss-report","match":{"type":"room_topic","value":"AI测试群"},"deliveryTargets":[{"type":"contact_name","value":"你的主微信昵称"}],"summarySchedule":"0 22 * * *"}]
@@ -563,7 +601,11 @@ WECHATY_CHANNELS_JSON=[{"code":"loss_prod","enabled":true,"scenario":"loss-repor
 
 常用排障入口：
 
-- `journalctl -u wechat-claw -f`
+- `journalctl -u wechat-claw -f -o short-iso`
+- `/var/lib/wechat-claw/logs`
+- `tail -f /var/lib/wechat-claw/logs/app-$(date +%F).log`
+- `tail -f /var/lib/wechat-claw/logs/error-$(date +%F).log`
+- `cd /opt/wechat-claw/current && npm run logs:recent -- --errors`
 - `/var/lib/wechat-claw/health.json`
 - `/var/lib/wechat-claw/latest-qrcode.txt`
 

@@ -2,7 +2,7 @@ import { getAppConfig, validateAppConfig } from "../core/config/env.js";
 import { getEnabledChannels } from "../core/channels/router.js";
 import { logger } from "../core/logging/logger.js";
 import { parseCronExpression } from "../core/runtime/cron-scheduler.js";
-import { assertStateDirWritable } from "../core/runtime/state-paths.js";
+import { assertLogDirWritable, assertStateDirWritable } from "../core/runtime/state-paths.js";
 import { loadPuppetModule, loadWechatyModule } from "../bot/wechaty-loader.js";
 
 async function main() {
@@ -28,6 +28,8 @@ async function main() {
     stateDir: config.stateDir,
     timeZone: config.timeZone,
     enabledChannels: enabledChannels.length,
+    logDir: config.logDir,
+    logLevel: config.logLevel,
   });
 
   for (const warning of validation.warnings) {
@@ -45,10 +47,17 @@ async function main() {
 
   try {
     const stateDir = assertStateDirWritable(config);
-    logger.info("State directory check passed", { stateDir });
+    const logDir = assertLogDirWritable(config);
+    logger.info("State directory check passed", {
+      logDir,
+      stateDir,
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    logger.error("State directory check failed", { message });
+    logger.error("State directory check failed", {
+      message,
+      stack: error instanceof Error ? error.stack : undefined,
+    });
     process.exitCode = 1;
     return;
   }
@@ -84,7 +93,10 @@ async function main() {
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    logger.error("Summary cron check failed", { message });
+    logger.error("Summary cron check failed", {
+      message,
+      stack: error instanceof Error ? error.stack : undefined,
+    });
     process.exitCode = 1;
     return;
   }
@@ -94,7 +106,10 @@ async function main() {
     logger.info("Wechaty module check passed");
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    logger.error("Wechaty module check failed", { message });
+    logger.error("Wechaty module check failed", {
+      message,
+      stack: error instanceof Error ? error.stack : undefined,
+    });
     process.exitCode = 1;
     return;
   }
@@ -106,7 +121,10 @@ async function main() {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    logger.error("Puppet runtime check failed", { message });
+    logger.error("Puppet runtime check failed", {
+      message,
+      stack: error instanceof Error ? error.stack : undefined,
+    });
     process.exitCode = 1;
     return;
   }

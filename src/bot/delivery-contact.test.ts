@@ -6,6 +6,9 @@ import { countSuccessfulDeliveries, sendTextToTargets } from "./delivery-contact
 import type { WechatyInstance } from "./types.js";
 
 const logger = {
+  debug() {
+    // no-op
+  },
   error() {
     // no-op
   },

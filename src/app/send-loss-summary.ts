@@ -17,7 +17,7 @@ import {
   type SummarySendRequestType,
 } from "../core/runtime/manual-summary-request.js";
 import { getManualSummaryRequestGateResult } from "../core/runtime/manual-summary-request-gate.js";
-import { assertStateDirWritable } from "../core/runtime/state-paths.js";
+import { assertLogDirWritable, assertStateDirWritable } from "../core/runtime/state-paths.js";
 
 const REQUEST_POLL_INTERVAL_MS = 1_000;
 
@@ -40,9 +40,13 @@ async function main() {
 
   try {
     assertStateDirWritable(config);
+    assertLogDirWritable(config);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    logger.error("State directory check failed", { message });
+    logger.error("State directory check failed", {
+      message,
+      stack: error instanceof Error ? error.stack : undefined,
+    });
     process.exitCode = 1;
     return;
   }
@@ -66,6 +70,7 @@ async function main() {
 
     logger.error("Summary send command arguments", {
       message,
+      stack: error instanceof Error ? error.stack : undefined,
     });
     process.exitCode = 1;
     return;
@@ -84,6 +89,7 @@ async function main() {
     const message = error instanceof Error ? error.message : String(error);
     logger.error("Failed to resolve summary send channels", {
       message,
+      stack: error instanceof Error ? error.stack : undefined,
       usage: buildUsageText(),
     });
     process.exitCode = 1;

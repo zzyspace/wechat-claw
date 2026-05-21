@@ -7,6 +7,20 @@ function resolveConfig(config?: AppConfig): AppConfig {
   return config ?? getAppConfig();
 }
 
+function assertDirectoryWritable(dirPath: string, label: string) {
+  const probePath = path.join(dirPath, ".write-test");
+
+  try {
+    fs.writeFileSync(probePath, String(Date.now()), "utf8");
+    fs.unlinkSync(probePath);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`${label} is not writable: ${dirPath}. ${message}`);
+  }
+
+  return dirPath;
+}
+
 export function getStateDirPath(config?: AppConfig): string {
   return path.resolve(resolveConfig(config).stateDir);
 }
@@ -19,21 +33,27 @@ export function ensureStateDir(config?: AppConfig): string {
 
 export function assertStateDirWritable(config?: AppConfig): string {
   const stateDir = ensureStateDir(config);
-  const probePath = path.join(stateDir, ".write-test");
-
-  try {
-    fs.writeFileSync(probePath, String(Date.now()), "utf8");
-    fs.unlinkSync(probePath);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    throw new Error(`State directory is not writable: ${stateDir}. ${message}`);
-  }
-
-  return stateDir;
+  return assertDirectoryWritable(stateDir, "State directory");
 }
 
 export function getDatabaseFilePath(config?: AppConfig): string {
   return path.join(getStateDirPath(config), "wechat-claw.sqlite");
+}
+
+export function getLogDirPath(config?: AppConfig): string {
+  const resolved = resolveConfig(config);
+  return path.resolve(resolved.logDir);
+}
+
+export function ensureLogDir(config?: AppConfig): string {
+  const logDir = getLogDirPath(config);
+  fs.mkdirSync(logDir, { recursive: true });
+  return logDir;
+}
+
+export function assertLogDirWritable(config?: AppConfig): string {
+  const logDir = ensureLogDir(config);
+  return assertDirectoryWritable(logDir, "Log directory");
 }
 
 export function getRawStorageDir(config?: AppConfig): string {

@@ -15,6 +15,9 @@ import { sendLossDailySummary, sendLossWeeklySummary } from "./loss-summary-deli
 const originalStateDir = process.env.WECHATY_STATE_DIR;
 
 const logger = {
+  debug() {
+    // no-op
+  },
   error() {
     // no-op
   },
@@ -120,6 +123,9 @@ test("sendLossDailySummary renders and delivers the summary text", async () => {
     channels: [channel],
     channelsSource: "json",
     coldStartIgnoreWindowSeconds: 60,
+    logDir: path.join(process.env.WECHATY_STATE_DIR, "logs"),
+    logLevel: "info",
+    logRetentionDays: 7,
     lossExtractionBaseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1",
     lossMergeWindowSeconds: 60,
     reimbursementExtractionBaseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1",
@@ -166,6 +172,9 @@ test("sendLossWeeklySummary renders a Sunday weekly report for the current week"
     channels: [channel],
     channelsSource: "json",
     coldStartIgnoreWindowSeconds: 60,
+    logDir: path.join(process.env.WECHATY_STATE_DIR, "logs"),
+    logLevel: "info",
+    logRetentionDays: 7,
     lossExtractionBaseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1",
     lossMergeWindowSeconds: 60,
     reimbursementExtractionBaseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1",
