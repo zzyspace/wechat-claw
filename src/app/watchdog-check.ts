@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
 
 import { getAppConfig, validateAppConfig } from "../core/config/env.js";
-import { logger } from "../core/logging/logger.js";
+import { createLogger } from "../core/logging/logger.js";
 import { sendSmtpMail } from "../core/alerts/smtp-client.js";
 import {
   createWatchdogAlertEmail,
@@ -15,6 +15,15 @@ import {
 import { assertLogDirWritable, assertStateDirWritable } from "../core/runtime/state-paths.js";
 
 const SERVICE_NAME = "wechat-claw";
+const logger = createLogger({
+  appendFile() {
+    // Watchdog logs should stay in journald only. If this process writes the shared
+    // app log file as root, it can steal ownership from the main service after date rollover.
+  },
+  ensureDir() {
+    // no-op: watchdog does not use file sinks
+  },
+});
 
 function parseSystemctlShowOutput(output: string): ServiceStatusSnapshot {
   const snapshot: ServiceStatusSnapshot = {

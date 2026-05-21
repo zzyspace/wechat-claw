@@ -131,3 +131,34 @@ test("createLogger writes error logs to both app and error files with stack deta
     output,
   );
 });
+
+test("createLogger can be configured for stdout-only logging", () => {
+  const stateDir = fs.mkdtempSync(path.join(os.tmpdir(), "wechat-claw-logger-"));
+  const logDir = path.join(stateDir, "logs");
+  const stdout: string[] = [];
+  const logger = createLogger({
+    appendFile() {
+      // no-op
+    },
+    ensureDir() {
+      // no-op
+    },
+    now: () => new Date("2026-05-21T10:11:12.345Z"),
+    pid: 4242,
+    resolveConfig: () => createConfig(logDir),
+    stdout(text) {
+      stdout.push(text);
+    },
+  });
+
+  logger.info("Watchdog check ok", {
+    serviceName: "wechat-claw",
+  });
+
+  assert.match(
+    stdout.join(""),
+    /^2026-05-21 18:11:12\.345 INFO Watchdog check ok serviceName="wechat-claw" run=20260521T101112Z-4242 pid=4242\n$/,
+  );
+  assert.equal(fs.existsSync(path.join(logDir, "app-2026-05-21.log")), false);
+  assert.equal(fs.existsSync(path.join(logDir, "error-2026-05-21.log")), false);
+});
