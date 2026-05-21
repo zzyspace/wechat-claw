@@ -6,6 +6,10 @@ import { HealthReporter } from "../core/runtime/health.js";
 import { startManualSummaryRequestPoller } from "../core/runtime/manual-summary-request-poller.js";
 import { assertLogDirWritable, assertStateDirWritable } from "../core/runtime/state-paths.js";
 import { startLossSummaryScheduler } from "../core/runtime/summary-scheduler.js";
+import {
+  createRuntimeRunId,
+  startWatchdogHeartbeatManager,
+} from "../core/runtime/watchdog-heartbeat.js";
 import { startBot } from "../bot/wechaty-client.js";
 import type { WechatyInstance } from "../bot/types.js";
 
@@ -49,10 +53,17 @@ async function main() {
   let stopLogRetentionManager = () => {
     // no-op
   };
+  let stopWatchdogHeartbeatManager = () => {
+    // no-op
+  };
+  let touchWatchdogHeartbeat = () => {
+    // no-op
+  };
   let shuttingDown = false;
   let healthReporter: HealthReporter | undefined;
   let shutdownPromise: Promise<void> | undefined;
-  const processStartedAt = Date.now();
+  const processStartedAt = new Date();
+  const runtimeRunId = createRuntimeRunId(processStartedAt, process.pid);
 
   const shutdown = async (signal: string) => {
     if (shutdownPromise) {
@@ -82,11 +93,14 @@ async function main() {
       }
 
       healthReporter?.setStatus("stopped");
+      touchWatchdogHeartbeat();
       logger.info("Runtime shutdown completed", {
         finalStatus: healthReporter?.getSnapshot().status ?? "stopped",
         signal,
-        uptimeMs: Date.now() - processStartedAt,
+        runtimeRunId,
+        uptimeMs: Date.now() - processStartedAt.getTime(),
       });
+      stopWatchdogHeartbeatManager();
     })();
 
     return shutdownPromise;
@@ -121,6 +135,8 @@ async function main() {
     logger.info("Runtime starting", {
       botName: config.botName,
       enabledChannels: config.channels.filter((channel) => channel.enabled).length,
+      alertEmailEnabled: config.alertEmailEnabled,
+      alertEmailRecipients: config.alertEmailTo.length,
       logDir: config.logDir,
       logLevel: config.logLevel,
       puppet: config.puppet ?? "(empty)",
@@ -131,27 +147,55 @@ async function main() {
     healthReporter = new HealthReporter(config, logger);
     healthReporter.initialize();
     healthReporter.setStatus("starting");
+    const watchdogHeartbeatManager = startWatchdogHeartbeatManager({
+      config,
+      getHealthSnapshot: () => healthReporter?.getSnapshot() ?? {
+        status: "starting",
+        pid: process.pid,
+        botName: config.botName,
+        puppet: config.puppet,
+        startedAt: processStartedAt.toISOString(),
+        lastScanAt: null,
+        lastLoginAt: null,
+        lastMessageAt: null,
+        lastSummaryAt: null,
+        lastError: null,
+      },
+      logger,
+      runId: runtimeRunId,
+      startedAt: processStartedAt.toISOString(),
+    });
+    stopWatchdogHeartbeatManager = () => watchdogHeartbeatManager.stop();
+    touchWatchdogHeartbeat = () => {
+      watchdogHeartbeatManager.touch();
+    };
+    touchWatchdogHeartbeat();
 
     bot = await startBot(logger, {
       onScan() {
         healthReporter?.markScan();
+        touchWatchdogHeartbeat();
       },
       onLogin() {
         healthReporter?.markLogin();
+        touchWatchdogHeartbeat();
       },
       onLogout({ name }) {
         healthReporter?.markError(new Error(`Bot logged out: ${name}`), {
           status: "degraded",
           category: "login_state_invalid",
         });
+        touchWatchdogHeartbeat();
       },
       onError(error) {
         healthReporter?.markError(error, {
           status: "degraded",
         });
+        touchWatchdogHeartbeat();
       },
       onMessage() {
         healthReporter?.markMessage();
+        touchWatchdogHeartbeat();
       },
     });
 
@@ -187,6 +231,7 @@ async function main() {
     healthReporter?.markError(error, {
       status: "degraded",
     });
+    touchWatchdogHeartbeat();
     logger.error("Application failed to start", {
       message,
       stack: error instanceof Error ? error.stack : undefined,

@@ -6,6 +6,8 @@ APP_DIR="/opt/wechat-claw/current"
 APP_USER="wechatclaw"
 ENV_FILE="/etc/wechat-claw.env"
 SERVICE_NAME="wechat-claw"
+WATCHDOG_SERVICE_NAME="wechat-claw-watchdog"
+WATCHDOG_TIMER_NAME="wechat-claw-watchdog"
 SYSTEMD_UNIT_DIR="/etc/systemd/system"
 NEEDRESTART_CONF_DIR="/etc/needrestart/conf.d"
 PUPPETEER_CACHE_DIR="${APP_DIR}/.cache/puppeteer"
@@ -75,6 +77,10 @@ fi
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 service_source="${script_dir}/wechat-claw.service"
 service_target="${SYSTEMD_UNIT_DIR}/${SERVICE_NAME}.service"
+watchdog_service_source="${script_dir}/wechat-claw-watchdog.service"
+watchdog_service_target="${SYSTEMD_UNIT_DIR}/${WATCHDOG_SERVICE_NAME}.service"
+watchdog_timer_source="${script_dir}/wechat-claw-watchdog.timer"
+watchdog_timer_target="${SYSTEMD_UNIT_DIR}/${WATCHDOG_TIMER_NAME}.timer"
 needrestart_source="${script_dir}/needrestart-wechat-claw.conf"
 needrestart_target="${NEEDRESTART_CONF_DIR}/${SERVICE_NAME}.conf"
 
@@ -161,9 +167,24 @@ install_dependencies_if_needed() {
 echo "[deploy] Pulling latest code from origin/main"
 run_as_app_user "git pull --ff-only origin main"
 
+if systemctl list-unit-files "${WATCHDOG_TIMER_NAME}.timer" >/dev/null 2>&1; then
+  echo "[deploy] Stopping watchdog timer during deploy"
+  systemctl stop "${WATCHDOG_TIMER_NAME}.timer" "${WATCHDOG_SERVICE_NAME}.service" || true
+fi
+
 if [[ -f "${service_source}" ]]; then
   echo "[deploy] Installing systemd unit"
   install -m 644 -o root -g root "${service_source}" "${service_target}"
+fi
+
+if [[ -f "${watchdog_service_source}" ]]; then
+  echo "[deploy] Installing watchdog service unit"
+  install -m 644 -o root -g root "${watchdog_service_source}" "${watchdog_service_target}"
+fi
+
+if [[ -f "${watchdog_timer_source}" ]]; then
+  echo "[deploy] Installing watchdog timer unit"
+  install -m 644 -o root -g root "${watchdog_timer_source}" "${watchdog_timer_target}"
 fi
 
 if [[ -f "${needrestart_source}" ]]; then
@@ -190,6 +211,11 @@ sudo -u "${APP_USER}" -E -H bash -lc "cd '${APP_DIR}' && npm run doctor"
 echo "[deploy] Restarting ${SERVICE_NAME}"
 systemctl restart "${SERVICE_NAME}"
 sleep 5
+
+if [[ -f "${watchdog_service_source}" && -f "${watchdog_timer_source}" ]]; then
+  echo "[deploy] Enabling watchdog timer"
+  systemctl enable --now "${WATCHDOG_TIMER_NAME}.timer"
+fi
 
 echo "[deploy] Service status"
 systemctl --no-pager --full status "${SERVICE_NAME}"

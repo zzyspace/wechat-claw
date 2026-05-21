@@ -72,6 +72,14 @@ export function getHealthArtifactPath(config?: AppConfig): string {
   return path.join(getStateDirPath(config), "health.json");
 }
 
+export function getWatchdogArtifactPath(config?: AppConfig): string {
+  return path.join(getStateDirPath(config), "watchdog.json");
+}
+
+export function getWatchdogStatePath(config?: AppConfig): string {
+  return path.join(getStateDirPath(config), "watchdog-state.json");
+}
+
 export function getMemoryCardFilePath(config?: AppConfig): string {
   const resolved = resolveConfig(config);
   return path.join(getStateDirPath(resolved), `${resolved.botName}.memory-card.json`);

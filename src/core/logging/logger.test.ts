@@ -12,6 +12,14 @@ function createConfig(logDir: string, logLevel: AppConfig["logLevel"] = "info"):
 
   return {
     attachmentRetentionDays: 60,
+    alertEmailEnabled: false,
+    alertEmailFrom: undefined,
+    alertEmailTo: [],
+    alertSmtpHost: undefined,
+    alertSmtpPassword: undefined,
+    alertSmtpPort: 587,
+    alertSmtpSecure: false,
+    alertSmtpUsername: undefined,
     botName: "wechat-loss-bot",
     channels: [],
     channelsSource: "json",

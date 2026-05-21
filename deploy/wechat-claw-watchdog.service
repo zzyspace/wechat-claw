@@ -1,0 +1,9 @@
+[Unit]
+Description=wechat-claw watchdog check
+After=network.target wechat-claw.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/wechat-claw/current
+EnvironmentFile=/etc/wechat-claw.env
+ExecStart=/usr/bin/node dist/app/watchdog-check.js

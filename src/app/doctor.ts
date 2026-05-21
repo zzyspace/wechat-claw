@@ -30,6 +30,8 @@ async function main() {
     enabledChannels: enabledChannels.length,
     logDir: config.logDir,
     logLevel: config.logLevel,
+    alertEmailEnabled: config.alertEmailEnabled,
+    alertEmailRecipients: config.alertEmailTo.length,
   });
 
   for (const warning of validation.warnings) {

@@ -13,6 +13,14 @@ const managedEnvKeys = [
   "WECHATY_LOG_DIR",
   "WECHATY_LOG_RETENTION_DAYS",
   "WECHATY_LOG_LEVEL",
+  "WECHATY_ALERT_EMAIL_ENABLED",
+  "WECHATY_ALERT_SMTP_HOST",
+  "WECHATY_ALERT_SMTP_PORT",
+  "WECHATY_ALERT_SMTP_SECURE",
+  "WECHATY_ALERT_SMTP_USERNAME",
+  "WECHATY_ALERT_SMTP_PASSWORD",
+  "WECHATY_ALERT_EMAIL_FROM",
+  "WECHATY_ALERT_EMAIL_TO",
   "WECHATY_TIMEZONE",
   "WECHATY_SUMMARY_CRON",
   "WECHATY_CHANNELS_JSON",
@@ -60,6 +68,14 @@ afterEach(() => {
 test("getAppConfig parses WECHATY_CHANNELS_JSON with mixed delivery targets", () => {
   applyEnv({
     WECHATY_ATTACHMENT_RETENTION_DAYS: "90",
+    WECHATY_ALERT_EMAIL_ENABLED: "true",
+    WECHATY_ALERT_SMTP_HOST: "smtp.example.com",
+    WECHATY_ALERT_SMTP_PORT: "587",
+    WECHATY_ALERT_SMTP_SECURE: "false",
+    WECHATY_ALERT_SMTP_USERNAME: "bot@example.com",
+    WECHATY_ALERT_SMTP_PASSWORD: "smtp-password",
+    WECHATY_ALERT_EMAIL_FROM: "bot@example.com",
+    WECHATY_ALERT_EMAIL_TO: "ops@example.com,dev@example.com",
     WECHATY_LOG_LEVEL: "debug",
     WECHATY_LOG_RETENTION_DAYS: "14",
     WECHATY_PUPPET: "wechaty-puppet-wechat",
@@ -101,6 +117,14 @@ test("getAppConfig parses WECHATY_CHANNELS_JSON with mixed delivery targets", ()
   assert.equal(config.debugContactName, "调试联系人");
   assert.equal(config.logLevel, "debug");
   assert.equal(config.logRetentionDays, 14);
+  assert.equal(config.alertEmailEnabled, true);
+  assert.equal(config.alertSmtpHost, "smtp.example.com");
+  assert.equal(config.alertSmtpPort, 587);
+  assert.equal(config.alertSmtpSecure, false);
+  assert.equal(config.alertSmtpUsername, "bot@example.com");
+  assert.equal(config.alertSmtpPassword, "smtp-password");
+  assert.equal(config.alertEmailFrom, "bot@example.com");
+  assert.deepEqual(config.alertEmailTo, ["ops@example.com", "dev@example.com"]);
   assert.equal(config.channels.length, 2);
   assert.equal(config.channels[1]?.scenario, "reimbursement");
   assert.equal(config.reimbursementExtractionProvider, "qwen");
@@ -194,6 +218,8 @@ test("getAppConfig defaults log settings from state dir", () => {
   assert.equal(config.logDir, "/tmp/wechat-claw-state/logs");
   assert.equal(config.logLevel, "info");
   assert.equal(config.logRetentionDays, 7);
+  assert.equal(config.alertEmailEnabled, false);
+  assert.deepEqual(config.alertEmailTo, []);
 });
 
 test("validateAppConfig rejects invalid log settings", () => {
@@ -217,6 +243,69 @@ test("validateAppConfig rejects invalid log settings", () => {
 
   assert(validation.errors.some((error) => error.includes("Invalid WECHATY_LOG_LEVEL")));
   assert(validation.errors.some((error) => error.includes("Invalid WECHATY_LOG_RETENTION_DAYS")));
+});
+
+test("validateAppConfig rejects invalid alert email settings when enabled", () => {
+  applyEnv({
+    WECHATY_PUPPET: "wechaty-puppet-wechat",
+    WECHATY_CHANNELS_JSON: JSON.stringify([
+      {
+        code: "loss_a",
+        enabled: true,
+        scenario: "loss-report",
+        match: { type: "room_topic", value: "报损群A" },
+        deliveryTargets: [{ type: "contact_name", value: "店长A" }],
+        summarySchedule: "",
+      },
+    ]),
+    WECHATY_ALERT_EMAIL_ENABLED: "true",
+    WECHATY_ALERT_SMTP_HOST: "",
+    WECHATY_ALERT_SMTP_PORT: "abc",
+    WECHATY_ALERT_SMTP_SECURE: "maybe",
+    WECHATY_ALERT_SMTP_USERNAME: "",
+    WECHATY_ALERT_SMTP_PASSWORD: "",
+    WECHATY_ALERT_EMAIL_FROM: "bad-address",
+    WECHATY_ALERT_EMAIL_TO: "ops@example.com,broken-address",
+  });
+
+  const validation = validateAppConfig(getAppConfig());
+
+  assert(validation.errors.some((error) => error.includes("Invalid WECHATY_ALERT_SMTP_SECURE")));
+  assert(validation.errors.some((error) => error.includes("Missing WECHATY_ALERT_SMTP_HOST")));
+  assert(validation.errors.some((error) => error.includes("Invalid WECHATY_ALERT_SMTP_PORT")));
+  assert(validation.errors.some((error) => error.includes("Missing WECHATY_ALERT_SMTP_USERNAME")));
+  assert(validation.errors.some((error) => error.includes("Missing WECHATY_ALERT_SMTP_PASSWORD")));
+  assert(validation.errors.some((error) => error.includes("Invalid WECHATY_ALERT_EMAIL_FROM")));
+  assert(validation.errors.some((error) => error.includes("Invalid WECHATY_ALERT_EMAIL_TO address")));
+});
+
+test("validateAppConfig warns about unusual alert smtp secure and port combinations", () => {
+  applyEnv({
+    WECHATY_PUPPET: "wechaty-puppet-wechat",
+    WECHATY_CHANNELS_JSON: JSON.stringify([
+      {
+        code: "loss_a",
+        enabled: true,
+        scenario: "loss-report",
+        match: { type: "room_topic", value: "报损群A" },
+        deliveryTargets: [{ type: "contact_name", value: "店长A" }],
+        summarySchedule: "",
+      },
+    ]),
+    WECHATY_ALERT_EMAIL_ENABLED: "true",
+    WECHATY_ALERT_SMTP_HOST: "smtp.example.com",
+    WECHATY_ALERT_SMTP_PORT: "465",
+    WECHATY_ALERT_SMTP_SECURE: "false",
+    WECHATY_ALERT_SMTP_USERNAME: "bot@example.com",
+    WECHATY_ALERT_SMTP_PASSWORD: "smtp-password",
+    WECHATY_ALERT_EMAIL_FROM: "bot@example.com",
+    WECHATY_ALERT_EMAIL_TO: "ops@example.com",
+  });
+
+  const validation = validateAppConfig(getAppConfig());
+
+  assert.deepEqual(validation.errors, []);
+  assert(validation.warnings.some((warning) => warning.includes("WECHATY_ALERT_SMTP_SECURE=false with port 465")));
 });
 
 test("loadEnvironmentFiles loads config from a specified env file without overriding existing env", () => {

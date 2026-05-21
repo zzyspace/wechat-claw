@@ -119,6 +119,14 @@ test("sendLossDailySummary renders and delivers the summary text", async () => {
   };
   const config: AppConfig = {
     attachmentRetentionDays: 60,
+    alertEmailEnabled: false,
+    alertEmailFrom: undefined,
+    alertEmailTo: [],
+    alertSmtpHost: undefined,
+    alertSmtpPassword: undefined,
+    alertSmtpPort: 587,
+    alertSmtpSecure: false,
+    alertSmtpUsername: undefined,
     botName: "wechat-loss-bot",
     channels: [channel],
     channelsSource: "json",
@@ -168,6 +176,14 @@ test("sendLossWeeklySummary renders a Sunday weekly report for the current week"
   };
   const config: AppConfig = {
     attachmentRetentionDays: 60,
+    alertEmailEnabled: false,
+    alertEmailFrom: undefined,
+    alertEmailTo: [],
+    alertSmtpHost: undefined,
+    alertSmtpPassword: undefined,
+    alertSmtpPort: 587,
+    alertSmtpSecure: false,
+    alertSmtpUsername: undefined,
     botName: "wechat-loss-bot",
     channels: [channel],
     channelsSource: "json",

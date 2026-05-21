@@ -9,6 +9,8 @@
 - 图片附件落本地文件
 - 将易读文本日志写入 `WECHATY_STATE_DIR/logs/`
 - 进程内定时发送报损日报、周报
+- 异常心跳写入 `WECHATY_STATE_DIR/watchdog.json`
+- 异常时支持 SMTP 邮件告警
 - 显式登录态与运行状态目录
 
 ## 当前能力
@@ -25,7 +27,8 @@
 - 对报账图片和文字提取金额、报账人、票据日期和支出类别
 - 支持按群生成报损日报文本骨架
 - 支持按 channel 独立 cron 在 bot 进程内直接发送日报、周报
-- 将二维码、登录态、健康状态、文本日志统一写入 `WECHATY_STATE_DIR`
+- 将二维码、登录态、健康状态、watchdog、文本日志统一写入 `WECHATY_STATE_DIR`
+- 支持 watchdog 定时巡检、异常自愈重启和邮件告警
 
 ## 环境要求
 
@@ -56,6 +59,14 @@ WECHATY_STATE_DIR=/var/lib/wechat-claw
 WECHATY_LOG_DIR=/var/lib/wechat-claw/logs
 WECHATY_LOG_RETENTION_DAYS=7
 WECHATY_LOG_LEVEL=info
+WECHATY_ALERT_EMAIL_ENABLED=false
+WECHATY_ALERT_SMTP_HOST=smtp.example.com
+WECHATY_ALERT_SMTP_PORT=587
+WECHATY_ALERT_SMTP_SECURE=false
+WECHATY_ALERT_SMTP_USERNAME=bot@example.com
+WECHATY_ALERT_SMTP_PASSWORD=
+WECHATY_ALERT_EMAIL_FROM=bot@example.com
+WECHATY_ALERT_EMAIL_TO=ops@example.com
 WECHATY_TIMEZONE=Asia/Shanghai
 WECHATY_DEBUG_CONTACT_NAME=你的主微信昵称
 WECHATY_ATTACHMENT_RETENTION_DAYS=60
@@ -77,10 +88,15 @@ WECHATY_CHANNELS_JSON=[{"code":"loss_a","enabled":true,"scenario":"loss-report",
 
 - `WECHATY_PUPPET`: 具体接入方案名称
 - `WECHATY_PUPPET_SERVICE_TOKEN`: 仅 `wechaty-puppet-service` 等 service 模式需要
-- `WECHATY_STATE_DIR`: 统一状态目录，包含 SQLite、附件、二维码、health、memory-card、logs
+- `WECHATY_STATE_DIR`: 统一状态目录，包含 SQLite、附件、二维码、health、watchdog、memory-card、logs
 - `WECHATY_LOG_DIR`: 文本日志目录，默认 `${WECHATY_STATE_DIR}/logs`
 - `WECHATY_LOG_RETENTION_DAYS`: 文本日志保留天数，默认 `7` 天；会清理更早的 `app-YYYY-MM-DD.log` 和 `error-YYYY-MM-DD.log`
 - `WECHATY_LOG_LEVEL`: 日志级别，支持 `debug / info / warn / error`，默认 `info`
+- `WECHATY_ALERT_EMAIL_ENABLED`: 是否启用异常邮件告警，默认 `false`
+- `WECHATY_ALERT_SMTP_HOST/PORT/SECURE`: SMTP 服务器配置
+- `WECHATY_ALERT_SMTP_USERNAME/PASSWORD`: SMTP 登录凭据
+- `WECHATY_ALERT_EMAIL_FROM`: 告警发件人邮箱
+- `WECHATY_ALERT_EMAIL_TO`: 告警收件人邮箱，支持多个，用逗号分隔
 - `WECHATY_TIMEZONE`: 日期边界和 cron 解释时区，默认 `Asia/Shanghai`
 - `WECHATY_DEBUG_CONTACT_NAME`: 所有 `"[wechat-claw]"` 调试信息统一发送到这个联系人，不参与业务日报发送
 - `WECHATY_CHANNELS_JSON`: 推荐的多群配置入口，支持 `loss-report` 和 `reimbursement` 场景
@@ -225,6 +241,12 @@ npm run build
 
 ```bash
 npm run inspect:messages
+```
+
+手工执行一次 watchdog 巡检：
+
+```bash
+npm run watchdog:check
 ```
 
 生成报损日报：
@@ -389,6 +411,18 @@ npm start
 - `lastSummaryAt`
 - `lastError`
 
+## Watchdog 状态文件
+
+程序还会维护：
+
+- `WECHATY_STATE_DIR/watchdog.json`
+- `WECHATY_STATE_DIR/watchdog-state.json`
+
+用途：
+
+- `watchdog.json` 记录进程心跳、最近健康状态和关键时间戳
+- `watchdog-state.json` 记录最近巡检时间、邮件去重窗口和自动重启节流窗口
+
 ## 文本日志
 
 程序会同时输出到：
@@ -414,6 +448,45 @@ npm run logs:recent
 npm run logs:recent -- --errors
 npm run logs:recent -- --date 2026-05-21 --grep login
 ```
+
+## 异常处理
+
+当前异常处理链路：
+
+- `systemd` 负责“进程退出后”自动拉起 `wechat-claw.service`
+- `watchdog timer` 每分钟执行一次 `npm run watchdog:check`
+- watchdog 会读取 `health.json` 和 `watchdog.json`
+- 对持续异常或心跳停滞执行自动重启
+- 对需要人工处理的情况发送邮件但不重启
+
+默认会处理的情况：
+
+- 主服务不在 `active` 状态
+- `health.status=degraded` 持续超过阈值
+- bot 已登出
+- `watchdog.json` 心跳长时间不更新
+- `waiting_for_scan` 持续过久
+
+常用排障命令：
+
+```bash
+systemctl status wechat-claw
+systemctl status wechat-claw-watchdog.timer
+journalctl -u wechat-claw -f -o short-iso
+journalctl -u wechat-claw-watchdog.service -f -o short-iso
+cat /var/lib/wechat-claw/health.json
+cat /var/lib/wechat-claw/watchdog.json
+cat /var/lib/wechat-claw/watchdog-state.json
+tail -f /var/lib/wechat-claw/logs/app-$(date +%F).log
+tail -f /var/lib/wechat-claw/logs/error-$(date +%F).log
+```
+
+人工恢复策略：
+
+- 如果服务已退出：优先看 `systemctl status wechat-claw`
+- 如果服务在线但登录失效：查看 `latest-qrcode.txt`，重新扫码
+- 如果进入 `degraded` 且长期不恢复：执行 `sudo systemctl restart wechat-claw`
+- 如果怀疑 SQLite 业务数据异常：执行 `sudo bash deploy/clear-wechat-claw-db.sh`
 
 ## Linux 单机部署
 
@@ -452,12 +525,14 @@ sudo bash deploy/deploy-wechat-claw.sh
 
 - `git pull --ff-only origin main`
 - 安装最新的 `systemd` service 文件
+- 安装最新的 watchdog `service/timer` 文件
 - 安装 `needrestart` 豁免，避免系统自动升级时重启 bot
 - `systemctl daemon-reload`
 - 仅当当前 `package-lock.json` 和已安装依赖树不一致时执行 `npm ci --include=dev`
 - `npm run build`
 - `npm run doctor`
 - `systemctl restart wechat-claw`
+- `systemctl enable --now wechat-claw-watchdog.timer`
 
 如果你想降低“忘记同步服务器配置”的风险，推荐以后统一只用这一条本地发布命令：
 
@@ -594,6 +669,14 @@ WECHATY_STATE_DIR=/var/lib/wechat-claw
 WECHATY_LOG_DIR=/var/lib/wechat-claw/logs
 WECHATY_LOG_RETENTION_DAYS=7
 WECHATY_LOG_LEVEL=info
+WECHATY_ALERT_EMAIL_ENABLED=false
+WECHATY_ALERT_SMTP_HOST=smtp.example.com
+WECHATY_ALERT_SMTP_PORT=587
+WECHATY_ALERT_SMTP_SECURE=false
+WECHATY_ALERT_SMTP_USERNAME=bot@example.com
+WECHATY_ALERT_SMTP_PASSWORD=
+WECHATY_ALERT_EMAIL_FROM=bot@example.com
+WECHATY_ALERT_EMAIL_TO=ops@example.com
 WECHATY_TIMEZONE=Asia/Shanghai
 WECHATY_DEBUG_CONTACT_NAME=你的主微信昵称
 WECHATY_CHANNELS_JSON=[{"code":"loss_prod","enabled":true,"scenario":"loss-report","match":{"type":"room_topic","value":"AI测试群"},"deliveryTargets":[{"type":"contact_name","value":"你的主微信昵称"}],"summarySchedule":"0 22 * * *"}]
@@ -602,9 +685,14 @@ WECHATY_CHANNELS_JSON=[{"code":"loss_prod","enabled":true,"scenario":"loss-repor
 常用排障入口：
 
 - `journalctl -u wechat-claw -f -o short-iso`
+- `journalctl -u wechat-claw-watchdog.service -f -o short-iso`
+- `systemctl status wechat-claw-watchdog.timer`
 - `/var/lib/wechat-claw/logs`
+- `/var/lib/wechat-claw/watchdog.json`
+- `/var/lib/wechat-claw/watchdog-state.json`
 - `tail -f /var/lib/wechat-claw/logs/app-$(date +%F).log`
 - `tail -f /var/lib/wechat-claw/logs/error-$(date +%F).log`
+- `cd /opt/wechat-claw/current && npm run watchdog:check`
 - `cd /opt/wechat-claw/current && npm run logs:recent -- --errors`
 - `/var/lib/wechat-claw/health.json`
 - `/var/lib/wechat-claw/latest-qrcode.txt`

@@ -39,6 +39,14 @@ export interface AppConfig {
   logDir: string;
   logRetentionDays: number;
   logLevel: LogLevelName;
+  alertEmailEnabled: boolean;
+  alertSmtpHost?: string;
+  alertSmtpPort: number;
+  alertSmtpSecure: boolean;
+  alertSmtpUsername?: string;
+  alertSmtpPassword?: string;
+  alertEmailFrom?: string;
+  alertEmailTo: string[];
   timeZone: string;
   debugContactName?: string;
   channels: ChannelConfig[];
@@ -87,6 +95,39 @@ function readStringEnv(name: string, fallback: string): string {
   return raw.trim();
 }
 
+function isBooleanLiteral(value: string): boolean {
+  const normalized = value.trim().toLowerCase();
+  return (
+    normalized === "1" ||
+    normalized === "0" ||
+    normalized === "true" ||
+    normalized === "false" ||
+    normalized === "yes" ||
+    normalized === "no" ||
+    normalized === "on" ||
+    normalized === "off"
+  );
+}
+
+function parseBooleanLiteral(value: string): boolean {
+  const normalized = value.trim().toLowerCase();
+  return normalized === "1" || normalized === "true" || normalized === "yes" || normalized === "on";
+}
+
+function readBooleanEnv(name: string, fallback: boolean): boolean {
+  const raw = process.env[name]?.trim();
+
+  if (!raw) {
+    return fallback;
+  }
+
+  if (!isBooleanLiteral(raw)) {
+    return fallback;
+  }
+
+  return parseBooleanLiteral(raw);
+}
+
 function isServicePuppet(puppet?: string): boolean {
   return puppet === "wechaty-puppet-service";
 }
@@ -119,6 +160,19 @@ function readNonNegativeNumberEnv(name: string, fallback: number): number {
 
   const value = Number(raw);
   return Number.isFinite(value) && value >= 0 ? value : fallback;
+}
+
+function readEmailListEnv(name: string): string[] {
+  const raw = process.env[name]?.trim();
+
+  if (!raw) {
+    return [];
+  }
+
+  return raw
+    .split(",")
+    .map((value) => value.trim())
+    .filter((value) => value.length > 0);
 }
 
 function isValidTimeZone(timeZone: string): boolean {
@@ -275,6 +329,14 @@ export function getAppConfig(): AppConfig {
       `${readStringEnv("WECHATY_STATE_DIR", "/var/lib/wechat-claw") || "/var/lib/wechat-claw"}/logs`,
     logRetentionDays: readConfiguredPositiveNumberEnv("WECHATY_LOG_RETENTION_DAYS", 7),
     logLevel: readLogLevelEnv("WECHATY_LOG_LEVEL", "info"),
+    alertEmailEnabled: readBooleanEnv("WECHATY_ALERT_EMAIL_ENABLED", false),
+    alertSmtpHost: readOptionalEnv("WECHATY_ALERT_SMTP_HOST"),
+    alertSmtpPort: readConfiguredPositiveNumberEnv("WECHATY_ALERT_SMTP_PORT", 587),
+    alertSmtpSecure: readBooleanEnv("WECHATY_ALERT_SMTP_SECURE", false),
+    alertSmtpUsername: readOptionalEnv("WECHATY_ALERT_SMTP_USERNAME"),
+    alertSmtpPassword: readOptionalEnv("WECHATY_ALERT_SMTP_PASSWORD"),
+    alertEmailFrom: readOptionalEnv("WECHATY_ALERT_EMAIL_FROM"),
+    alertEmailTo: readEmailListEnv("WECHATY_ALERT_EMAIL_TO"),
     timeZone: readStringEnv("WECHATY_TIMEZONE", "Asia/Shanghai") || "Asia/Shanghai",
     debugContactName: readOptionalEnv("WECHATY_DEBUG_CONTACT_NAME"),
     channels: channelResolution.channels,
@@ -307,6 +369,8 @@ export function getAppConfig(): AppConfig {
 export function validateAppConfig(config: AppConfig): ConfigValidationResult {
   const errors: string[] = [];
   const warnings: string[] = [];
+  const rawAlertEmailEnabled = process.env.WECHATY_ALERT_EMAIL_ENABLED?.trim();
+  const rawAlertSmtpSecure = process.env.WECHATY_ALERT_SMTP_SECURE?.trim();
 
   if (!config.puppet) {
     errors.push("Missing WECHATY_PUPPET");
@@ -326,6 +390,14 @@ export function validateAppConfig(config: AppConfig): ConfigValidationResult {
 
   if (!isValidLogLevel(config.logLevel)) {
     errors.push(`Invalid WECHATY_LOG_LEVEL: ${config.logLevel}`);
+  }
+
+  if (rawAlertEmailEnabled && !isBooleanLiteral(rawAlertEmailEnabled)) {
+    errors.push(`Invalid WECHATY_ALERT_EMAIL_ENABLED: ${rawAlertEmailEnabled}`);
+  }
+
+  if (rawAlertSmtpSecure && !isBooleanLiteral(rawAlertSmtpSecure)) {
+    errors.push(`Invalid WECHATY_ALERT_SMTP_SECURE: ${rawAlertSmtpSecure}`);
   }
 
   if (!config.timeZone.trim()) {
@@ -421,6 +493,52 @@ export function validateAppConfig(config: AppConfig): ConfigValidationResult {
     );
   }
 
+  if (config.alertEmailEnabled) {
+    if (!config.alertSmtpHost) {
+      errors.push("Missing WECHATY_ALERT_SMTP_HOST");
+    }
+
+    if (!Number.isInteger(config.alertSmtpPort) || config.alertSmtpPort <= 0) {
+      errors.push(`Invalid WECHATY_ALERT_SMTP_PORT: ${config.alertSmtpPort}`);
+    }
+
+    if (!config.alertSmtpUsername) {
+      errors.push("Missing WECHATY_ALERT_SMTP_USERNAME");
+    }
+
+    if (!config.alertSmtpPassword) {
+      errors.push("Missing WECHATY_ALERT_SMTP_PASSWORD");
+    }
+
+    if (!config.alertEmailFrom) {
+      errors.push("Missing WECHATY_ALERT_EMAIL_FROM");
+    } else if (!isValidEmailAddress(config.alertEmailFrom)) {
+      errors.push(`Invalid WECHATY_ALERT_EMAIL_FROM: ${config.alertEmailFrom}`);
+    }
+
+    if (config.alertEmailTo.length === 0) {
+      errors.push("Missing WECHATY_ALERT_EMAIL_TO");
+    }
+
+    for (const address of config.alertEmailTo) {
+      if (!isValidEmailAddress(address)) {
+        errors.push(`Invalid WECHATY_ALERT_EMAIL_TO address: ${address}`);
+      }
+    }
+
+    if (config.alertSmtpSecure && config.alertSmtpPort === 587) {
+      warnings.push(
+        "WECHATY_ALERT_SMTP_SECURE=true with port 587 is unusual. Double-check whether your SMTP provider expects STARTTLS instead.",
+      );
+    }
+
+    if (!config.alertSmtpSecure && config.alertSmtpPort === 465) {
+      warnings.push(
+        "WECHATY_ALERT_SMTP_SECURE=false with port 465 is unusual. Double-check whether your SMTP provider expects implicit TLS instead.",
+      );
+    }
+  }
+
   return {
     errors,
     warnings,
@@ -439,4 +557,8 @@ function readLogLevelEnv(name: string, fallback: LogLevelName): LogLevelName {
   }
 
   return isValidLogLevel(value) ? value : (value as LogLevelName);
+}
+
+function isValidEmailAddress(value: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 }
