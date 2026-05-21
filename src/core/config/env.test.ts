@@ -211,6 +211,14 @@ test("getAppConfig defaults log settings from state dir", () => {
     WECHATY_LOG_DIR: undefined,
     WECHATY_LOG_LEVEL: undefined,
     WECHATY_LOG_RETENTION_DAYS: undefined,
+    WECHATY_ALERT_EMAIL_ENABLED: undefined,
+    WECHATY_ALERT_SMTP_HOST: undefined,
+    WECHATY_ALERT_SMTP_PORT: undefined,
+    WECHATY_ALERT_SMTP_SECURE: undefined,
+    WECHATY_ALERT_SMTP_USERNAME: undefined,
+    WECHATY_ALERT_SMTP_PASSWORD: undefined,
+    WECHATY_ALERT_EMAIL_FROM: undefined,
+    WECHATY_ALERT_EMAIL_TO: undefined,
   });
 
   const config = getAppConfig();

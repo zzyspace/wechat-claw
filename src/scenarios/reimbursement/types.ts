@@ -93,3 +93,14 @@ export interface ReimbursementReportSourceRecord {
   role: ReimbursementSourceRole;
   createdAt: string;
 }
+
+export interface ReimbursementReportSourceDetail extends ReimbursementReportSourceRecord {
+  eventReceivedAt: string;
+  messageExternalId: string;
+  senderName: string;
+  textContent: string;
+}
+
+export interface ReimbursementReportDetail extends ReimbursementReportRecord {
+  sources: ReimbursementReportSourceDetail[];
+}

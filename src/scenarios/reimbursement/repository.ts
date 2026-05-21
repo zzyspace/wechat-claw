@@ -2,8 +2,10 @@ import { getDatabase } from "../../core/storage/database.js";
 import type {
   ReimbursementEvidenceType,
   ReimbursementExpenseCategory,
+  ReimbursementReportDetail,
   ReimbursementReportInput,
   ReimbursementReportRecord,
+  ReimbursementReportSourceDetail,
   ReimbursementReportSourceRecord,
   ReimbursementSourceRole,
   ReimbursementVoucherDateSource,
@@ -325,4 +327,117 @@ export function listRecentReimbursementReports(limit = 10): ReimbursementReportR
     .all(limit) as Parameters<typeof mapReportRow>[0][];
 
   return rows.map(mapReportRow);
+}
+
+function listSourcesByReportIds(reportIds: number[]): Map<number, ReimbursementReportSourceDetail[]> {
+  const grouped = new Map<number, ReimbursementReportSourceDetail[]>();
+
+  if (reportIds.length === 0) {
+    return grouped;
+  }
+
+  const db = getDatabase();
+  const placeholders = reportIds.map(() => "?").join(", ");
+  const rows = db
+    .prepare(
+      `
+        SELECT
+          rrs.id,
+          rrs.reimbursement_report_id as reimbursementReportId,
+          rrs.raw_message_id as rawMessageId,
+          rrs.role,
+          rrs.created_at as createdAt,
+          rm.event_received_at as eventReceivedAt,
+          rm.message_external_id as messageExternalId,
+          rm.sender_name as senderName,
+          rm.text_content as textContent
+        FROM reimbursement_report_sources rrs
+        INNER JOIN raw_messages rm ON rm.id = rrs.raw_message_id
+        WHERE rrs.reimbursement_report_id IN (${placeholders})
+        ORDER BY rrs.reimbursement_report_id ASC, rrs.id ASC
+      `,
+    )
+    .all(...reportIds) as Array<{
+    id: number;
+    reimbursementReportId: number;
+    rawMessageId: number;
+    role: string;
+    createdAt: string;
+    eventReceivedAt: string;
+    messageExternalId: string;
+    senderName: string;
+    textContent: string;
+  }>;
+
+  for (const row of rows) {
+    const source: ReimbursementReportSourceDetail = {
+      id: row.id,
+      reimbursementReportId: row.reimbursementReportId,
+      rawMessageId: row.rawMessageId,
+      role: row.role as ReimbursementSourceRole,
+      createdAt: row.createdAt,
+      eventReceivedAt: row.eventReceivedAt,
+      messageExternalId: row.messageExternalId,
+      senderName: row.senderName,
+      textContent: row.textContent,
+    };
+    const list = grouped.get(row.reimbursementReportId) ?? [];
+    list.push(source);
+    grouped.set(row.reimbursementReportId, list);
+  }
+
+  return grouped;
+}
+
+export function listReimbursementReportDetails(options?: {
+  channelCode?: string;
+  limit?: number;
+}): ReimbursementReportDetail[] {
+  const db = getDatabase();
+  const hasLimit = Number.isFinite(options?.limit) && Number(options?.limit) > 0;
+  const baseSql = `
+    SELECT
+      id,
+      channel_code as channelCode,
+      channel_name as channelName,
+      reporter,
+      amount,
+      currency,
+      expense_category as expenseCategory,
+      voucher_date as voucherDate,
+      voucher_date_source as voucherDateSource,
+      note,
+      evidence_type as evidenceType,
+      merchant,
+      document_no as documentNo,
+      voucher_type as voucherType,
+      ocr_text as ocrText,
+      confidence,
+      needs_review as needsReview,
+      created_at as createdAt,
+      updated_at as updatedAt
+    FROM reimbursement_reports
+  `;
+  const whereSql = options?.channelCode ? "WHERE channel_code = ?" : "";
+  const orderSql = "ORDER BY id DESC";
+  const limitSql = hasLimit ? "LIMIT ?" : "";
+  const statement = db.prepare([baseSql, whereSql, orderSql, limitSql].filter(Boolean).join(" "));
+  const params: Array<string | number> = [];
+
+  if (options?.channelCode) {
+    params.push(options.channelCode);
+  }
+
+  if (hasLimit) {
+    params.push(Number(options?.limit));
+  }
+
+  const rows = statement.all(...params) as Parameters<typeof mapReportRow>[0][];
+  const reports = rows.map(mapReportRow);
+  const sourcesByReportId = listSourcesByReportIds(reports.map((report) => report.id));
+
+  return reports.map((report) => ({
+    ...report,
+    sources: sourcesByReportId.get(report.id) ?? [],
+  }));
 }
