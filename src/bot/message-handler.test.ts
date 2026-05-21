@@ -247,6 +247,12 @@ test("handleMessage stores reimbursement text-only messages without recent image
   assert.equal(report.reporter, "小王");
   assert.equal(report.evidenceType, "text");
   assert.equal(report.needsReview, false);
+  assert(logs.some((entry) => entry.message === "Started reimbursement message processing"));
+  assert(logs.some((entry) => entry.message === "Persisted reimbursement raw message"));
+  assert(logs.some((entry) => entry.message === "Starting reimbursement extraction"));
+  assert(logs.some((entry) => entry.message === "Completed reimbursement extraction"));
+  assert(logs.some((entry) => entry.message === "Persisted reimbursement report"));
+  assert(logs.some((entry) => entry.message === "Persisted reimbursement scenario extraction"));
 });
 
 test("handleMessage ignores reimbursement text-only URL messages", { concurrency: false }, async () => {
@@ -322,6 +328,8 @@ test("handleMessage stores reimbursement images under reimbursement raw dir and 
   assert.equal(imageRawMessage.attachments.length, 1);
   assert.equal(imageRawMessage.attachments[0]?.localPath.startsWith(getReimbursementRawStorageDir()), true);
   assert.equal(imageReport.evidenceType, "image");
+  assert(logs.some((entry) => entry.message === "Detected reimbursement image-like message"));
+  assert(logs.some((entry) => entry.message === "Saved reimbursement image attachment"));
 
   await handleMessage(
     {
@@ -353,4 +361,8 @@ test("handleMessage stores reimbursement images under reimbursement raw dir and 
   assert.equal(updatedReport.evidenceType, "image+text");
   assert.equal(updatedReport.note, "这张是昨天晚餐食材");
   assert.equal(listRecentReimbursementReports(1000).filter((report) => report.id === imageReport.id).length, 1);
+  assert(logs.some((entry) => entry.message === "Checking recent reimbursement image context for remark merge"));
+  assert(logs.some((entry) => entry.message === "Matched reimbursement image context for remark merge"));
+  assert(logs.some((entry) => entry.message === "Updated reimbursement report with merged remark"));
+  assert(logs.some((entry) => entry.message === "Persisted reimbursement remark linkage extraction"));
 });

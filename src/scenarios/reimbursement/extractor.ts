@@ -1,5 +1,6 @@
 import fs from "node:fs";
 
+import type { Logger } from "../../core/logging/logger.js";
 import { formatZonedDate } from "../../core/runtime/timezone.js";
 import type { StoredAttachment } from "../../core/storage/types.js";
 import type {
@@ -292,8 +293,24 @@ function buildFallbackExtraction(input: ReimbursementExtractionInput): Reimburse
 export async function extractReimbursementReport(
   input: ReimbursementExtractionInput,
   config: ReimbursementModelProviderConfig,
+  logger?: Logger,
 ): Promise<ReimbursementExtractionResult> {
   if (!input.attachments.length || !config.provider || !config.model || !config.apiKey) {
+    logger?.info("Reimbursement extraction fell back to heuristic", {
+      attachmentCount: input.attachments.length,
+      channelCode: input.channelCode ?? "(empty)",
+      provider: config.provider ?? "(empty)",
+      model: config.model ?? "(empty)",
+      rawMessageId: input.rawMessageId,
+      reason: !input.attachments.length
+        ? "no_attachments"
+        : !config.provider
+          ? "provider_missing"
+          : !config.model
+            ? "model_missing"
+            : "api_key_missing",
+      reporter: input.reporter,
+    });
     return buildFallbackExtraction(input);
   }
 
@@ -301,10 +318,25 @@ export async function extractReimbursementReport(
   const messageVoucherDate = getMessageVoucherDate(input);
 
   try {
+    logger?.info("Calling reimbursement model extraction", {
+      attachmentCount: input.attachments.length,
+      channelCode: input.channelCode ?? "(empty)",
+      model: config.model,
+      provider: config.provider,
+      rawMessageId: input.rawMessageId,
+      reporter: input.reporter,
+    });
     const modelResult =
       config.provider === "qwen" ? await callQwenReimbursementExtraction(input, config) : null;
 
     if (!modelResult) {
+      logger?.info("Reimbursement model returned no structured result, using heuristic fallback", {
+        channelCode: input.channelCode ?? "(empty)",
+        model: config.model,
+        provider: config.provider,
+        rawMessageId: input.rawMessageId,
+        reporter: input.reporter,
+      });
       return buildFallbackExtraction(input);
     }
 
@@ -324,7 +356,7 @@ export async function extractReimbursementReport(
           ? 0.55
           : 0.82;
 
-    return {
+    const result: ReimbursementExtractionResult = {
       scenarioCode: "reimbursement",
       extractorCode: `model-${config.provider}-${config.model}`,
       status: "extracted",
@@ -349,8 +381,34 @@ export async function extractReimbursementReport(
         ocrText: normalizeOptionalText(modelResult.ocr_text),
       },
     };
+
+    logger?.info("Reimbursement model extraction completed", {
+      amount: result.resultJson.amount,
+      attachmentCount: input.attachments.length,
+      channelCode: input.channelCode ?? "(empty)",
+      confidence: result.confidence,
+      evidenceType: result.resultJson.evidenceType,
+      expenseCategory: result.resultJson.expenseCategory,
+      extractorCode: result.extractorCode,
+      needsReview: result.needsReview,
+      rawMessageId: input.rawMessageId,
+      reporter: input.reporter,
+      voucherDate: result.resultJson.voucherDate,
+      voucherDateSource: result.resultJson.voucherDateSource,
+    });
+
+    return result;
   } catch {
     const fallback = buildFallbackExtraction(input);
+
+    logger?.warn("Reimbursement model extraction failed, using heuristic fallback", {
+      attachmentCount: input.attachments.length,
+      channelCode: input.channelCode ?? "(empty)",
+      model: config.model,
+      provider: config.provider,
+      rawMessageId: input.rawMessageId,
+      reporter: input.reporter,
+    });
 
     return {
       ...fallback,
