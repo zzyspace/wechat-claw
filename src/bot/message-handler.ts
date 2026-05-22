@@ -21,9 +21,10 @@ import {
   saveReimbursementReport,
 } from "../scenarios/reimbursement/repository.js";
 import { resolveMessageSentAt } from "./cold-start-filter.js";
-import { sendTextToTarget } from "./delivery-contact.js";
+import { countSuccessfulDeliveries, sendTextToTarget, sendTextToTargets } from "./delivery-contact.js";
 
 const REIMBURSEMENT_BACKWARD_TEXT_MERGE_WINDOW_SECONDS = 3;
+const REIMBURSEMENT_RECEIPT_PENDING_TEXT = "此次报账待核验";
 
 export interface MessageContext {
   channels: ChannelConfig[];
@@ -757,6 +758,10 @@ async function handleReimbursementMessage(
     typeValue: parsed.typeValue,
   });
 
+  if (parsed.attachments.length > 0 && saveResult.inserted) {
+    await sendReimbursementReceiptNotification(message, logger, parsed.channel, report.amount);
+  }
+
   await sendDebugNotification(message, context, logger, parsed.channel, [
     "[wechat-claw] 已收到群消息",
     `逻辑频道: ${parsed.channel.code}`,
@@ -809,8 +814,68 @@ async function sendDebugNotification(
   });
 }
 
+async function sendReimbursementReceiptNotification(
+  message: any,
+  logger: Logger,
+  channel: ChannelConfig,
+  amount: number | null,
+) {
+  if (channel.deliveryTargets.length === 0) {
+    logger.info("Skipped reimbursement receipt notification", {
+      channelCode: channel.code,
+      reason: "no_delivery_targets",
+    });
+    return;
+  }
+
+  const bot = typeof message.wechaty === "function" ? message.wechaty() : message.wechaty;
+  if (!bot) {
+    logger.warn("Wechaty instance unavailable for reimbursement receipt notification", {
+      channelCode: channel.code,
+    });
+    return;
+  }
+
+  const receiptText = buildReimbursementReceiptText(amount);
+  const deliveryResults = await sendTextToTargets(
+    bot,
+    channel.deliveryTargets,
+    receiptText,
+    logger,
+  );
+  const deliveredTargets = countSuccessfulDeliveries(deliveryResults);
+
+  if (deliveredTargets === 0) {
+    logger.warn("Failed to deliver reimbursement receipt to any target", {
+      channelCode: channel.code,
+      receiptText,
+      totalTargets: deliveryResults.length,
+    });
+    return;
+  }
+
+  logger.info("Sent reimbursement receipt notifications", {
+    channelCode: channel.code,
+    deliveredTargets,
+    receiptText,
+    totalTargets: deliveryResults.length,
+  });
+}
+
 function cryptoRandomId() {
   return `generated_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function buildReimbursementReceiptText(amount: number | null) {
+  if (amount === null) {
+    return REIMBURSEMENT_RECEIPT_PENDING_TEXT;
+  }
+
+  return `报账${formatReimbursementReceiptAmount(amount)}元已录入`;
+}
+
+function formatReimbursementReceiptAmount(amount: number) {
+  return amount.toFixed(2).replace(/\.?0+$/, "");
 }
 
 function isImageLikeMessage(typeValue: unknown, normalizedText: string) {

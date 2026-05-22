@@ -4,12 +4,13 @@ import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 
-import type { ChannelConfig } from "../core/channels/types.js";
+import type { ChannelConfig, DeliveryTarget } from "../core/channels/types.js";
 import type { Logger } from "../core/logging/logger.js";
 import { getReimbursementRawStorageDir } from "../core/runtime/state-paths.js";
 import { listRecentRawMessages } from "../core/storage/raw-message-repository.js";
 import { listRecentReimbursementReports } from "../scenarios/reimbursement/repository.js";
 import { handleMessage } from "./message-handler.js";
+import type { WechatyInstance } from "./types.js";
 
 process.env.WECHATY_STATE_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "wechat-claw-message-handler-"));
 const originalFetch = globalThis.fetch;
@@ -46,9 +47,13 @@ function createChannel(): ChannelConfig {
 }
 
 function createReimbursementChannel(): ChannelConfig {
+  return createReimbursementChannelWithTargets([]);
+}
+
+function createReimbursementChannelWithTargets(deliveryTargets: DeliveryTarget[]): ChannelConfig {
   return {
     code: "reimbursement_a",
-    deliveryTargets: [],
+    deliveryTargets,
     enabled: true,
     match: {
       type: "room_topic",
@@ -57,6 +62,73 @@ function createReimbursementChannel(): ChannelConfig {
     scenario: "reimbursement",
     summarySchedule: "",
   };
+}
+
+interface DeliveredMessage {
+  targetType: "contact_name" | "room_topic";
+  targetValue: string;
+  text: string;
+}
+
+function createWechatyMock(
+  delivered: DeliveredMessage[],
+  options?: {
+    missingContactNames?: string[];
+    missingRoomTopics?: string[];
+  },
+) {
+  const missingContactNames = new Set(options?.missingContactNames ?? []);
+  const missingRoomTopics = new Set(options?.missingRoomTopics ?? []);
+
+  return {
+    Contact: {
+      find: async (query: Record<string, unknown>) => {
+        const name = String(query.name ?? "");
+
+        if (missingContactNames.has(name)) {
+          return null;
+        }
+
+        return {
+          async say(text: string) {
+            delivered.push({
+              targetType: "contact_name",
+              targetValue: name,
+              text,
+            });
+          },
+        };
+      },
+    },
+    Room: {
+      find: async (query: Record<string, unknown>) => {
+        const topic = String(query.topic ?? "");
+
+        if (missingRoomTopics.has(topic)) {
+          return null;
+        }
+
+        return {
+          async say(text: string) {
+            delivered.push({
+              targetType: "room_topic",
+              targetValue: topic,
+              text,
+            });
+          },
+        };
+      },
+    },
+    on() {
+      return this;
+    },
+    async start() {
+      // no-op
+    },
+    async stop() {
+      // no-op
+    },
+  } satisfies WechatyInstance;
 }
 
 function createMessageContext(channels: ChannelConfig[]) {
@@ -216,6 +288,7 @@ test(
 test("handleMessage stores reimbursement text-only messages without recent image context", { concurrency: false }, async () => {
   const logs: Array<{ level: string; message: string; context?: Record<string, unknown> }> = [];
   const messageId = "reimbursement-text-test";
+  const delivered: DeliveredMessage[] = [];
 
   await handleMessage(
     {
@@ -232,8 +305,11 @@ test("handleMessage stores reimbursement text-only messages without recent image
       }),
       text: () => "食材采购报账 36.5元",
       type: () => 7,
+      wechaty: createWechatyMock(delivered),
     },
-    createMessageContext([createReimbursementChannel()]),
+    createMessageContext([
+      createReimbursementChannelWithTargets([{ type: "room_topic", value: "AI报账群" }]),
+    ]),
     createLogger(logs),
   );
 
@@ -254,6 +330,7 @@ test("handleMessage stores reimbursement text-only messages without recent image
   assert(logs.some((entry) => entry.message === "Completed reimbursement extraction"));
   assert(logs.some((entry) => entry.message === "Persisted reimbursement report"));
   assert(logs.some((entry) => entry.message === "Persisted reimbursement scenario extraction"));
+  assert.deepEqual(delivered, []);
 });
 
 test("handleMessage ignores reimbursement text-only URL messages", { concurrency: false }, async () => {
@@ -293,7 +370,11 @@ test("handleMessage stores reimbursement images under reimbursement raw dir and 
   const logs: Array<{ level: string; message: string; context?: Record<string, unknown> }> = [];
   const imageMessageId = "reimbursement-image-before-remark-test";
   const remarkMessageId = "reimbursement-remark-after-image-test";
-  const context = createMessageContext([createReimbursementChannel()]);
+  const delivered: DeliveredMessage[] = [];
+  const context = createMessageContext([
+    createReimbursementChannelWithTargets([{ type: "room_topic", value: "AI报账群" }]),
+  ]);
+  const wechaty = createWechatyMock(delivered);
 
   await handleMessage(
     {
@@ -314,6 +395,7 @@ test("handleMessage stores reimbursement images under reimbursement raw dir and 
         toBuffer: async () => Buffer.from([0xff, 0xd8, 0xff, 0xd9]),
       }),
       type: () => 6,
+      wechaty,
     },
     context,
     createLogger(logs),
@@ -331,6 +413,13 @@ test("handleMessage stores reimbursement images under reimbursement raw dir and 
   assert.equal(imageReport.evidenceType, "image");
   assert(logs.some((entry) => entry.message === "Detected reimbursement image-like message"));
   assert(logs.some((entry) => entry.message === "Saved reimbursement image attachment"));
+  assert.deepEqual(delivered, [
+    {
+      targetType: "room_topic",
+      targetValue: "AI报账群",
+      text: "此次报账待核验",
+    },
+  ]);
 
   await handleMessage(
     {
@@ -347,6 +436,7 @@ test("handleMessage stores reimbursement images under reimbursement raw dir and 
       }),
       text: () => "这张是昨天晚餐食材",
       type: () => 7,
+      wechaty,
     },
     context,
     createLogger(logs),
@@ -366,13 +456,18 @@ test("handleMessage stores reimbursement images under reimbursement raw dir and 
   assert(logs.some((entry) => entry.message === "Matched reimbursement image context for remark merge"));
   assert(logs.some((entry) => entry.message === "Updated reimbursement report with merged remark"));
   assert(logs.some((entry) => entry.message === "Persisted reimbursement remark linkage extraction"));
+  assert.equal(delivered.length, 1);
 });
 
 test("handleMessage merges reimbursement text followed by image within 3 seconds", { concurrency: false }, async () => {
   const logs: Array<{ level: string; message: string; context?: Record<string, unknown> }> = [];
   const textMessageId = "reimbursement-text-before-image-test";
   const imageMessageId = "reimbursement-image-after-text-test";
-  const context = createMessageContext([createReimbursementChannel()]);
+  const delivered: DeliveredMessage[] = [];
+  const context = createMessageContext([
+    createReimbursementChannelWithTargets([{ type: "room_topic", value: "AI报账群" }]),
+  ]);
+  const wechaty = createWechatyMock(delivered);
   const beforeReportCount = listRecentReimbursementReports(1000).length;
 
   await handleMessage(
@@ -390,6 +485,7 @@ test("handleMessage merges reimbursement text followed by image within 3 seconds
       }),
       text: () => "昨晚外卖报账 42元",
       type: () => 7,
+      wechaty,
     },
     context,
     createLogger(logs),
@@ -422,6 +518,7 @@ test("handleMessage merges reimbursement text followed by image within 3 seconds
         toBuffer: async () => Buffer.from([0xff, 0xd8, 0xff, 0xd9]),
       }),
       type: () => 6,
+      wechaty,
     },
     context,
     createLogger(logs),
@@ -444,6 +541,83 @@ test("handleMessage merges reimbursement text followed by image within 3 seconds
   assert.equal(listRecentReimbursementReports(1000).length, beforeReportCount + 1);
   assert(logs.some((entry) => entry.message === "Checking recent reimbursement text context for image merge"));
   assert(logs.some((entry) => entry.message === "Matched recent reimbursement text context for image merge"));
+  assert.deepEqual(delivered, [
+    {
+      targetType: "room_topic",
+      targetValue: "AI报账群",
+      text: "报账42元已录入",
+    },
+  ]);
+});
+
+test("handleMessage skips reimbursement receipt when deliveryTargets are empty", { concurrency: false }, async () => {
+  const logs: Array<{ level: string; message: string; context?: Record<string, unknown> }> = [];
+
+  await handleMessage(
+    {
+      id: () => "reimbursement-image-no-receipt-targets-test",
+      room: async () => ({
+        alias: async () => "小吴",
+        id: () => "reimbursement_room_no_targets",
+        topic: async () => "AI报账群",
+      }),
+      self: () => false,
+      talker: async () => ({
+        id: () => "reimbursement_talker_no_targets",
+        name: () => "Ryan。",
+      }),
+      text: () => "",
+      toFileBox: async () => ({
+        name: "receipt-no-targets.jpg",
+        toBuffer: async () => Buffer.from([0xff, 0xd8, 0xff, 0xd9]),
+      }),
+      type: () => 6,
+    },
+    createMessageContext([createReimbursementChannel()]),
+    createLogger(logs),
+  );
+
+  assert(logs.some((entry) => entry.message === "Skipped reimbursement receipt notification"));
+});
+
+test("handleMessage keeps reimbursement persistence when receipt delivery fails", { concurrency: false }, async () => {
+  const logs: Array<{ level: string; message: string; context?: Record<string, unknown> }> = [];
+  const messageId = "reimbursement-image-receipt-delivery-fails-test";
+
+  await handleMessage(
+    {
+      id: () => messageId,
+      room: async () => ({
+        alias: async () => "小郑",
+        id: () => "reimbursement_room_delivery_fail",
+        topic: async () => "AI报账群",
+      }),
+      self: () => false,
+      talker: async () => ({
+        id: () => "reimbursement_talker_delivery_fail",
+        name: () => "Ryan。",
+      }),
+      text: () => "",
+      toFileBox: async () => ({
+        name: "receipt-delivery-fail.jpg",
+        toBuffer: async () => Buffer.from([0xff, 0xd8, 0xff, 0xd9]),
+      }),
+      type: () => 6,
+      wechaty: createWechatyMock([], {
+        missingRoomTopics: ["不存在的回执群"],
+      }),
+    },
+    createMessageContext([
+      createReimbursementChannelWithTargets([{ type: "room_topic", value: "不存在的回执群" }]),
+    ]),
+    createLogger(logs),
+  );
+
+  const report = listRecentReimbursementReports(1000).find((item) => item.reporter === "小郑");
+
+  assert(report);
+  assert.equal(report.evidenceType, "image");
+  assert(logs.some((entry) => entry.message === "Failed to deliver reimbursement receipt to any target"));
 });
 
 test("handleMessage does not merge reimbursement text followed by image after 3 seconds", { concurrency: false }, async () => {

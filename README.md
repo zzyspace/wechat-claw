@@ -153,7 +153,7 @@ WECHATY_CHANNELS_JSON=[{"code":"loss_a","enabled":true,"scenario":"loss-report",
 - `summarySchedule`: 日报 cron，例如每天 `22:00` 用 `0 22 * * *`
 - `weeklySummarySchedule`: 周报 cron，例如每周日 `22:10` 用 `10 22 * * 0`
 - `summarySchedule` 或 `weeklySummarySchedule` 留空 `""`，表示关闭对应的自动发送
-- 报账群第一版只做监听、图片保存、金额识别和入库，不要求配置发送目标
+- 报账群可以不配置发送目标；但若要发送“报账xx元已录入 / 此次报账待核验”回执，需要在 `deliveryTargets` 中配置目标，可直接填写当前报账群的 `room_topic`
 - 也就是说：
   - `summarySchedule` 留空时，不会自动发送日报
   - `weeklySummarySchedule` 留空时，不会自动发送周报
