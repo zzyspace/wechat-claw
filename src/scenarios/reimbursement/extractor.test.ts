@@ -83,6 +83,7 @@ test("extractReimbursementReport calls qwen3.5-flash and normalizes amount, date
     assert.match(promptText, /外卖或商城订单页如果有多个商品、套餐或明细金额，但页面没有明确总金额，应把每个商品或明细的实际价格加总/);
     assert.match(promptText, /微信聊天界面的转账截图如果包含多条转账记录，应把每条转账的金额加起来/);
     assert.match(promptText, /支付宝聊天界面的转账或代付截图如果包含多条记录，应把每条转账或代付的金额加起来/);
+    assert.match(promptText, /如果识别结果表示这笔记录是退款、退回、退款成功或退款到账，amount 应返回负数/);
     assert.equal(result.extractorCode, "model-qwen-qwen3.5-flash");
     assert.equal(result.resultJson.amount, 128.5);
     assert.equal(result.resultJson.currency, "CNY");
