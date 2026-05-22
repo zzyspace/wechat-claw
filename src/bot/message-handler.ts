@@ -498,6 +498,8 @@ async function handleReimbursementMessage(
           reimbursementReportId: recentImageReport.id,
           rawMessageId: saveResult.rawMessageId,
           note: parsed.normalizedText,
+          timeZone: context.timeZone ?? "Asia/Shanghai",
+          referenceDateTime: parsed.eventReceivedAt,
         });
         logger.info("Updated reimbursement report with merged remark", {
           amount: updatedReport.amount,
@@ -689,6 +691,8 @@ async function handleReimbursementMessage(
         ocrText: extraction.resultJson.ocrText,
         confidence: extraction.confidence,
         needsReview: extraction.needsReview,
+        timeZone: context.timeZone ?? "Asia/Shanghai",
+        referenceDateTime: parsed.eventReceivedAt,
       })
     : saveReimbursementReport({
         channelCode: parsed.channel.code,
@@ -708,6 +712,8 @@ async function handleReimbursementMessage(
         confidence: extraction.confidence,
         needsReview: extraction.needsReview,
         primaryRawMessageId: saveResult.rawMessageId,
+        timeZone: context.timeZone ?? "Asia/Shanghai",
+        referenceDateTime: parsed.eventReceivedAt,
       });
   logger.info("Persisted reimbursement report", {
     amount: report.amount,

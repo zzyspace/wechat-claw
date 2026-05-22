@@ -62,6 +62,8 @@ export interface ReimbursementReportInput {
   confidence: number;
   needsReview: boolean;
   primaryRawMessageId: number;
+  timeZone?: string;
+  referenceDateTime?: string;
 }
 
 export interface ReimbursementReportRecord {

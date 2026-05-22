@@ -1,4 +1,5 @@
 import { getDatabase } from "../../core/storage/database.js";
+import { getZonedDateParts, zonedDateTimeToUtc } from "../../core/runtime/timezone.js";
 import type {
   ReimbursementEvidenceType,
   ReimbursementExpenseCategory,
@@ -10,6 +11,8 @@ import type {
   ReimbursementSourceRole,
   ReimbursementVoucherDateSource,
 } from "./types.js";
+
+const DEFAULT_REIMBURSEMENT_TIME_ZONE = "Asia/Shanghai";
 
 export interface RecentPrimaryImageReportLookupInput {
   beforeIso: string;
@@ -64,6 +67,36 @@ export interface NextImageRawMessageLookupInput {
 export interface ImageRawMessageMatch {
   rawMessageId: number;
   eventReceivedAt: string;
+}
+
+function resolveMonthlyLedgerCreatedAtOverride(input: {
+  note: string;
+  timeZone?: string;
+  referenceDateTime?: string;
+}) {
+  const match = input.note.match(/(\d{1,2})月账/);
+
+  if (!match) {
+    return null;
+  }
+
+  const month = Number(match[1]);
+  if (!Number.isInteger(month) || month < 1 || month > 12) {
+    return null;
+  }
+
+  const referenceDate = input.referenceDateTime ? new Date(input.referenceDateTime) : new Date();
+  if (!Number.isFinite(referenceDate.getTime())) {
+    return null;
+  }
+
+  const timeZone = input.timeZone ?? DEFAULT_REIMBURSEMENT_TIME_ZONE;
+  const anchorDate = new Date(referenceDate.getTime() - 15 * 24 * 60 * 60 * 1000);
+  const anchorYear = getZonedDateParts(anchorDate, timeZone).year;
+  const lastDay = new Date(Date.UTC(anchorYear, month, 0)).getUTCDate();
+  const utcDate = zonedDateTimeToUtc(anchorYear, month, lastDay, 0, 0, 0, timeZone);
+
+  return utcDate.toISOString().slice(0, 19).replace("T", " ");
 }
 
 function mapReportRow(row: {
@@ -173,6 +206,11 @@ export function saveReimbursementReport(input: ReimbursementReportInput): Reimbu
   }
 
   const db = getDatabase();
+  const createdAtOverride = resolveMonthlyLedgerCreatedAtOverride({
+    note: input.note,
+    timeZone: input.timeZone,
+    referenceDateTime: input.referenceDateTime,
+  });
   const insertReport = db.prepare(`
     INSERT INTO reimbursement_reports (
       channel_code,
@@ -190,8 +228,9 @@ export function saveReimbursementReport(input: ReimbursementReportInput): Reimbu
       voucher_type,
       ocr_text,
       confidence,
-      needs_review
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      needs_review,
+      created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, datetime('now')))
   `);
   const insertSource = db.prepare(`
     INSERT INTO reimbursement_report_sources (
@@ -219,6 +258,7 @@ export function saveReimbursementReport(input: ReimbursementReportInput): Reimbu
       input.ocrText,
       input.confidence,
       input.needsReview ? 1 : 0,
+      createdAtOverride,
     );
     const createdReportId = Number(result.lastInsertRowid);
 
@@ -510,8 +550,17 @@ export function attachRemarkToReimbursementReport(input: {
   reimbursementReportId: number;
   rawMessageId: number;
   note: string;
+  timeZone?: string;
+  referenceDateTime?: string;
 }): ReimbursementReportRecord {
   const db = getDatabase();
+  const existing = selectReportById(input.reimbursementReportId);
+  const mergedNote = mergeReportNotes(existing.note, input.note);
+  const createdAtOverride = resolveMonthlyLedgerCreatedAtOverride({
+    note: mergedNote,
+    timeZone: input.timeZone,
+    referenceDateTime: input.referenceDateTime,
+  });
 
   db.transaction(() => {
     addReimbursementReportSource({
@@ -524,17 +573,13 @@ export function attachRemarkToReimbursementReport(input: {
       `
         UPDATE reimbursement_reports
         SET
-          note = CASE
-            WHEN note = '' THEN ?
-            WHEN ? = '' THEN note
-            WHEN note = ? THEN note
-            ELSE note || '；' || ?
-          END,
+          note = ?,
           evidence_type = 'image+text',
+          created_at = COALESCE(?, created_at),
           updated_at = datetime('now')
         WHERE id = ?
       `,
-    ).run(input.note, input.note, input.note, input.note, input.reimbursementReportId);
+    ).run(mergedNote, createdAtOverride, input.reimbursementReportId);
   })();
 
   return selectReportById(input.reimbursementReportId);
@@ -555,6 +600,8 @@ export function mergePrimaryImageIntoTextOnlyReimbursementReport(input: {
   ocrText: string | null;
   confidence: number;
   needsReview: boolean;
+  timeZone?: string;
+  referenceDateTime?: string;
 }): ReimbursementReportRecord {
   const db = getDatabase();
   const existing = selectReportById(input.reimbursementReportId);
@@ -566,6 +613,11 @@ export function mergePrimaryImageIntoTextOnlyReimbursementReport(input: {
   const mergedVoucherDate = input.voucherDateSource === "model" ? input.voucherDate : existing.voucherDate;
   const mergedVoucherDateSource =
     input.voucherDateSource === "model" ? input.voucherDateSource : existing.voucherDateSource;
+  const createdAtOverride = resolveMonthlyLedgerCreatedAtOverride({
+    note: mergedNote,
+    timeZone: input.timeZone,
+    referenceDateTime: input.referenceDateTime,
+  });
 
   db.transaction(() => {
     db.prepare(
@@ -599,6 +651,7 @@ export function mergePrimaryImageIntoTextOnlyReimbursementReport(input: {
           ocr_text = ?,
           confidence = ?,
           needs_review = ?,
+          created_at = COALESCE(?, created_at),
           updated_at = datetime('now')
         WHERE id = ?
       `,
@@ -615,6 +668,7 @@ export function mergePrimaryImageIntoTextOnlyReimbursementReport(input: {
       input.ocrText ?? existing.ocrText,
       Math.max(existing.confidence, input.confidence),
       existing.needsReview || input.needsReview ? 1 : 0,
+      createdAtOverride,
       input.reimbursementReportId,
     );
   })();
