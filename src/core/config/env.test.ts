@@ -29,6 +29,7 @@ const managedEnvKeys = [
   "WECHATY_DEBUG_CONTACT_NAME",
   "WECHATY_ATTACHMENT_RETENTION_DAYS",
   "WECHATY_COLD_START_IGNORE_WINDOW_SECONDS",
+  "WECHATY_REIMBURSEMENT_BACKWARD_TEXT_MERGE_WINDOW_SECONDS",
   "WECHATY_REIMBURSEMENT_EXTRACTION_PROVIDER",
   "WECHATY_REIMBURSEMENT_EXTRACTION_MODEL",
   "WECHATY_REIMBURSEMENT_EXTRACTION_API_KEY",
@@ -80,6 +81,7 @@ test("getAppConfig parses WECHATY_CHANNELS_JSON with mixed delivery targets", ()
     WECHATY_LOG_RETENTION_DAYS: "14",
     WECHATY_PUPPET: "wechaty-puppet-wechat",
     WECHATY_COLD_START_IGNORE_WINDOW_SECONDS: "45",
+    WECHATY_REIMBURSEMENT_BACKWARD_TEXT_MERGE_WINDOW_SECONDS: "5",
     WECHATY_DEBUG_CONTACT_NAME: "调试联系人",
     WECHATY_CHANNELS_JSON: JSON.stringify([
       {
@@ -114,6 +116,7 @@ test("getAppConfig parses WECHATY_CHANNELS_JSON with mixed delivery targets", ()
   assert.equal(config.channelsSource, "json");
   assert.equal(config.attachmentRetentionDays, 90);
   assert.equal(config.coldStartIgnoreWindowSeconds, 45);
+  assert.equal(config.reimbursementBackwardTextMergeWindowSeconds, 5);
   assert.equal(config.debugContactName, "调试联系人");
   assert.equal(config.logLevel, "debug");
   assert.equal(config.logRetentionDays, 14);

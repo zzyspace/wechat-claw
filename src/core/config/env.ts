@@ -56,6 +56,7 @@ export interface AppConfig {
   attachmentRetentionDays: number;
   coldStartIgnoreWindowSeconds: number;
   lossMergeWindowSeconds: number;
+  reimbursementBackwardTextMergeWindowSeconds: number;
   lossExtractionProvider?: string;
   lossExtractionModel?: string;
   lossExtractionApiKey?: string;
@@ -349,6 +350,10 @@ export function getAppConfig(): AppConfig {
       60,
     ),
     lossMergeWindowSeconds: readPositiveNumberEnv("WECHATY_LOSS_MERGE_WINDOW_SECONDS", 60),
+    reimbursementBackwardTextMergeWindowSeconds: readNonNegativeNumberEnv(
+      "WECHATY_REIMBURSEMENT_BACKWARD_TEXT_MERGE_WINDOW_SECONDS",
+      3,
+    ),
     lossExtractionProvider: readOptionalEnv("WECHATY_LOSS_EXTRACTION_PROVIDER"),
     lossExtractionModel: readOptionalEnv("WECHATY_LOSS_EXTRACTION_MODEL"),
     lossExtractionApiKey: readOptionalEnv("WECHATY_LOSS_EXTRACTION_API_KEY"),

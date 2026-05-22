@@ -72,6 +72,7 @@ WECHATY_DEBUG_CONTACT_NAME=你的主微信昵称
 WECHATY_ATTACHMENT_RETENTION_DAYS=60
 WECHATY_COLD_START_IGNORE_WINDOW_SECONDS=60
 WECHATY_LOSS_MERGE_WINDOW_SECONDS=60
+WECHATY_REIMBURSEMENT_BACKWARD_TEXT_MERGE_WINDOW_SECONDS=3
 WECHATY_LOSS_EXTRACTION_PROVIDER=
 WECHATY_LOSS_EXTRACTION_MODEL=
 WECHATY_LOSS_EXTRACTION_API_KEY=
@@ -104,10 +105,12 @@ WECHATY_CHANNELS_JSON=[{"code":"loss_a","enabled":true,"scenario":"loss-report",
 - `WECHATY_COLD_START_IGNORE_WINDOW_SECONDS`: 冷启动忽略窗口，默认 `60` 秒；会忽略发送时间早于“bot 启动时间 - 窗口”的历史消息，设为 `0` 可关闭
 - `WECHATY_SUMMARY_PROMPT_TEMPLATE`: 总结提示词模板，可自定义
 - `WECHATY_LOSS_MERGE_WINDOW_SECONDS`: 同一人图文消息合并窗口，默认 `60` 秒；报损和报账第一版共用这个窗口
+- `WECHATY_REIMBURSEMENT_BACKWARD_TEXT_MERGE_WINDOW_SECONDS`: 报账图片向前回看文字的窗口，默认 `3` 秒；同时影响“文字后图片”的回看合并和“图1 + 文字 + 图2”时文字改挂到图2的判断，设为 `0` 可关闭
   当前规则：
   - 报损图 + 文字：窗口内可合并为一条报损
   - 报账图片后文字：窗口内可作为备注合并到同一份报账
-  - 报账文字后图片：仅回看前 `3` 秒内的同人文字并合并到同一份报账
+  - 报账文字后图片：仅回看前 `WECHATY_REIMBURSEMENT_BACKWARD_TEXT_MERGE_WINDOW_SECONDS` 秒内的同人文字并合并到同一份报账
+  - 报账图1 + 文字 + 图2：如果图2与中间这条文字间隔在 `WECHATY_REIMBURSEMENT_BACKWARD_TEXT_MERGE_WINDOW_SECONDS` 秒内，这条文字会从图1对应报账改挂到图2对应报账
   - 图 + 图：不合并
   - 一条业务记录最多保留一张图片
 - `WECHATY_LOSS_EXTRACTION_PROVIDER`: 报损提取模型提供商

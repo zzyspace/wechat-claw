@@ -30,6 +30,7 @@ function createConfig(stateDir: string): AppConfig {
     lossExtractionModel: undefined,
     lossExtractionProvider: undefined,
     lossMergeWindowSeconds: 60,
+    reimbursementBackwardTextMergeWindowSeconds: 3,
     puppet: "wechaty-puppet-wechat",
     puppetServiceToken: undefined,
     reimbursementExtractionApiKey: undefined,

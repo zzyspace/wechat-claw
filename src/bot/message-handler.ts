@@ -15,15 +15,15 @@ import {
   findForwardTextOnlyReimbursementReport,
   findNextImageRawMessage,
   findRecentImageRawMessage,
+  findRecentRemarkTextSource,
   findRecentTextOnlyReimbursementReport,
   getReimbursementReportByRawMessageId,
   mergePrimaryImageIntoTextOnlyReimbursementReport,
+  moveRemarkToReimbursementReport,
   saveReimbursementReport,
 } from "../scenarios/reimbursement/repository.js";
 import { resolveMessageSentAt } from "./cold-start-filter.js";
 import { countSuccessfulDeliveries, sendTextToTarget, sendTextToTargets } from "./delivery-contact.js";
-
-const REIMBURSEMENT_BACKWARD_TEXT_MERGE_WINDOW_SECONDS = 3;
 const REIMBURSEMENT_RECEIPT_PENDING_TEXT = "此次报账待核验";
 
 export interface MessageContext {
@@ -31,6 +31,7 @@ export interface MessageContext {
   debugContactName?: string;
   timeZone?: string;
   lossMergeWindowSeconds: number;
+  reimbursementBackwardTextMergeWindowSeconds: number;
   lossExtractionProvider?: string;
   lossExtractionModel?: string;
   lossExtractionApiKey?: string;
@@ -332,6 +333,7 @@ async function handleReimbursementMessage(
   let forwardTextReport = null;
   let forwardTextUntilIso: string | undefined;
   let recentTextReport = null;
+  let recentRemarkTextSource = null;
 
   if (parsed.attachments.length > 0 && context.lossMergeWindowSeconds > 0) {
     const currentTime = new Date(parsed.eventReceivedAt).getTime();
@@ -391,7 +393,7 @@ async function handleReimbursementMessage(
     if (!forwardTextReport) {
       const backwardMergeWindowSeconds = Math.min(
         context.lossMergeWindowSeconds,
-        REIMBURSEMENT_BACKWARD_TEXT_MERGE_WINDOW_SECONDS,
+        context.reimbursementBackwardTextMergeWindowSeconds,
       );
 
       if (backwardMergeWindowSeconds > 0) {
@@ -445,6 +447,37 @@ async function handleReimbursementMessage(
             roomTopic: parsed.roomTopic,
             senderName: parsed.senderName,
           });
+
+          recentRemarkTextSource = findRecentRemarkTextSource({
+            beforeIso: parsed.eventReceivedAt,
+            channelCode: parsed.channel.code,
+            channelName: parsed.roomTopic,
+            currentRawMessageId: saveResult.rawMessageId,
+            senderExternalId: parsed.senderExternalId,
+            senderName: parsed.senderName,
+            sinceIso,
+            sinceRawMessageId: previousImageRawMessage?.rawMessageId,
+          });
+
+          if (recentRemarkTextSource) {
+            logger.info("Matched recent reimbursement remark context for image merge", {
+              channelCode: parsed.channel.code,
+              matchedReportId: recentRemarkTextSource.reimbursementReportId,
+              messageExternalId: parsed.messageExternalId,
+              rawMessageId: saveResult.rawMessageId,
+              recentRemarkRawMessageId: recentRemarkTextSource.rawMessageId,
+              roomTopic: parsed.roomTopic,
+              senderName: parsed.senderName,
+            });
+          } else {
+            logger.info("No recent reimbursement remark context matched for image merge", {
+              channelCode: parsed.channel.code,
+              messageExternalId: parsed.messageExternalId,
+              rawMessageId: saveResult.rawMessageId,
+              roomTopic: parsed.roomTopic,
+              senderName: parsed.senderName,
+            });
+          }
         }
       }
     }
@@ -675,7 +708,7 @@ async function handleReimbursementMessage(
     senderName: parsed.senderName,
   });
   const mergeTargetReport = forwardTextReport ?? recentTextReport;
-  const report = mergeTargetReport
+  let report = mergeTargetReport
     ? mergePrimaryImageIntoTextOnlyReimbursementReport({
         reimbursementReportId: mergeTargetReport.id,
         imageRawMessageId: saveResult.rawMessageId,
@@ -715,6 +748,39 @@ async function handleReimbursementMessage(
         timeZone: context.timeZone ?? "Asia/Shanghai",
         referenceDateTime: parsed.eventReceivedAt,
       });
+
+  if (recentRemarkTextSource && !mergeTargetReport) {
+    const reassignment = moveRemarkToReimbursementReport({
+      targetReimbursementReportId: report.id,
+      rawMessageId: recentRemarkTextSource.rawMessageId,
+      timeZone: context.timeZone ?? "Asia/Shanghai",
+      referenceDateTime: parsed.eventReceivedAt,
+    });
+    report = reassignment.targetReport;
+    saveScenarioExtraction({
+      rawMessageId: recentRemarkTextSource.rawMessageId,
+      scenarioCode: "reimbursement",
+      extractorCode: "remark-link-v1",
+      status: "extracted",
+      confidence: report.confidence,
+      needsReview: report.needsReview,
+      resultJson: {
+        eventType: "reimbursement_report_remark",
+        rawMessageId: recentRemarkTextSource.rawMessageId,
+        reimbursementReportId: report.id,
+        note: recentRemarkTextSource.textContent,
+      },
+    });
+    logger.info("Reassigned reimbursement remark context to newer image report", {
+      channelCode: parsed.channel.code,
+      messageExternalId: parsed.messageExternalId,
+      rawMessageId: saveResult.rawMessageId,
+      recentRemarkRawMessageId: recentRemarkTextSource.rawMessageId,
+      reimbursementReportId: report.id,
+      senderName: parsed.senderName,
+      sourceReimbursementReportId: reassignment.sourceReport.id,
+    });
+  }
   logger.info("Persisted reimbursement report", {
     amount: report.amount,
     channelCode: parsed.channel.code,
@@ -727,6 +793,7 @@ async function handleReimbursementMessage(
     senderName: parsed.senderName,
     mergedFromForwardTextReport: Boolean(forwardTextReport),
     mergedFromRecentTextReport: Boolean(recentTextReport),
+    mergedFromRecentRemarkTextSource: Boolean(recentRemarkTextSource),
   });
   const savedExtraction = saveScenarioExtraction({
     rawMessageId: saveResult.rawMessageId,

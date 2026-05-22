@@ -193,6 +193,7 @@ export async function startBot(
           debugContactName: config.debugContactName,
           timeZone: config.timeZone,
           lossMergeWindowSeconds: config.lossMergeWindowSeconds,
+          reimbursementBackwardTextMergeWindowSeconds: config.reimbursementBackwardTextMergeWindowSeconds,
           lossExtractionProvider: config.lossExtractionProvider,
           lossExtractionModel: config.lossExtractionModel,
           lossExtractionApiKey: config.lossExtractionApiKey,

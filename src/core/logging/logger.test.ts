@@ -32,6 +32,7 @@ function createConfig(logDir: string, logLevel: AppConfig["logLevel"] = "info"):
     lossExtractionModel: undefined,
     lossExtractionProvider: undefined,
     lossMergeWindowSeconds: 60,
+    reimbursementBackwardTextMergeWindowSeconds: 3,
     puppet: "wechaty-puppet-wechat",
     puppetServiceToken: undefined,
     reimbursementExtractionApiKey: undefined,

@@ -8,7 +8,7 @@ import type { ChannelConfig, DeliveryTarget } from "../core/channels/types.js";
 import type { Logger } from "../core/logging/logger.js";
 import { getReimbursementRawStorageDir } from "../core/runtime/state-paths.js";
 import { listRecentRawMessages } from "../core/storage/raw-message-repository.js";
-import { listRecentReimbursementReports } from "../scenarios/reimbursement/repository.js";
+import { listReimbursementReportDetails, listRecentReimbursementReports } from "../scenarios/reimbursement/repository.js";
 import { handleMessage } from "./message-handler.js";
 import type { WechatyInstance } from "./types.js";
 
@@ -135,6 +135,7 @@ function createMessageContext(channels: ChannelConfig[]) {
   return {
     channels,
     lossMergeWindowSeconds: 30,
+    reimbursementBackwardTextMergeWindowSeconds: 3,
     lossExtractionBaseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1",
     reimbursementExtractionBaseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1",
     reimbursementExtractionModel: "qwen3.5-flash",
@@ -548,6 +549,117 @@ test("handleMessage merges reimbursement text followed by image within 3 seconds
       text: "报账42元已录入",
     },
   ]);
+});
+
+test("handleMessage reassigns a recent text-only remark to the newer image within 3 seconds", { concurrency: false }, async () => {
+  const logs: Array<{ level: string; message: string; context?: Record<string, unknown> }> = [];
+  const delivered: DeliveredMessage[] = [];
+  const context = createMessageContext([
+    createReimbursementChannelWithTargets([{ type: "room_topic", value: "AI报账群" }]),
+  ]);
+  const wechaty = createWechatyMock(delivered);
+
+  await handleMessage(
+    {
+      id: () => "reimbursement-image-first-for-remark-reassign-test",
+      room: async () => ({
+        alias: async () => "小卢",
+        id: () => "reimbursement_room_reassign",
+        topic: async () => "AI报账群",
+      }),
+      self: () => false,
+      talker: async () => ({
+        id: () => "reimbursement_talker_reassign",
+        name: () => "Ryan。",
+      }),
+      text: () => "",
+      toFileBox: async () => ({
+        name: "first-image.jpg",
+        toBuffer: async () => Buffer.from([0xff, 0xd8, 0xff, 0xd9]),
+      }),
+      type: () => 6,
+      wechaty,
+    },
+    context,
+    createLogger(logs),
+  );
+
+  const firstReport = listRecentReimbursementReports(1000).find((report) => report.reporter === "小卢");
+  assert(firstReport);
+  assert.equal(firstReport.evidenceType, "image");
+
+  await new Promise((resolve) => setTimeout(resolve, 50));
+
+  await handleMessage(
+    {
+      id: () => "reimbursement-text-between-images-reassign-test",
+      room: async () => ({
+        alias: async () => "小卢",
+        id: () => "reimbursement_room_reassign",
+        topic: async () => "AI报账群",
+      }),
+      self: () => false,
+      talker: async () => ({
+        id: () => "reimbursement_talker_reassign",
+        name: () => "Ryan。",
+      }),
+      text: () => "平",
+      type: () => 7,
+      wechaty,
+    },
+    context,
+    createLogger(logs),
+  );
+
+  const reportAfterRemark = listRecentReimbursementReports(1000).find((report) => report.id === firstReport.id);
+  assert(reportAfterRemark);
+  assert.equal(reportAfterRemark.evidenceType, "image+text");
+  assert.equal(reportAfterRemark.note, "平");
+
+  await new Promise((resolve) => setTimeout(resolve, 50));
+
+  await handleMessage(
+    {
+      id: () => "reimbursement-image-second-for-remark-reassign-test",
+      room: async () => ({
+        alias: async () => "小卢",
+        id: () => "reimbursement_room_reassign",
+        topic: async () => "AI报账群",
+      }),
+      self: () => false,
+      talker: async () => ({
+        id: () => "reimbursement_talker_reassign",
+        name: () => "Ryan。",
+      }),
+      text: () => "",
+      toFileBox: async () => ({
+        name: "second-image.jpg",
+        toBuffer: async () => Buffer.from([0xff, 0xd8, 0xff, 0xd9]),
+      }),
+      type: () => 6,
+      wechaty,
+    },
+    context,
+    createLogger(logs),
+  );
+
+  const reports = listReimbursementReportDetails({
+    channelCode: "reimbursement_a",
+    limit: 10,
+  }).filter((report) => report.reporter === "小卢");
+  const updatedFirstReport = reports.find((report) => report.id === firstReport.id);
+  const secondReport = reports.find((report) => report.id !== firstReport.id);
+
+  assert.equal(reports.length, 2);
+  assert(updatedFirstReport);
+  assert(secondReport);
+  assert.equal(updatedFirstReport.evidenceType, "image");
+  assert.equal(updatedFirstReport.note, "");
+  assert.equal(secondReport.evidenceType, "image+text");
+  assert.equal(secondReport.note, "平");
+  assert.equal(secondReport.sources.some((source) => source.textContent === "平" && source.role === "remark"), true);
+  assert(logs.some((entry) => entry.message === "Matched recent reimbursement remark context for image merge"));
+  assert(logs.some((entry) => entry.message === "Reassigned reimbursement remark context to newer image report"));
 });
 
 test("handleMessage skips reimbursement receipt when deliveryTargets are empty", { concurrency: false }, async () => {

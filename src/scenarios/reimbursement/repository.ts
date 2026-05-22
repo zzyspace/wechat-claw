@@ -69,6 +69,24 @@ export interface ImageRawMessageMatch {
   eventReceivedAt: string;
 }
 
+export interface RecentRemarkTextSourceLookupInput {
+  beforeIso: string;
+  channelCode?: string;
+  channelName: string;
+  senderExternalId?: string;
+  senderName: string;
+  sinceIso: string;
+  sinceRawMessageId?: number;
+  currentRawMessageId?: number;
+}
+
+export interface RemarkTextSourceMatch {
+  reimbursementReportId: number;
+  rawMessageId: number;
+  eventReceivedAt: string;
+  textContent: string;
+}
+
 function resolveMonthlyLedgerCreatedAtOverride(input: {
   note: string;
   timeZone?: string;
@@ -141,6 +159,11 @@ function mapReportRow(row: {
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
+}
+
+function normalizeSourceText(text: string) {
+  const normalized = text === "(非文本消息)" ? "" : text.trim();
+  return normalized;
 }
 
 function selectReportById(id: number): ReimbursementReportRecord {
@@ -406,6 +429,69 @@ export function findRecentTextOnlyReimbursementReport(
   return row ? selectReportById(row.id) : null;
 }
 
+export function findRecentRemarkTextSource(
+  input: RecentRemarkTextSourceLookupInput,
+): RemarkTextSourceMatch | null {
+  const db = getDatabase();
+  const senderCondition = input.senderExternalId
+    ? "rm.sender_external_id = ?"
+    : "rm.sender_name = ?";
+  const senderValue = input.senderExternalId ?? input.senderName;
+  const channelCondition = input.channelCode ? "rm.channel_code = ?" : "rm.channel_name = ?";
+  const channelValue = input.channelCode ?? input.channelName;
+  const row = db
+    .prepare(
+      `
+        SELECT
+          rrs.reimbursement_report_id as reimbursementReportId,
+          rm.id as rawMessageId,
+          rm.event_received_at as eventReceivedAt,
+          rm.text_content as textContent
+        FROM reimbursement_report_sources rrs
+        INNER JOIN raw_messages rm ON rm.id = rrs.raw_message_id
+        WHERE ${channelCondition}
+          AND ${senderCondition}
+          AND rrs.role = 'remark'
+          AND NOT EXISTS (
+            SELECT 1
+            FROM message_attachments ma
+            WHERE ma.raw_message_id = rm.id
+          )
+          AND rm.text_content != '(非文本消息)'
+          AND (
+            rm.event_received_at > ?
+            OR (
+              rm.event_received_at = ?
+              AND (? IS NULL OR rm.id > ?)
+            )
+          )
+          AND (
+            rm.event_received_at < ?
+            OR (
+              rm.event_received_at = ?
+              AND (? IS NULL OR rm.id < ?)
+            )
+          )
+        ORDER BY rm.event_received_at DESC, rm.id DESC
+        LIMIT 1
+      `,
+    )
+    .get(
+      channelValue,
+      senderValue,
+      input.sinceIso,
+      input.sinceIso,
+      input.sinceRawMessageId ?? null,
+      input.sinceRawMessageId ?? null,
+      input.beforeIso,
+      input.beforeIso,
+      input.currentRawMessageId ?? null,
+      input.currentRawMessageId ?? null,
+    ) as RemarkTextSourceMatch | undefined;
+
+  return row ?? null;
+}
+
 export function findRecentImageRawMessage(
   input: RecentImageRawMessageLookupInput,
 ): ImageRawMessageMatch | null {
@@ -546,6 +632,68 @@ export function addReimbursementReportSource(input: {
   };
 }
 
+function refreshReimbursementReportFromSources(input: {
+  reimbursementReportId: number;
+  timeZone?: string;
+  referenceDateTime?: string;
+}) {
+  const db = getDatabase();
+  const existing = selectReportById(input.reimbursementReportId);
+  const rows = db
+    .prepare(
+      `
+        SELECT
+          rm.text_content as textContent,
+          EXISTS (
+            SELECT 1
+            FROM message_attachments ma
+            WHERE ma.raw_message_id = rm.id
+          ) as hasAttachment
+        FROM reimbursement_report_sources rrs
+        INNER JOIN raw_messages rm ON rm.id = rrs.raw_message_id
+        WHERE rrs.reimbursement_report_id = ?
+        ORDER BY rrs.id ASC
+      `,
+    )
+    .all(input.reimbursementReportId) as Array<{
+    textContent: string;
+    hasAttachment: number;
+  }>;
+
+  let mergedNote = "";
+  let hasImage = false;
+
+  for (const row of rows) {
+    mergedNote = mergeReportNotes(mergedNote, normalizeSourceText(row.textContent));
+    hasImage = hasImage || Boolean(row.hasAttachment);
+  }
+
+  const evidenceType: ReimbursementEvidenceType = hasImage
+    ? mergedNote
+      ? "image+text"
+      : "image"
+    : "text";
+  const createdAtOverride = resolveMonthlyLedgerCreatedAtOverride({
+    note: mergedNote,
+    timeZone: input.timeZone,
+    referenceDateTime: input.referenceDateTime,
+  });
+
+  db.prepare(
+    `
+      UPDATE reimbursement_reports
+      SET
+        note = ?,
+        evidence_type = ?,
+        created_at = COALESCE(?, created_at),
+        updated_at = datetime('now')
+      WHERE id = ?
+    `,
+  ).run(mergedNote, evidenceType, createdAtOverride, input.reimbursementReportId);
+
+  return existing;
+}
+
 export function attachRemarkToReimbursementReport(input: {
   reimbursementReportId: number;
   rawMessageId: number;
@@ -674,6 +822,72 @@ export function mergePrimaryImageIntoTextOnlyReimbursementReport(input: {
   })();
 
   return selectReportById(input.reimbursementReportId);
+}
+
+export function moveRemarkToReimbursementReport(input: {
+  targetReimbursementReportId: number;
+  rawMessageId: number;
+  timeZone?: string;
+  referenceDateTime?: string;
+}): {
+  sourceReport: ReimbursementReportRecord;
+  targetReport: ReimbursementReportRecord;
+} {
+  const db = getDatabase();
+  const source = db
+    .prepare(
+      `
+        SELECT
+          reimbursement_report_id as reimbursementReportId,
+          role
+        FROM reimbursement_report_sources
+        WHERE raw_message_id = ?
+      `,
+    )
+    .get(input.rawMessageId) as
+    | {
+        reimbursementReportId: number;
+        role: string;
+      }
+    | undefined;
+
+  if (!source || source.role !== "remark") {
+    throw new Error(`Remark source not found for raw message: ${input.rawMessageId}`);
+  }
+
+  if (source.reimbursementReportId === input.targetReimbursementReportId) {
+    const report = selectReportById(input.targetReimbursementReportId);
+    return {
+      sourceReport: report,
+      targetReport: report,
+    };
+  }
+
+  db.transaction(() => {
+    db.prepare(
+      `
+        UPDATE reimbursement_report_sources
+        SET reimbursement_report_id = ?
+        WHERE raw_message_id = ?
+      `,
+    ).run(input.targetReimbursementReportId, input.rawMessageId);
+
+    refreshReimbursementReportFromSources({
+      reimbursementReportId: source.reimbursementReportId,
+      timeZone: input.timeZone,
+      referenceDateTime: input.referenceDateTime,
+    });
+    refreshReimbursementReportFromSources({
+      reimbursementReportId: input.targetReimbursementReportId,
+      timeZone: input.timeZone,
+      referenceDateTime: input.referenceDateTime,
+    });
+  })();
+
+  return {
+    sourceReport: selectReportById(source.reimbursementReportId),
+    targetReport: selectReportById(input.targetReimbursementReportId),
+  };
 }
 
 export function listRecentReimbursementReports(limit = 10): ReimbursementReportRecord[] {
