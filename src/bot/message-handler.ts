@@ -12,9 +12,14 @@ import { extractLossReportByModel } from "../scenarios/loss-report/model-provide
 import { extractReimbursementReport } from "../scenarios/reimbursement/extractor.js";
 import {
   attachRemarkToReimbursementReport,
-  findRecentPrimaryImageReimbursementReport,
+  findForwardTextOnlyReimbursementReport,
+  findNextImageRawMessage,
+  findRecentImageRawMessage,
+  getReimbursementReportByRawMessageId,
+  mergePrimaryImageIntoTextOnlyReimbursementReport,
   saveReimbursementReport,
 } from "../scenarios/reimbursement/repository.js";
+import { resolveMessageSentAt } from "./cold-start-filter.js";
 import { sendTextToTarget } from "./delivery-contact.js";
 
 export interface MessageContext {
@@ -70,7 +75,7 @@ export async function handleMessage(message: any, context: MessageContext, logge
   const typeValue = typeof message.type === "function" ? message.type() : "unknown";
   const normalizedText = normalizeMessageText(text, typeValue);
   const messageId = typeof message.id === "function" ? message.id() : message.id || cryptoRandomId();
-  const eventReceivedAt = new Date().toISOString();
+  const eventReceivedAt = resolveMessageEventTime(message);
   const attachments: StoredAttachment[] = [];
 
   if (isImageLikeMessage(typeValue, normalizedText)) {
@@ -297,10 +302,63 @@ async function handleReimbursementMessage(
     senderName: parsed.senderName,
   });
 
+  let forwardTextReport = null;
+
+  if (parsed.attachments.length > 0 && context.lossMergeWindowSeconds > 0) {
+    const currentTime = new Date(parsed.eventReceivedAt).getTime();
+    const maxUntilIso = new Date(currentTime + context.lossMergeWindowSeconds * 1000).toISOString();
+    const nextImageRawMessage = findNextImageRawMessage({
+      afterIso: parsed.eventReceivedAt,
+      channelCode: parsed.channel.code,
+      channelName: parsed.roomTopic,
+      senderExternalId: parsed.senderExternalId,
+      senderName: parsed.senderName,
+      untilIso: maxUntilIso,
+    });
+    const untilIso = nextImageRawMessage?.eventReceivedAt ?? maxUntilIso;
+    logger.info("Checking forward reimbursement text context for image merge", {
+      afterIso: parsed.eventReceivedAt,
+      channelCode: parsed.channel.code,
+      messageExternalId: parsed.messageExternalId,
+      nextImageRawMessageId: nextImageRawMessage?.rawMessageId,
+      rawMessageId: saveResult.rawMessageId,
+      roomTopic: parsed.roomTopic,
+      senderName: parsed.senderName,
+      untilIso,
+    });
+    forwardTextReport = findForwardTextOnlyReimbursementReport({
+      afterIso: parsed.eventReceivedAt,
+      channelCode: parsed.channel.code,
+      channelName: parsed.roomTopic,
+      senderExternalId: parsed.senderExternalId,
+      senderName: parsed.senderName,
+      untilIso,
+    });
+
+    if (forwardTextReport) {
+      logger.info("Matched forward reimbursement text context for image merge", {
+        channelCode: parsed.channel.code,
+        matchedReportId: forwardTextReport.id,
+        messageExternalId: parsed.messageExternalId,
+        rawMessageId: saveResult.rawMessageId,
+        roomTopic: parsed.roomTopic,
+        senderName: parsed.senderName,
+      });
+    } else {
+      logger.info("No forward reimbursement text context matched for image merge", {
+        channelCode: parsed.channel.code,
+        messageExternalId: parsed.messageExternalId,
+        rawMessageId: saveResult.rawMessageId,
+        roomTopic: parsed.roomTopic,
+        senderName: parsed.senderName,
+      });
+    }
+  }
+
   if (isTextOnlyMessage(parsed) && context.lossMergeWindowSeconds > 0) {
     const currentTime = new Date(parsed.eventReceivedAt).getTime();
     const sinceIso = new Date(currentTime - context.lossMergeWindowSeconds * 1000).toISOString();
-    logger.info("Checking recent reimbursement image context for remark merge", {
+    logger.info("Checking recent reimbursement image raw context for remark merge", {
       channelCode: parsed.channel.code,
       messageExternalId: parsed.messageExternalId,
       rawMessageId: saveResult.rawMessageId,
@@ -309,7 +367,7 @@ async function handleReimbursementMessage(
       sinceIso,
       text: parsed.normalizedText,
     });
-    const recentImageReport = findRecentPrimaryImageReimbursementReport({
+    const recentImageRawMessage = findRecentImageRawMessage({
       beforeIso: parsed.eventReceivedAt,
       channelCode: parsed.channel.code,
       channelName: parsed.roomTopic,
@@ -318,89 +376,103 @@ async function handleReimbursementMessage(
       sinceIso,
     });
 
-    if (recentImageReport) {
-      logger.info("Matched reimbursement image context for remark merge", {
-        channelCode: parsed.channel.code,
-        matchedReportId: recentImageReport.id,
-        messageExternalId: parsed.messageExternalId,
-        rawMessageId: saveResult.rawMessageId,
-        roomTopic: parsed.roomTopic,
-        senderName: parsed.senderName,
-      });
-      const updatedReport = attachRemarkToReimbursementReport({
-        reimbursementReportId: recentImageReport.id,
-        rawMessageId: saveResult.rawMessageId,
-        note: parsed.normalizedText,
-      });
-      logger.info("Updated reimbursement report with merged remark", {
-        amount: updatedReport.amount,
-        channelCode: parsed.channel.code,
-        evidenceType: updatedReport.evidenceType,
-        messageExternalId: parsed.messageExternalId,
-        note: updatedReport.note,
-        rawMessageId: saveResult.rawMessageId,
-        reimbursementReportId: updatedReport.id,
-        senderName: parsed.senderName,
-      });
-      const savedExtraction = saveScenarioExtraction({
-        rawMessageId: saveResult.rawMessageId,
-        scenarioCode: "reimbursement",
-        extractorCode: "remark-link-v1",
-        status: "extracted",
-        confidence: updatedReport.confidence,
-        needsReview: updatedReport.needsReview,
-        resultJson: {
-          eventType: "reimbursement_report_remark",
+    if (recentImageRawMessage) {
+      const recentImageReport = getReimbursementReportByRawMessageId(recentImageRawMessage.rawMessageId);
+
+      if (!recentImageReport) {
+        logger.info("Recent reimbursement image raw message has no persisted report yet", {
+          channelCode: parsed.channel.code,
+          imageRawMessageId: recentImageRawMessage.rawMessageId,
+          messageExternalId: parsed.messageExternalId,
+          rawMessageId: saveResult.rawMessageId,
+          roomTopic: parsed.roomTopic,
+          senderName: parsed.senderName,
+        });
+      } else {
+        logger.info("Matched reimbursement image context for remark merge", {
+          channelCode: parsed.channel.code,
+          imageRawMessageId: recentImageRawMessage.rawMessageId,
+          matchedReportId: recentImageReport.id,
+          messageExternalId: parsed.messageExternalId,
+          rawMessageId: saveResult.rawMessageId,
+          roomTopic: parsed.roomTopic,
+          senderName: parsed.senderName,
+        });
+        const updatedReport = attachRemarkToReimbursementReport({
+          reimbursementReportId: recentImageReport.id,
+          rawMessageId: saveResult.rawMessageId,
+          note: parsed.normalizedText,
+        });
+        logger.info("Updated reimbursement report with merged remark", {
+          amount: updatedReport.amount,
+          channelCode: parsed.channel.code,
+          evidenceType: updatedReport.evidenceType,
+          messageExternalId: parsed.messageExternalId,
+          note: updatedReport.note,
           rawMessageId: saveResult.rawMessageId,
           reimbursementReportId: updatedReport.id,
-          note: parsed.normalizedText,
-        },
-      });
-      logger.info("Persisted reimbursement remark linkage extraction", {
+          senderName: parsed.senderName,
+        });
+        const savedExtraction = saveScenarioExtraction({
+          rawMessageId: saveResult.rawMessageId,
+          scenarioCode: "reimbursement",
+          extractorCode: "remark-link-v1",
+          status: "extracted",
+          confidence: updatedReport.confidence,
+          needsReview: updatedReport.needsReview,
+          resultJson: {
+            eventType: "reimbursement_report_remark",
+            rawMessageId: saveResult.rawMessageId,
+            reimbursementReportId: updatedReport.id,
+            note: parsed.normalizedText,
+          },
+        });
+        logger.info("Persisted reimbursement remark linkage extraction", {
+          channelCode: parsed.channel.code,
+          extractionId: savedExtraction.id,
+          extractorCode: savedExtraction.extractorCode,
+          messageExternalId: parsed.messageExternalId,
+          rawMessageId: saveResult.rawMessageId,
+          reimbursementReportId: updatedReport.id,
+          scenarioStatus: savedExtraction.status,
+        });
+
+        logger.info("Received reimbursement room message", {
+          attachmentsCount: parsed.attachments.length,
+          channelCode: parsed.channel.code,
+          inserted: saveResult.inserted,
+          rawMessageId: saveResult.rawMessageId,
+          reimbursementReportId: updatedReport.id,
+          roomTopic: parsed.roomTopic,
+          scenarioStatus: savedExtraction.status,
+          senderName: parsed.senderName,
+          text: parsed.normalizedText,
+          typeValue: parsed.typeValue,
+        });
+
+        await sendDebugNotification(message, context, logger, parsed.channel, [
+          "[wechat-claw] 已收到群消息",
+          `逻辑频道: ${parsed.channel.code}`,
+          `场景: 报账`,
+          `群聊: ${parsed.roomTopic}`,
+          `发送人: ${parsed.senderName}`,
+          `消息类型: ${parsed.messageType}`,
+          `内容: ${parsed.normalizedText}`,
+          `附件数: ${parsed.attachments.length}`,
+          `入库: ${saveResult.inserted ? "新消息" : "已去重"}`,
+          `报账处理: 备注合并 / report=${updatedReport.id}`,
+        ]);
+        return;
+      }
+    } else {
+      logger.info("No reimbursement image raw context matched for remark merge", {
         channelCode: parsed.channel.code,
-        extractionId: savedExtraction.id,
-        extractorCode: savedExtraction.extractorCode,
         messageExternalId: parsed.messageExternalId,
         rawMessageId: saveResult.rawMessageId,
-        reimbursementReportId: updatedReport.id,
-        scenarioStatus: savedExtraction.status,
-      });
-
-      logger.info("Received reimbursement room message", {
-        attachmentsCount: parsed.attachments.length,
-        channelCode: parsed.channel.code,
-        inserted: saveResult.inserted,
-        rawMessageId: saveResult.rawMessageId,
-        reimbursementReportId: updatedReport.id,
         roomTopic: parsed.roomTopic,
-        scenarioStatus: savedExtraction.status,
         senderName: parsed.senderName,
-        text: parsed.normalizedText,
-        typeValue: parsed.typeValue,
       });
-
-      await sendDebugNotification(message, context, logger, parsed.channel, [
-        "[wechat-claw] 已收到群消息",
-        `逻辑频道: ${parsed.channel.code}`,
-        `场景: 报账`,
-        `群聊: ${parsed.roomTopic}`,
-        `发送人: ${parsed.senderName}`,
-        `消息类型: ${parsed.messageType}`,
-        `内容: ${parsed.normalizedText}`,
-        `附件数: ${parsed.attachments.length}`,
-        `入库: ${saveResult.inserted ? "新消息" : "已去重"}`,
-        `报账处理: 备注合并 / report=${updatedReport.id}`,
-      ]);
-      return;
     }
-
-    logger.info("No reimbursement image context matched for remark merge", {
-      channelCode: parsed.channel.code,
-      messageExternalId: parsed.messageExternalId,
-      rawMessageId: saveResult.rawMessageId,
-      roomTopic: parsed.roomTopic,
-      senderName: parsed.senderName,
-    });
   }
 
   logger.info("Starting reimbursement extraction", {
@@ -458,25 +530,42 @@ async function handleReimbursementMessage(
     rawMessageId: saveResult.rawMessageId,
     senderName: parsed.senderName,
   });
-  const report = saveReimbursementReport({
-    channelCode: parsed.channel.code,
-    channelName: parsed.roomTopic,
-    reporter: parsed.senderName,
-    amount: extraction.resultJson.amount,
-    currency: extraction.resultJson.currency,
-    expenseCategory: extraction.resultJson.expenseCategory,
-    voucherDate: extraction.resultJson.voucherDate,
-    voucherDateSource: extraction.resultJson.voucherDateSource,
-    note: extraction.resultJson.note,
-    evidenceType: extraction.resultJson.evidenceType,
-    merchant: extraction.resultJson.merchant,
-    documentNo: extraction.resultJson.documentNo,
-    voucherType: extraction.resultJson.voucherType,
-    ocrText: extraction.resultJson.ocrText,
-    confidence: extraction.confidence,
-    needsReview: extraction.needsReview,
-    primaryRawMessageId: saveResult.rawMessageId,
-  });
+  const report = forwardTextReport
+    ? mergePrimaryImageIntoTextOnlyReimbursementReport({
+        reimbursementReportId: forwardTextReport.id,
+        imageRawMessageId: saveResult.rawMessageId,
+        amount: extraction.resultJson.amount,
+        currency: extraction.resultJson.currency,
+        expenseCategory: extraction.resultJson.expenseCategory,
+        voucherDate: extraction.resultJson.voucherDate,
+        voucherDateSource: extraction.resultJson.voucherDateSource,
+        note: extraction.resultJson.note,
+        merchant: extraction.resultJson.merchant,
+        documentNo: extraction.resultJson.documentNo,
+        voucherType: extraction.resultJson.voucherType,
+        ocrText: extraction.resultJson.ocrText,
+        confidence: extraction.confidence,
+        needsReview: extraction.needsReview,
+      })
+    : saveReimbursementReport({
+        channelCode: parsed.channel.code,
+        channelName: parsed.roomTopic,
+        reporter: parsed.senderName,
+        amount: extraction.resultJson.amount,
+        currency: extraction.resultJson.currency,
+        expenseCategory: extraction.resultJson.expenseCategory,
+        voucherDate: extraction.resultJson.voucherDate,
+        voucherDateSource: extraction.resultJson.voucherDateSource,
+        note: extraction.resultJson.note,
+        evidenceType: extraction.resultJson.evidenceType,
+        merchant: extraction.resultJson.merchant,
+        documentNo: extraction.resultJson.documentNo,
+        voucherType: extraction.resultJson.voucherType,
+        ocrText: extraction.resultJson.ocrText,
+        confidence: extraction.confidence,
+        needsReview: extraction.needsReview,
+        primaryRawMessageId: saveResult.rawMessageId,
+      });
   logger.info("Persisted reimbursement report", {
     amount: report.amount,
     channelCode: parsed.channel.code,
@@ -487,6 +576,7 @@ async function handleReimbursementMessage(
     rawMessageId: saveResult.rawMessageId,
     reimbursementReportId: report.id,
     senderName: parsed.senderName,
+    mergedFromForwardTextReport: Boolean(forwardTextReport),
   });
   const savedExtraction = saveScenarioExtraction({
     rawMessageId: saveResult.rawMessageId,
@@ -655,6 +745,11 @@ function isTextOnlyUrlMessage(input: ParsedRoomMessage) {
 
 function containsUrl(text: string) {
   return /(https?:\/\/|www\.|[a-z0-9.-]+\.(?:com|cn|net|org|io|top|shop|xyz|me)(?:\/|\b))/i.test(text);
+}
+
+function resolveMessageEventTime(message: any) {
+  const now = new Date();
+  return resolveMessageSentAt(message, now)?.toISOString() ?? now.toISOString();
 }
 
 function isXmlImagePayload(text: string, typeValue: unknown) {

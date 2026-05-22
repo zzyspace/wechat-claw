@@ -50,7 +50,7 @@ export function shouldIgnoreColdStartMessage(
   };
 }
 
-function resolveMessageSentAt(message: any, now: Date): Date | undefined {
+export function resolveMessageSentAt(message: any, now: Date): Date | undefined {
   if (message && typeof message.date === "function") {
     try {
       const value = message.date();

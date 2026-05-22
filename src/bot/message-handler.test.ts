@@ -361,8 +361,156 @@ test("handleMessage stores reimbursement images under reimbursement raw dir and 
   assert.equal(updatedReport.evidenceType, "image+text");
   assert.equal(updatedReport.note, "这张是昨天晚餐食材");
   assert.equal(listRecentReimbursementReports(1000).filter((report) => report.id === imageReport.id).length, 1);
-  assert(logs.some((entry) => entry.message === "Checking recent reimbursement image context for remark merge"));
+  assert(logs.some((entry) => entry.message === "Checking recent reimbursement image raw context for remark merge"));
   assert(logs.some((entry) => entry.message === "Matched reimbursement image context for remark merge"));
   assert(logs.some((entry) => entry.message === "Updated reimbursement report with merged remark"));
   assert(logs.some((entry) => entry.message === "Persisted reimbursement remark linkage extraction"));
+});
+
+test("handleMessage does not merge reimbursement text followed by image", { concurrency: false }, async () => {
+  const logs: Array<{ level: string; message: string; context?: Record<string, unknown> }> = [];
+  const textMessageId = "reimbursement-text-before-image-test";
+  const imageMessageId = "reimbursement-image-after-text-test";
+  const context = createMessageContext([createReimbursementChannel()]);
+  const beforeReportCount = listRecentReimbursementReports(1000).length;
+
+  await handleMessage(
+    {
+      id: () => textMessageId,
+      room: async () => ({
+        alias: async () => "小赵",
+        id: () => "reimbursement_room_2",
+        topic: async () => "AI报账群",
+      }),
+      self: () => false,
+      talker: async () => ({
+        id: () => "reimbursement_talker_text_first",
+        name: () => "Ryan。",
+      }),
+      text: () => "昨晚外卖报账 42元",
+      type: () => 7,
+    },
+    context,
+    createLogger(logs),
+  );
+
+  const textReport = listRecentReimbursementReports(1000).find(
+    (report) => report.reporter === "小赵" && report.note === "昨晚外卖报账 42元",
+  );
+  assert(textReport);
+  assert.equal(textReport.evidenceType, "text");
+  assert.equal(textReport.amount, 42);
+  assert.equal(listRecentReimbursementReports(1000).length, beforeReportCount + 1);
+
+  await handleMessage(
+    {
+      id: () => imageMessageId,
+      room: async () => ({
+        alias: async () => "小赵",
+        id: () => "reimbursement_room_2",
+        topic: async () => "AI报账群",
+      }),
+      self: () => false,
+      talker: async () => ({
+        id: () => "reimbursement_talker_text_first",
+        name: () => "Ryan。",
+      }),
+      text: () => "",
+      toFileBox: async () => ({
+        name: "order.jpg",
+        toBuffer: async () => Buffer.from([0xff, 0xd8, 0xff, 0xd9]),
+      }),
+      type: () => 6,
+    },
+    context,
+    createLogger(logs),
+  );
+
+  const reports = listRecentReimbursementReports(1000).filter(
+    (report) => report.reporter === "小赵" && report.note === "昨晚外卖报账 42元",
+  );
+  const originalTextReport = reports.find((report) => report.id === textReport.id);
+  const imageRawMessage = listRecentRawMessages(1000).find(
+    (message) => message.messageExternalId === imageMessageId,
+  );
+  const imageOnlyReport = listRecentReimbursementReports(1000).find(
+    (report) => report.reporter === "小赵" && report.id !== textReport.id && report.evidenceType === "image",
+  );
+
+  assert.equal(reports.length, 1);
+  assert(originalTextReport);
+  assert(imageRawMessage);
+  assert(imageOnlyReport);
+  assert.equal(originalTextReport.evidenceType, "text");
+  assert.equal(originalTextReport.note, "昨晚外卖报账 42元");
+  assert.equal(originalTextReport.amount, 42);
+  assert.equal(imageOnlyReport.evidenceType, "image");
+  assert.equal(listRecentReimbursementReports(1000).length, beforeReportCount + 2);
+  assert(logs.some((entry) => entry.message === "No forward reimbursement text context matched for image merge"));
+});
+
+test("handleMessage merges reimbursement image sent first even when text is processed first", { concurrency: false }, async () => {
+  const logs: Array<{ level: string; message: string; context?: Record<string, unknown> }> = [];
+  const imageMessageId = "reimbursement-image-sent-first-text-processed-first-image";
+  const textMessageId = "reimbursement-text-processed-first-after-image";
+  const context = createMessageContext([createReimbursementChannel()]);
+  const imageSentAt = new Date("2026-05-22T10:00:00.000Z");
+  const textSentAt = new Date("2026-05-22T10:00:05.000Z");
+  const beforeReportCount = listRecentReimbursementReports(1000).length;
+
+  await handleMessage(
+    {
+      id: () => textMessageId,
+      date: () => textSentAt,
+      room: async () => ({
+        alias: async () => "小孙",
+        id: () => "reimbursement_room_3",
+        topic: async () => "AI报账群",
+      }),
+      self: () => false,
+      talker: async () => ({
+        id: () => "reimbursement_talker_race",
+        name: () => "Ryan。",
+      }),
+      text: () => "午餐外卖 35元",
+      type: () => 7,
+    },
+    context,
+    createLogger(logs),
+  );
+
+  await handleMessage(
+    {
+      id: () => imageMessageId,
+      date: () => imageSentAt,
+      room: async () => ({
+        alias: async () => "小孙",
+        id: () => "reimbursement_room_3",
+        topic: async () => "AI报账群",
+      }),
+      self: () => false,
+      talker: async () => ({
+        id: () => "reimbursement_talker_race",
+        name: () => "Ryan。",
+      }),
+      text: () => "",
+      toFileBox: async () => ({
+        name: "meal.jpg",
+        toBuffer: async () => Buffer.from([0xff, 0xd8, 0xff, 0xd9]),
+      }),
+      type: () => 6,
+    },
+    context,
+    createLogger(logs),
+  );
+
+  const reports = listRecentReimbursementReports(1000).filter(
+    (report) => report.reporter === "小孙" && report.note === "午餐外卖 35元",
+  );
+
+  assert.equal(reports.length, 1);
+  assert.equal(reports[0]?.evidenceType, "image+text");
+  assert.equal(reports[0]?.amount, 35);
+  assert.equal(listRecentReimbursementReports(1000).length, beforeReportCount + 1);
+  assert(logs.some((entry) => entry.message === "Matched forward reimbursement text context for image merge"));
 });

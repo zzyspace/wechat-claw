@@ -20,6 +20,38 @@ export interface RecentPrimaryImageReportLookupInput {
   sinceIso: string;
 }
 
+export interface ForwardTextOnlyReportLookupInput {
+  channelCode?: string;
+  channelName: string;
+  senderExternalId?: string;
+  senderName: string;
+  afterIso: string;
+  untilIso: string;
+}
+
+export interface RecentImageRawMessageLookupInput {
+  beforeIso: string;
+  channelCode?: string;
+  channelName: string;
+  senderExternalId?: string;
+  senderName: string;
+  sinceIso: string;
+}
+
+export interface NextImageRawMessageLookupInput {
+  afterIso: string;
+  channelCode?: string;
+  channelName: string;
+  senderExternalId?: string;
+  senderName: string;
+  untilIso: string;
+}
+
+export interface ImageRawMessageMatch {
+  rawMessageId: number;
+  eventReceivedAt: string;
+}
+
 function mapReportRow(row: {
   id: number;
   channelCode?: string | null;
@@ -215,6 +247,102 @@ export function findRecentPrimaryImageReimbursementReport(
   return row ? selectReportById(row.id) : null;
 }
 
+export function findForwardTextOnlyReimbursementReport(
+  input: ForwardTextOnlyReportLookupInput,
+): ReimbursementReportRecord | null {
+  const db = getDatabase();
+  const senderCondition = input.senderExternalId
+    ? "rm.sender_external_id = ?"
+    : "rm.sender_name = ?";
+  const senderValue = input.senderExternalId ?? input.senderName;
+  const channelCondition = input.channelCode ? "rm.channel_code = ?" : "rm.channel_name = ?";
+  const channelValue = input.channelCode ?? input.channelName;
+  const row = db
+    .prepare(
+      `
+        SELECT rr.id
+        FROM reimbursement_reports rr
+        INNER JOIN reimbursement_report_sources rrs
+          ON rrs.reimbursement_report_id = rr.id AND rrs.role = 'primary'
+        INNER JOIN raw_messages rm ON rm.id = rrs.raw_message_id
+        WHERE ${channelCondition}
+          AND ${senderCondition}
+          AND rm.event_received_at > ?
+          AND rm.event_received_at < ?
+          AND rr.evidence_type = 'text'
+        ORDER BY rm.event_received_at ASC, rr.id DESC
+        LIMIT 1
+      `,
+    )
+    .get(channelValue, senderValue, input.afterIso, input.untilIso) as
+    | { id: number }
+    | undefined;
+
+  return row ? selectReportById(row.id) : null;
+}
+
+export function findRecentImageRawMessage(
+  input: RecentImageRawMessageLookupInput,
+): ImageRawMessageMatch | null {
+  const db = getDatabase();
+  const senderCondition = input.senderExternalId
+    ? "rm.sender_external_id = ?"
+    : "rm.sender_name = ?";
+  const senderValue = input.senderExternalId ?? input.senderName;
+  const channelCondition = input.channelCode ? "rm.channel_code = ?" : "rm.channel_name = ?";
+  const channelValue = input.channelCode ?? input.channelName;
+  const row = db
+    .prepare(
+      `
+        SELECT
+          rm.id as rawMessageId,
+          rm.event_received_at as eventReceivedAt
+        FROM raw_messages rm
+        INNER JOIN message_attachments ma ON ma.raw_message_id = rm.id
+        WHERE ${channelCondition}
+          AND ${senderCondition}
+          AND rm.event_received_at >= ?
+          AND rm.event_received_at < ?
+        ORDER BY rm.event_received_at DESC, rm.id DESC
+        LIMIT 1
+      `,
+    )
+    .get(channelValue, senderValue, input.sinceIso, input.beforeIso) as ImageRawMessageMatch | undefined;
+
+  return row ?? null;
+}
+
+export function findNextImageRawMessage(
+  input: NextImageRawMessageLookupInput,
+): ImageRawMessageMatch | null {
+  const db = getDatabase();
+  const senderCondition = input.senderExternalId
+    ? "rm.sender_external_id = ?"
+    : "rm.sender_name = ?";
+  const senderValue = input.senderExternalId ?? input.senderName;
+  const channelCondition = input.channelCode ? "rm.channel_code = ?" : "rm.channel_name = ?";
+  const channelValue = input.channelCode ?? input.channelName;
+  const row = db
+    .prepare(
+      `
+        SELECT
+          rm.id as rawMessageId,
+          rm.event_received_at as eventReceivedAt
+        FROM raw_messages rm
+        INNER JOIN message_attachments ma ON ma.raw_message_id = rm.id
+        WHERE ${channelCondition}
+          AND ${senderCondition}
+          AND rm.event_received_at > ?
+          AND rm.event_received_at < ?
+        ORDER BY rm.event_received_at ASC, rm.id ASC
+        LIMIT 1
+      `,
+    )
+    .get(channelValue, senderValue, input.afterIso, input.untilIso) as ImageRawMessageMatch | undefined;
+
+  return row ?? null;
+}
+
 export function addReimbursementReportSource(input: {
   reimbursementReportId: number;
   rawMessageId: number;
@@ -283,12 +411,99 @@ export function attachRemarkToReimbursementReport(input: {
       `
         UPDATE reimbursement_reports
         SET
-          note = ?,
+          note = CASE
+            WHEN note = '' THEN ?
+            WHEN ? = '' THEN note
+            WHEN note = ? THEN note
+            ELSE note || '；' || ?
+          END,
           evidence_type = 'image+text',
           updated_at = datetime('now')
         WHERE id = ?
       `,
-    ).run(input.note, input.reimbursementReportId);
+    ).run(input.note, input.note, input.note, input.note, input.reimbursementReportId);
+  })();
+
+  return selectReportById(input.reimbursementReportId);
+}
+
+export function mergePrimaryImageIntoTextOnlyReimbursementReport(input: {
+  reimbursementReportId: number;
+  imageRawMessageId: number;
+  amount: number | null;
+  currency: string;
+  expenseCategory: ReimbursementExpenseCategory;
+  voucherDate: string;
+  voucherDateSource: ReimbursementVoucherDateSource;
+  note: string;
+  merchant: string | null;
+  documentNo: string | null;
+  voucherType: string | null;
+  ocrText: string | null;
+  confidence: number;
+  needsReview: boolean;
+}): ReimbursementReportRecord {
+  const db = getDatabase();
+  const existing = selectReportById(input.reimbursementReportId);
+  const mergedNote = mergeReportNotes(existing.note, input.note);
+  const mergedAmount = input.amount ?? existing.amount;
+  const mergedCurrency = input.amount !== null ? input.currency : existing.currency;
+  const mergedExpenseCategory =
+    existing.expenseCategory === "food" || input.expenseCategory === "food" ? "food" : "other";
+  const mergedVoucherDate = input.voucherDateSource === "model" ? input.voucherDate : existing.voucherDate;
+  const mergedVoucherDateSource =
+    input.voucherDateSource === "model" ? input.voucherDateSource : existing.voucherDateSource;
+
+  db.transaction(() => {
+    db.prepare(
+      `
+        UPDATE reimbursement_report_sources
+        SET role = 'remark'
+        WHERE reimbursement_report_id = ? AND role = 'primary'
+      `,
+    ).run(input.reimbursementReportId);
+
+    addReimbursementReportSource({
+      reimbursementReportId: input.reimbursementReportId,
+      rawMessageId: input.imageRawMessageId,
+      role: "primary",
+    });
+
+    db.prepare(
+      `
+        UPDATE reimbursement_reports
+        SET
+          amount = ?,
+          currency = ?,
+          expense_category = ?,
+          voucher_date = ?,
+          voucher_date_source = ?,
+          note = ?,
+          evidence_type = 'image+text',
+          merchant = ?,
+          document_no = ?,
+          voucher_type = ?,
+          ocr_text = ?,
+          confidence = ?,
+          needs_review = ?,
+          updated_at = datetime('now')
+        WHERE id = ?
+      `,
+    ).run(
+      mergedAmount,
+      mergedCurrency,
+      mergedExpenseCategory,
+      mergedVoucherDate,
+      mergedVoucherDateSource,
+      mergedNote,
+      input.merchant ?? existing.merchant,
+      input.documentNo ?? existing.documentNo,
+      input.voucherType ?? existing.voucherType,
+      input.ocrText ?? existing.ocrText,
+      Math.max(existing.confidence, input.confidence),
+      existing.needsReview || input.needsReview ? 1 : 0,
+      input.reimbursementReportId,
+    );
   })();
 
   return selectReportById(input.reimbursementReportId);
@@ -440,4 +655,16 @@ export function listReimbursementReportDetails(options?: {
     ...report,
     sources: sourcesByReportId.get(report.id) ?? [],
   }));
+}
+
+function mergeReportNotes(left: string, right: string) {
+  if (!left) {
+    return right;
+  }
+
+  if (!right || left === right) {
+    return left;
+  }
+
+  return `${left}；${right}`;
 }
