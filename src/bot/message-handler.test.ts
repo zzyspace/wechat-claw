@@ -514,3 +514,66 @@ test("handleMessage merges reimbursement image sent first even when text is proc
   assert.equal(listRecentReimbursementReports(1000).length, beforeReportCount + 1);
   assert(logs.some((entry) => entry.message === "Matched forward reimbursement text context for image merge"));
 });
+
+test("handleMessage merges reimbursement image and text when they share the same second timestamp", { concurrency: false }, async () => {
+  const logs: Array<{ level: string; message: string; context?: Record<string, unknown> }> = [];
+  const imageMessageId = "reimbursement-image-same-second-test";
+  const textMessageId = "reimbursement-text-same-second-test";
+  const context = createMessageContext([createReimbursementChannel()]);
+  const sameSecond = new Date("2026-05-22T10:10:10.000Z");
+  const beforeReportCount = listRecentReimbursementReports(1000).length;
+
+  await handleMessage(
+    {
+      id: () => imageMessageId,
+      date: () => sameSecond,
+      room: async () => ({
+        alias: async () => "小周",
+        id: () => "reimbursement_room_4",
+        topic: async () => "AI报账群",
+      }),
+      self: () => false,
+      talker: async () => ({
+        id: () => "reimbursement_talker_same_second",
+        name: () => "Ryan。",
+      }),
+      text: () => "",
+      toFileBox: async () => ({
+        name: "same-second.jpg",
+        toBuffer: async () => Buffer.from([0xff, 0xd8, 0xff, 0xd9]),
+      }),
+      type: () => 6,
+    },
+    context,
+    createLogger(logs),
+  );
+
+  await handleMessage(
+    {
+      id: () => textMessageId,
+      date: () => sameSecond,
+      room: async () => ({
+        alias: async () => "小周",
+        id: () => "reimbursement_room_4",
+        topic: async () => "AI报账群",
+      }),
+      self: () => false,
+      talker: async () => ({
+        id: () => "reimbursement_talker_same_second",
+        name: () => "Ryan。",
+      }),
+      text: () => "平",
+      type: () => 7,
+    },
+    context,
+    createLogger(logs),
+  );
+
+  const reports = listRecentReimbursementReports(1000).filter((report) => report.reporter === "小周");
+
+  assert.equal(reports.length, 1);
+  assert.equal(reports[0]?.evidenceType, "image+text");
+  assert.equal(reports[0]?.note, "平");
+  assert.equal(listRecentReimbursementReports(1000).length, beforeReportCount + 1);
+  assert(logs.some((entry) => entry.message === "Matched reimbursement image context for remark merge"));
+});

@@ -27,6 +27,7 @@ export interface ForwardTextOnlyReportLookupInput {
   senderName: string;
   afterIso: string;
   untilIso: string;
+  currentRawMessageId?: number;
 }
 
 export interface RecentImageRawMessageLookupInput {
@@ -36,6 +37,7 @@ export interface RecentImageRawMessageLookupInput {
   senderExternalId?: string;
   senderName: string;
   sinceIso: string;
+  currentRawMessageId?: number;
 }
 
 export interface NextImageRawMessageLookupInput {
@@ -45,6 +47,7 @@ export interface NextImageRawMessageLookupInput {
   senderExternalId?: string;
   senderName: string;
   untilIso: string;
+  currentRawMessageId?: number;
 }
 
 export interface ImageRawMessageMatch {
@@ -267,14 +270,28 @@ export function findForwardTextOnlyReimbursementReport(
         INNER JOIN raw_messages rm ON rm.id = rrs.raw_message_id
         WHERE ${channelCondition}
           AND ${senderCondition}
-          AND rm.event_received_at > ?
+          AND (
+            rm.event_received_at > ?
+            OR (
+              rm.event_received_at = ?
+              AND (? IS NULL OR rm.id > ?)
+            )
+          )
           AND rm.event_received_at < ?
           AND rr.evidence_type = 'text'
-        ORDER BY rm.event_received_at ASC, rr.id DESC
+        ORDER BY rm.event_received_at ASC, rm.id ASC, rr.id DESC
         LIMIT 1
       `,
     )
-    .get(channelValue, senderValue, input.afterIso, input.untilIso) as
+    .get(
+      channelValue,
+      senderValue,
+      input.afterIso,
+      input.afterIso,
+      input.currentRawMessageId ?? null,
+      input.currentRawMessageId ?? null,
+      input.untilIso,
+    ) as
     | { id: number }
     | undefined;
 
@@ -302,12 +319,26 @@ export function findRecentImageRawMessage(
         WHERE ${channelCondition}
           AND ${senderCondition}
           AND rm.event_received_at >= ?
-          AND rm.event_received_at < ?
+          AND (
+            rm.event_received_at < ?
+            OR (
+              rm.event_received_at = ?
+              AND (? IS NULL OR rm.id < ?)
+            )
+          )
         ORDER BY rm.event_received_at DESC, rm.id DESC
         LIMIT 1
       `,
     )
-    .get(channelValue, senderValue, input.sinceIso, input.beforeIso) as ImageRawMessageMatch | undefined;
+    .get(
+      channelValue,
+      senderValue,
+      input.sinceIso,
+      input.beforeIso,
+      input.beforeIso,
+      input.currentRawMessageId ?? null,
+      input.currentRawMessageId ?? null,
+    ) as ImageRawMessageMatch | undefined;
 
   return row ?? null;
 }
@@ -332,13 +363,27 @@ export function findNextImageRawMessage(
         INNER JOIN message_attachments ma ON ma.raw_message_id = rm.id
         WHERE ${channelCondition}
           AND ${senderCondition}
-          AND rm.event_received_at > ?
+          AND (
+            rm.event_received_at > ?
+            OR (
+              rm.event_received_at = ?
+              AND (? IS NULL OR rm.id > ?)
+            )
+          )
           AND rm.event_received_at < ?
         ORDER BY rm.event_received_at ASC, rm.id ASC
         LIMIT 1
       `,
     )
-    .get(channelValue, senderValue, input.afterIso, input.untilIso) as ImageRawMessageMatch | undefined;
+    .get(
+      channelValue,
+      senderValue,
+      input.afterIso,
+      input.afterIso,
+      input.currentRawMessageId ?? null,
+      input.currentRawMessageId ?? null,
+      input.untilIso,
+    ) as ImageRawMessageMatch | undefined;
 
   return row ?? null;
 }
