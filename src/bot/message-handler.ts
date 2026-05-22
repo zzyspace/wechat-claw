@@ -75,8 +75,26 @@ export async function handleMessage(message: any, context: MessageContext, logge
   const typeValue = typeof message.type === "function" ? message.type() : "unknown";
   const normalizedText = normalizeMessageText(text, typeValue);
   const messageId = typeof message.id === "function" ? message.id() : message.id || cryptoRandomId();
+  const dateValue = readMessageDate(message);
+  const ageValue = readMessageAge(message);
+  const resolvedSentAt = resolveMessageSentAt(message, new Date());
   const eventReceivedAt = resolveMessageEventTime(message);
   const attachments: StoredAttachment[] = [];
+
+  if (channel.scenario === "reimbursement") {
+    logger.info("Resolved reimbursement message time", {
+      ageValue: ageValue ?? "(empty)",
+      channelCode: channel.code,
+      eventReceivedAt,
+      messageDate: dateValue ?? "(empty)",
+      messageExternalId: String(messageId),
+      messageType: String(typeValue),
+      resolvedSentAt: resolvedSentAt?.toISOString() ?? "(empty)",
+      roomTopic,
+      senderName,
+      text: normalizedText,
+    });
+  }
 
   if (isImageLikeMessage(typeValue, normalizedText)) {
     if (channel.scenario === "reimbursement") {
@@ -803,6 +821,32 @@ function containsUrl(text: string) {
 function resolveMessageEventTime(message: any) {
   const now = new Date();
   return resolveMessageSentAt(message, now)?.toISOString() ?? now.toISOString();
+}
+
+function readMessageDate(message: any) {
+  if (!message || typeof message.date !== "function") {
+    return undefined;
+  }
+
+  try {
+    const value = message.date();
+    return value instanceof Date && Number.isFinite(value.getTime()) ? value.toISOString() : String(value);
+  } catch (error) {
+    return `error:${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+function readMessageAge(message: any) {
+  if (!message || typeof message.age !== "function") {
+    return undefined;
+  }
+
+  try {
+    const value = message.age();
+    return Number.isFinite(Number(value)) ? Number(value) : String(value);
+  } catch (error) {
+    return `error:${error instanceof Error ? error.message : String(error)}`;
+  }
 }
 
 function isXmlImagePayload(text: string, typeValue: unknown) {
