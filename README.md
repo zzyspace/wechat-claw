@@ -107,6 +107,7 @@ WECHATY_CHANNELS_JSON=[{"code":"loss_a","enabled":true,"scenario":"loss-report",
   当前规则：
   - 报损图 + 文字：窗口内可合并为一条报损
   - 报账图片后文字：窗口内可作为备注合并到同一份报账
+  - 报账文字后图片：仅回看前 `3` 秒内的同人文字并合并到同一份报账
   - 图 + 图：不合并
   - 一条业务记录最多保留一张图片
 - `WECHATY_LOSS_EXTRACTION_PROVIDER`: 报损提取模型提供商
@@ -259,7 +260,7 @@ npm run inspect:reimbursements -- --channel reimbursement_a
 说明：
 
 - 每份报账会按一个区块打印，包含金额、类别、票据日期、备注、OCR 文本、是否需要复核
-- 同时会展开来源 raw message 明细，方便排查“图片 + 后续备注文字”是否合并正确
+- 同时会展开来源 raw message 明细，方便排查“图片 + 文字”是否合并正确
 - 没有报账数据时会打印 `status=empty`
 
 手工执行一次 watchdog 巡检：

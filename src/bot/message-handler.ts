@@ -15,12 +15,15 @@ import {
   findForwardTextOnlyReimbursementReport,
   findNextImageRawMessage,
   findRecentImageRawMessage,
+  findRecentTextOnlyReimbursementReport,
   getReimbursementReportByRawMessageId,
   mergePrimaryImageIntoTextOnlyReimbursementReport,
   saveReimbursementReport,
 } from "../scenarios/reimbursement/repository.js";
 import { resolveMessageSentAt } from "./cold-start-filter.js";
 import { sendTextToTarget } from "./delivery-contact.js";
+
+const REIMBURSEMENT_BACKWARD_TEXT_MERGE_WINDOW_SECONDS = 3;
 
 export interface MessageContext {
   channels: ChannelConfig[];
@@ -327,6 +330,7 @@ async function handleReimbursementMessage(
 
   let forwardTextReport = null;
   let forwardTextUntilIso: string | undefined;
+  let recentTextReport = null;
 
   if (parsed.attachments.length > 0 && context.lossMergeWindowSeconds > 0) {
     const currentTime = new Date(parsed.eventReceivedAt).getTime();
@@ -381,6 +385,67 @@ async function handleReimbursementMessage(
         roomTopic: parsed.roomTopic,
         senderName: parsed.senderName,
       });
+    }
+
+    if (!forwardTextReport) {
+      const backwardMergeWindowSeconds = Math.min(
+        context.lossMergeWindowSeconds,
+        REIMBURSEMENT_BACKWARD_TEXT_MERGE_WINDOW_SECONDS,
+      );
+
+      if (backwardMergeWindowSeconds > 0) {
+        const backwardSinceIso = new Date(currentTime - backwardMergeWindowSeconds * 1000).toISOString();
+        const previousImageRawMessage = findRecentImageRawMessage({
+          beforeIso: parsed.eventReceivedAt,
+          channelCode: parsed.channel.code,
+          channelName: parsed.roomTopic,
+          currentRawMessageId: saveResult.rawMessageId,
+          senderExternalId: parsed.senderExternalId,
+          senderName: parsed.senderName,
+          sinceIso: backwardSinceIso,
+        });
+        const sinceIso = previousImageRawMessage?.eventReceivedAt ?? backwardSinceIso;
+
+        logger.info("Checking recent reimbursement text context for image merge", {
+          channelCode: parsed.channel.code,
+          currentRawMessageId: saveResult.rawMessageId,
+          messageExternalId: parsed.messageExternalId,
+          previousImageRawMessageId: previousImageRawMessage?.rawMessageId,
+          roomTopic: parsed.roomTopic,
+          senderName: parsed.senderName,
+          sinceIso,
+          untilIso: parsed.eventReceivedAt,
+        });
+        recentTextReport = findRecentTextOnlyReimbursementReport({
+          beforeIso: parsed.eventReceivedAt,
+          channelCode: parsed.channel.code,
+          channelName: parsed.roomTopic,
+          currentRawMessageId: saveResult.rawMessageId,
+          senderExternalId: parsed.senderExternalId,
+          senderName: parsed.senderName,
+          sinceIso,
+          sinceRawMessageId: previousImageRawMessage?.rawMessageId,
+        });
+
+        if (recentTextReport) {
+          logger.info("Matched recent reimbursement text context for image merge", {
+            channelCode: parsed.channel.code,
+            matchedReportId: recentTextReport.id,
+            messageExternalId: parsed.messageExternalId,
+            rawMessageId: saveResult.rawMessageId,
+            roomTopic: parsed.roomTopic,
+            senderName: parsed.senderName,
+          });
+        } else {
+          logger.info("No recent reimbursement text context matched for image merge", {
+            channelCode: parsed.channel.code,
+            messageExternalId: parsed.messageExternalId,
+            rawMessageId: saveResult.rawMessageId,
+            roomTopic: parsed.roomTopic,
+            senderName: parsed.senderName,
+          });
+        }
+      }
     }
   }
 
@@ -606,9 +671,10 @@ async function handleReimbursementMessage(
     rawMessageId: saveResult.rawMessageId,
     senderName: parsed.senderName,
   });
-  const report = forwardTextReport
+  const mergeTargetReport = forwardTextReport ?? recentTextReport;
+  const report = mergeTargetReport
     ? mergePrimaryImageIntoTextOnlyReimbursementReport({
-        reimbursementReportId: forwardTextReport.id,
+        reimbursementReportId: mergeTargetReport.id,
         imageRawMessageId: saveResult.rawMessageId,
         amount: extraction.resultJson.amount,
         currency: extraction.resultJson.currency,
@@ -653,6 +719,7 @@ async function handleReimbursementMessage(
     reimbursementReportId: report.id,
     senderName: parsed.senderName,
     mergedFromForwardTextReport: Boolean(forwardTextReport),
+    mergedFromRecentTextReport: Boolean(recentTextReport),
   });
   const savedExtraction = saveScenarioExtraction({
     rawMessageId: saveResult.rawMessageId,

@@ -368,7 +368,7 @@ test("handleMessage stores reimbursement images under reimbursement raw dir and 
   assert(logs.some((entry) => entry.message === "Persisted reimbursement remark linkage extraction"));
 });
 
-test("handleMessage does not merge reimbursement text followed by image", { concurrency: false }, async () => {
+test("handleMessage merges reimbursement text followed by image within 3 seconds", { concurrency: false }, async () => {
   const logs: Array<{ level: string; message: string; context?: Record<string, unknown> }> = [];
   const textMessageId = "reimbursement-text-before-image-test";
   const imageMessageId = "reimbursement-image-after-text-test";
@@ -430,24 +430,82 @@ test("handleMessage does not merge reimbursement text followed by image", { conc
   const reports = listRecentReimbursementReports(1000).filter(
     (report) => report.reporter === "小赵" && report.note === "昨晚外卖报账 42元",
   );
-  const originalTextReport = reports.find((report) => report.id === textReport.id);
+  const mergedReport = reports.find((report) => report.id === textReport.id);
   const imageRawMessage = listRecentRawMessages(1000).find(
     (message) => message.messageExternalId === imageMessageId,
   );
-  const imageOnlyReport = listRecentReimbursementReports(1000).find(
-    (report) => report.reporter === "小赵" && report.id !== textReport.id && report.evidenceType === "image",
-  );
 
   assert.equal(reports.length, 1);
-  assert(originalTextReport);
+  assert(mergedReport);
   assert(imageRawMessage);
-  assert(imageOnlyReport);
-  assert.equal(originalTextReport.evidenceType, "text");
-  assert.equal(originalTextReport.note, "昨晚外卖报账 42元");
-  assert.equal(originalTextReport.amount, 42);
-  assert.equal(imageOnlyReport.evidenceType, "image");
+  assert.equal(mergedReport.evidenceType, "image+text");
+  assert.equal(mergedReport.note, "昨晚外卖报账 42元");
+  assert.equal(mergedReport.amount, 42);
+  assert.equal(listRecentReimbursementReports(1000).length, beforeReportCount + 1);
+  assert(logs.some((entry) => entry.message === "Checking recent reimbursement text context for image merge"));
+  assert(logs.some((entry) => entry.message === "Matched recent reimbursement text context for image merge"));
+});
+
+test("handleMessage does not merge reimbursement text followed by image after 3 seconds", { concurrency: false }, async () => {
+  const logs: Array<{ level: string; message: string; context?: Record<string, unknown> }> = [];
+  const textMessageId = "reimbursement-text-before-image-too-late-test";
+  const imageMessageId = "reimbursement-image-too-late-test";
+  const context = createMessageContext([createReimbursementChannel()]);
+  const beforeReportCount = listRecentReimbursementReports(1000).length;
+
+  await handleMessage(
+    {
+      id: () => textMessageId,
+      room: async () => ({
+        alias: async () => "小钱",
+        id: () => "reimbursement_room_3",
+        topic: async () => "AI报账群",
+      }),
+      self: () => false,
+      talker: async () => ({
+        id: () => "reimbursement_talker_text_too_late",
+        name: () => "Ryan。",
+      }),
+      text: () => "办公用品报账 58元",
+      type: () => 7,
+    },
+    context,
+    createLogger(logs),
+  );
+
+  await new Promise((resolve) => setTimeout(resolve, 3100));
+
+  await handleMessage(
+    {
+      id: () => imageMessageId,
+      room: async () => ({
+        alias: async () => "小钱",
+        id: () => "reimbursement_room_3",
+        topic: async () => "AI报账群",
+      }),
+      self: () => false,
+      talker: async () => ({
+        id: () => "reimbursement_talker_text_too_late",
+        name: () => "Ryan。",
+      }),
+      text: () => "",
+      toFileBox: async () => ({
+        name: "late-order.jpg",
+        toBuffer: async () => Buffer.from([0xff, 0xd8, 0xff, 0xd9]),
+      }),
+      type: () => 6,
+    },
+    context,
+    createLogger(logs),
+  );
+
+  const reports = listRecentReimbursementReports(1000).filter((report) => report.reporter === "小钱");
+
+  assert.equal(reports.length, 2);
+  assert.equal(reports.some((report) => report.note === "办公用品报账 58元" && report.evidenceType === "text"), true);
+  assert.equal(reports.some((report) => report.id && report.evidenceType === "image"), true);
   assert.equal(listRecentReimbursementReports(1000).length, beforeReportCount + 2);
-  assert(logs.some((entry) => entry.message === "No forward reimbursement text context matched for image merge"));
+  assert(logs.some((entry) => entry.message === "No recent reimbursement text context matched for image merge"));
 });
 
 test.skip("handleMessage merges reimbursement image sent first even when text is processed first", { concurrency: false }, async () => {

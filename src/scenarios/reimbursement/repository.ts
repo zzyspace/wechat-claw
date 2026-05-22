@@ -20,6 +20,17 @@ export interface RecentPrimaryImageReportLookupInput {
   sinceIso: string;
 }
 
+export interface RecentTextOnlyReportLookupInput {
+  beforeIso: string;
+  channelCode?: string;
+  channelName: string;
+  senderExternalId?: string;
+  senderName: string;
+  sinceIso: string;
+  sinceRawMessageId?: number;
+  currentRawMessageId?: number;
+}
+
 export interface ForwardTextOnlyReportLookupInput {
   channelCode?: string;
   channelName: string;
@@ -291,6 +302,63 @@ export function findForwardTextOnlyReimbursementReport(
       input.currentRawMessageId ?? null,
       input.currentRawMessageId ?? null,
       input.untilIso,
+    ) as
+    | { id: number }
+    | undefined;
+
+  return row ? selectReportById(row.id) : null;
+}
+
+export function findRecentTextOnlyReimbursementReport(
+  input: RecentTextOnlyReportLookupInput,
+): ReimbursementReportRecord | null {
+  const db = getDatabase();
+  const senderCondition = input.senderExternalId
+    ? "rm.sender_external_id = ?"
+    : "rm.sender_name = ?";
+  const senderValue = input.senderExternalId ?? input.senderName;
+  const channelCondition = input.channelCode ? "rm.channel_code = ?" : "rm.channel_name = ?";
+  const channelValue = input.channelCode ?? input.channelName;
+  const row = db
+    .prepare(
+      `
+        SELECT rr.id
+        FROM reimbursement_reports rr
+        INNER JOIN reimbursement_report_sources rrs
+          ON rrs.reimbursement_report_id = rr.id AND rrs.role = 'primary'
+        INNER JOIN raw_messages rm ON rm.id = rrs.raw_message_id
+        WHERE ${channelCondition}
+          AND ${senderCondition}
+          AND (
+            rm.event_received_at > ?
+            OR (
+              rm.event_received_at = ?
+              AND (? IS NULL OR rm.id > ?)
+            )
+          )
+          AND (
+            rm.event_received_at < ?
+            OR (
+              rm.event_received_at = ?
+              AND (? IS NULL OR rm.id < ?)
+            )
+          )
+          AND rr.evidence_type = 'text'
+        ORDER BY rm.event_received_at DESC, rm.id DESC, rr.id DESC
+        LIMIT 1
+      `,
+    )
+    .get(
+      channelValue,
+      senderValue,
+      input.sinceIso,
+      input.sinceIso,
+      input.sinceRawMessageId ?? null,
+      input.sinceRawMessageId ?? null,
+      input.beforeIso,
+      input.beforeIso,
+      input.currentRawMessageId ?? null,
+      input.currentRawMessageId ?? null,
     ) as
     | { id: number }
     | undefined;
