@@ -303,6 +303,7 @@ async function handleReimbursementMessage(
   });
 
   let forwardTextReport = null;
+  let forwardTextUntilIso: string | undefined;
 
   if (parsed.attachments.length > 0 && context.lossMergeWindowSeconds > 0) {
     const currentTime = new Date(parsed.eventReceivedAt).getTime();
@@ -317,6 +318,7 @@ async function handleReimbursementMessage(
       untilIso: maxUntilIso,
     });
     const untilIso = nextImageRawMessage?.eventReceivedAt ?? maxUntilIso;
+    forwardTextUntilIso = untilIso;
     logger.info("Checking forward reimbursement text context for image merge", {
       afterIso: parsed.eventReceivedAt,
       channelCode: parsed.channel.code,
@@ -327,15 +329,17 @@ async function handleReimbursementMessage(
       senderName: parsed.senderName,
       untilIso,
     });
-    forwardTextReport = findForwardTextOnlyReimbursementReport({
-      afterIso: parsed.eventReceivedAt,
-      channelCode: parsed.channel.code,
-      channelName: parsed.roomTopic,
-      currentRawMessageId: saveResult.rawMessageId,
-      senderExternalId: parsed.senderExternalId,
-      senderName: parsed.senderName,
-      untilIso,
-    });
+    forwardTextReport = findForwardTextOnlyReimbursementReport(
+      {
+        afterIso: parsed.eventReceivedAt,
+        channelCode: parsed.channel.code,
+        channelName: parsed.roomTopic,
+        currentRawMessageId: saveResult.rawMessageId,
+        senderExternalId: parsed.senderExternalId,
+        senderName: parsed.senderName,
+        untilIso,
+      },
+    );
 
     if (forwardTextReport) {
       logger.info("Matched forward reimbursement text context for image merge", {
@@ -524,6 +528,52 @@ async function handleReimbursementMessage(
     voucherDate: extraction.resultJson.voucherDate,
     voucherDateSource: extraction.resultJson.voucherDateSource,
   });
+
+  if (
+    parsed.attachments.length > 0 &&
+    context.lossMergeWindowSeconds > 0 &&
+    !forwardTextReport &&
+    forwardTextUntilIso
+  ) {
+    logger.info("Rechecking forward reimbursement text context after extraction", {
+      afterIso: parsed.eventReceivedAt,
+      channelCode: parsed.channel.code,
+      messageExternalId: parsed.messageExternalId,
+      rawMessageId: saveResult.rawMessageId,
+      roomTopic: parsed.roomTopic,
+      senderName: parsed.senderName,
+      untilIso: forwardTextUntilIso,
+    });
+    forwardTextReport = findForwardTextOnlyReimbursementReport({
+      afterIso: parsed.eventReceivedAt,
+      channelCode: parsed.channel.code,
+      channelName: parsed.roomTopic,
+      currentRawMessageId: saveResult.rawMessageId,
+      senderExternalId: parsed.senderExternalId,
+      senderName: parsed.senderName,
+      untilIso: forwardTextUntilIso,
+    });
+
+    if (forwardTextReport) {
+      logger.info("Matched forward reimbursement text context after extraction", {
+        channelCode: parsed.channel.code,
+        matchedReportId: forwardTextReport.id,
+        messageExternalId: parsed.messageExternalId,
+        rawMessageId: saveResult.rawMessageId,
+        roomTopic: parsed.roomTopic,
+        senderName: parsed.senderName,
+      });
+    } else {
+      logger.info("No forward reimbursement text context matched after extraction", {
+        channelCode: parsed.channel.code,
+        messageExternalId: parsed.messageExternalId,
+        rawMessageId: saveResult.rawMessageId,
+        roomTopic: parsed.roomTopic,
+        senderName: parsed.senderName,
+      });
+    }
+  }
+
   logger.info("Persisting reimbursement report", {
     amount: extraction.resultJson.amount,
     channelCode: parsed.channel.code,

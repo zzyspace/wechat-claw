@@ -12,6 +12,7 @@ import { listRecentReimbursementReports } from "../scenarios/reimbursement/repos
 import { handleMessage } from "./message-handler.js";
 
 process.env.WECHATY_STATE_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "wechat-claw-message-handler-"));
+const originalFetch = globalThis.fetch;
 
 function createLogger(records: Array<{ level: string; message: string; context?: Record<string, unknown> }>) {
   return {
@@ -576,4 +577,114 @@ test("handleMessage merges reimbursement image and text when they share the same
   assert.equal(reports[0]?.note, "平");
   assert.equal(listRecentReimbursementReports(1000).length, beforeReportCount + 1);
   assert(logs.some((entry) => entry.message === "Matched reimbursement image context for remark merge"));
+});
+
+test("handleMessage rechecks forward reimbursement text after image extraction", { concurrency: false }, async () => {
+  const logs: Array<{ level: string; message: string; context?: Record<string, unknown> }> = [];
+  const imageMessageId = "reimbursement-image-recheck-test";
+  const textMessageId = "reimbursement-text-during-image-extraction-test";
+  const context = {
+    ...createMessageContext([createReimbursementChannel()]),
+    reimbursementExtractionApiKey: "test-key",
+  };
+  const imageSentAt = new Date("2026-05-22T10:20:00.000Z");
+  const textSentAt = new Date("2026-05-22T10:20:05.000Z");
+  const beforeReportCount = listRecentReimbursementReports(1000).length;
+
+  globalThis.fetch = (async () => {
+    await new Promise((resolve) => setTimeout(resolve, 30));
+
+    return new Response(
+      JSON.stringify({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                amount: "88.00",
+                currency: "人民币",
+                expense_category: "other",
+                voucher_date: "2026-05-22",
+                merchant: "测试商户",
+                document_no: null,
+                voucher_type: "order",
+                ocr_text: "总实付88.00",
+                confidence: 0.91,
+              }),
+            },
+          },
+        ],
+      }),
+      {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json",
+        },
+      },
+    );
+  }) as typeof fetch;
+
+  try {
+    const imageTask = handleMessage(
+      {
+        id: () => imageMessageId,
+        date: () => imageSentAt,
+        room: async () => ({
+          alias: async () => "小韩",
+          id: () => "reimbursement_room_5",
+          topic: async () => "AI报账群",
+        }),
+        self: () => false,
+        talker: async () => ({
+          id: () => "reimbursement_talker_recheck",
+          name: () => "Ryan。",
+        }),
+        text: () => "",
+        toFileBox: async () => ({
+          name: "delayed.jpg",
+          toBuffer: async () => Buffer.from([0xff, 0xd8, 0xff, 0xd9]),
+        }),
+        type: () => 6,
+      },
+      context,
+      createLogger(logs),
+    );
+
+    await new Promise((resolve) => setTimeout(resolve, 5));
+
+    await handleMessage(
+      {
+        id: () => textMessageId,
+        date: () => textSentAt,
+        room: async () => ({
+          alias: async () => "小韩",
+          id: () => "reimbursement_room_5",
+          topic: async () => "AI报账群",
+        }),
+        self: () => false,
+        talker: async () => ({
+          id: () => "reimbursement_talker_recheck",
+          name: () => "Ryan。",
+        }),
+        text: () => "补充备注",
+        type: () => 7,
+      },
+      context,
+      createLogger(logs),
+    );
+
+    await imageTask;
+
+    const reports = listRecentReimbursementReports(1000).filter((report) => report.reporter === "小韩");
+
+    assert.equal(reports.length, 1);
+    assert.equal(reports[0]?.evidenceType, "image+text");
+    assert.equal(reports[0]?.note, "补充备注");
+    assert.equal(reports[0]?.amount, 88);
+    assert.equal(listRecentReimbursementReports(1000).length, beforeReportCount + 1);
+    assert(logs.some((entry) => entry.message === "Recent reimbursement image raw message has no persisted report yet"));
+    assert(logs.some((entry) => entry.message === "Rechecking forward reimbursement text context after extraction"));
+    assert(logs.some((entry) => entry.message === "Matched forward reimbursement text context after extraction"));
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
