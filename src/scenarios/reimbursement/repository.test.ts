@@ -182,3 +182,71 @@ test("mergePrimaryImageIntoTextOnlyReimbursementReport backdates createdAt when 
   assert.equal(updated.note, "平；6月账");
   assert.equal(formatLocalTimestamp(updated.createdAt, "Asia/Shanghai"), "2026-06-30 00:00:00");
 });
+
+test("mergePrimaryImageIntoTextOnlyReimbursementReport clears text-only needsReview when image has amount", () => {
+  const textMessage = saveRawMessage({
+    messageExternalId: "reimbursement-repository-merge-needs-review-text",
+    channelCode: "reimbursement_repository_test",
+    channelName: "报账仓储测试群",
+    senderName: "小陈",
+    messageType: "7",
+    textContent: "平",
+    eventReceivedAt: "2026-07-21T10:00:00.000Z",
+    dedupeKey: "reimbursement-repository-merge-needs-review-text",
+    attachments: [],
+  });
+  const report = saveReimbursementReport({
+    channelCode: "reimbursement_repository_test",
+    channelName: "报账仓储测试群",
+    reporter: "小陈",
+    amount: null,
+    currency: "CNY",
+    expenseCategory: "other",
+    voucherDate: "2026-07-21",
+    voucherDateSource: "message",
+    note: "平",
+    evidenceType: "text",
+    merchant: null,
+    documentNo: null,
+    voucherType: null,
+    ocrText: null,
+    confidence: 0.45,
+    needsReview: true,
+    primaryRawMessageId: textMessage.rawMessageId,
+    timeZone: "Asia/Shanghai",
+    referenceDateTime: "2026-07-21T10:00:00.000Z",
+  });
+  const imageMessage = saveRawMessage({
+    messageExternalId: "reimbursement-repository-merge-needs-review-image",
+    channelCode: "reimbursement_repository_test",
+    channelName: "报账仓储测试群",
+    senderName: "小陈",
+    messageType: "6",
+    textContent: "(非文本消息)",
+    eventReceivedAt: "2026-07-21T10:00:10.000Z",
+    dedupeKey: "reimbursement-repository-merge-needs-review-image",
+    attachments: [],
+  });
+
+  const updated = mergePrimaryImageIntoTextOnlyReimbursementReport({
+    reimbursementReportId: report.id,
+    imageRawMessageId: imageMessage.rawMessageId,
+    amount: 3968.25,
+    currency: "CNY",
+    expenseCategory: "food",
+    voucherDate: "2026-07-21",
+    voucherDateSource: "model",
+    note: "",
+    merchant: "广东澳美佳供应链",
+    documentNo: "AMJ-00-20260520-149",
+    voucherType: "销售单",
+    ocrText: "合计总金额 3,968.25",
+    confidence: 0.95,
+    needsReview: false,
+    timeZone: "Asia/Shanghai",
+    referenceDateTime: "2026-07-21T10:00:10.000Z",
+  });
+
+  assert.equal(updated.amount, 3968.25);
+  assert.equal(updated.needsReview, false);
+});

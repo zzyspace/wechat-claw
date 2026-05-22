@@ -782,6 +782,7 @@ export function mergePrimaryImageIntoTextOnlyReimbursementReport(input: {
   const mergedVoucherDate = input.voucherDateSource === "model" ? input.voucherDate : existing.voucherDate;
   const mergedVoucherDateSource =
     input.voucherDateSource === "model" ? input.voucherDateSource : existing.voucherDateSource;
+  const mergedNeedsReview = input.amount !== null ? input.needsReview : existing.needsReview || input.needsReview;
   const createdAtOverride = resolveMonthlyLedgerCreatedAtOverride({
     note: mergedNote,
     timeZone: input.timeZone,
@@ -836,7 +837,7 @@ export function mergePrimaryImageIntoTextOnlyReimbursementReport(input: {
       input.voucherType ?? existing.voucherType,
       input.ocrText ?? existing.ocrText,
       Math.max(existing.confidence, input.confidence),
-      existing.needsReview || input.needsReview ? 1 : 0,
+      mergedNeedsReview ? 1 : 0,
       createdAtOverride,
       input.reimbursementReportId,
     );
