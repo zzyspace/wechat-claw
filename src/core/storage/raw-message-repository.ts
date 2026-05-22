@@ -101,7 +101,7 @@ export function saveRawMessage(input: StoredRawMessageInput): SaveRawMessageResu
       input.senderName,
       input.messageType,
       input.textContent,
-      input.eventReceivedAt,
+      input.messageSentAt ?? input.eventReceivedAt,
       input.eventReceivedAt,
       input.dedupeKey,
     );

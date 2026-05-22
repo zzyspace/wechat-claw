@@ -11,6 +11,7 @@ export interface NormalizeMessageInput {
   senderName: string;
   messageType: string;
   textContent: string;
+  messageSentAt?: string;
   eventReceivedAt: string;
   attachments: StoredAttachment[];
 }
@@ -47,6 +48,7 @@ export function normalizeMessage(input: NormalizeMessageInput): StoredRawMessage
     senderName: input.senderName,
     messageType: input.messageType,
     textContent: input.textContent,
+    messageSentAt: input.messageSentAt,
     eventReceivedAt: input.eventReceivedAt,
     dedupeKey: computeDedupeKey(input),
     attachments: input.attachments,

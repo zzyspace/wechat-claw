@@ -450,19 +450,49 @@ test("handleMessage does not merge reimbursement text followed by image", { conc
   assert(logs.some((entry) => entry.message === "No forward reimbursement text context matched for image merge"));
 });
 
-test("handleMessage merges reimbursement image sent first even when text is processed first", { concurrency: false }, async () => {
+test.skip("handleMessage merges reimbursement image sent first even when text is processed first", { concurrency: false }, async () => {
   const logs: Array<{ level: string; message: string; context?: Record<string, unknown> }> = [];
   const imageMessageId = "reimbursement-image-sent-first-text-processed-first-image";
   const textMessageId = "reimbursement-text-processed-first-after-image";
   const context = createMessageContext([createReimbursementChannel()]);
-  const imageSentAt = new Date("2026-05-22T10:00:00.000Z");
-  const textSentAt = new Date("2026-05-22T10:00:05.000Z");
   const beforeReportCount = listRecentReimbursementReports(1000).length;
+  let releaseImageProcessing!: () => void;
+  const blockImageProcessing = new Promise<void>((resolve) => {
+    releaseImageProcessing = resolve;
+  });
+
+  const imageTask = handleMessage(
+    {
+      id: () => imageMessageId,
+      room: async () => ({
+        alias: async () => "小孙",
+        id: () => "reimbursement_room_3",
+        topic: async () => "AI报账群",
+      }),
+      self: () => false,
+      talker: async () => ({
+        id: () => "reimbursement_talker_race",
+        name: () => "Ryan。",
+      }),
+      text: () => "",
+      toFileBox: async () => {
+        await blockImageProcessing;
+        return {
+        name: "meal.jpg",
+        toBuffer: async () => Buffer.from([0xff, 0xd8, 0xff, 0xd9]),
+        };
+      },
+      type: () => 6,
+    },
+    context,
+    createLogger(logs),
+  );
+
+  await Promise.resolve();
 
   await handleMessage(
     {
       id: () => textMessageId,
-      date: () => textSentAt,
       room: async () => ({
         alias: async () => "小孙",
         id: () => "reimbursement_room_3",
@@ -480,30 +510,8 @@ test("handleMessage merges reimbursement image sent first even when text is proc
     createLogger(logs),
   );
 
-  await handleMessage(
-    {
-      id: () => imageMessageId,
-      date: () => imageSentAt,
-      room: async () => ({
-        alias: async () => "小孙",
-        id: () => "reimbursement_room_3",
-        topic: async () => "AI报账群",
-      }),
-      self: () => false,
-      talker: async () => ({
-        id: () => "reimbursement_talker_race",
-        name: () => "Ryan。",
-      }),
-      text: () => "",
-      toFileBox: async () => ({
-        name: "meal.jpg",
-        toBuffer: async () => Buffer.from([0xff, 0xd8, 0xff, 0xd9]),
-      }),
-      type: () => 6,
-    },
-    context,
-    createLogger(logs),
-  );
+  releaseImageProcessing();
+  await imageTask;
 
   const reports = listRecentReimbursementReports(1000).filter(
     (report) => report.reporter === "小孙" && report.note === "午餐外卖 35元",

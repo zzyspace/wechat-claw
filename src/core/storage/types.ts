@@ -14,6 +14,7 @@ export interface StoredRawMessageInput {
   senderName: string;
   messageType: string;
   textContent: string;
+  messageSentAt?: string;
   eventReceivedAt: string;
   dedupeKey: string;
   attachments: StoredAttachment[];

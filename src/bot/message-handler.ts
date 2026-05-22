@@ -43,6 +43,7 @@ interface ParsedRoomMessage {
   channelExternalId?: string;
   eventReceivedAt: string;
   messageExternalId: string;
+  messageSentAt?: string;
   messageType: string;
   normalizedText: string;
   roomTopic: string;
@@ -78,7 +79,8 @@ export async function handleMessage(message: any, context: MessageContext, logge
   const dateValue = readMessageDate(message);
   const ageValue = readMessageAge(message);
   const resolvedSentAt = resolveMessageSentAt(message, new Date());
-  const eventReceivedAt = resolveMessageEventTime(message);
+  const messageSentAt = resolvedSentAt?.toISOString();
+  const eventReceivedAt = new Date().toISOString();
   const attachments: StoredAttachment[] = [];
 
   if (channel.scenario === "reimbursement") {
@@ -89,7 +91,7 @@ export async function handleMessage(message: any, context: MessageContext, logge
       messageDate: dateValue ?? "(empty)",
       messageExternalId: String(messageId),
       messageType: String(typeValue),
-      resolvedSentAt: resolvedSentAt?.toISOString() ?? "(empty)",
+      messageSentAt: messageSentAt ?? "(empty)",
       roomTopic,
       senderName,
       text: normalizedText,
@@ -145,6 +147,7 @@ export async function handleMessage(message: any, context: MessageContext, logge
     eventReceivedAt,
     messageExternalId: String(messageId),
     messageType: String(typeValue),
+    messageSentAt,
     normalizedText,
     roomTopic,
     senderExternalId,
@@ -199,6 +202,7 @@ async function handleLossReportMessage(
     senderName: parsed.senderName,
     messageType: parsed.messageType,
     textContent: parsed.normalizedText,
+    messageSentAt: parsed.messageSentAt,
     eventReceivedAt: parsed.eventReceivedAt,
     attachments: parsed.attachments,
   });
@@ -306,6 +310,7 @@ async function handleReimbursementMessage(
     senderName: parsed.senderName,
     messageType: parsed.messageType,
     textContent: parsed.normalizedText,
+    messageSentAt: parsed.messageSentAt,
     eventReceivedAt: parsed.eventReceivedAt,
     attachments: parsed.attachments,
   });
