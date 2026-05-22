@@ -34,6 +34,12 @@ export interface RecentTextOnlyReportLookupInput {
   currentRawMessageId?: number;
 }
 
+export interface ForwardTextOnlyReportMatch {
+  report: ReimbursementReportRecord;
+  rawMessageId: number;
+  eventReceivedAt: string;
+}
+
 export interface ForwardTextOnlyReportLookupInput {
   channelCode?: string;
   channelName: string;
@@ -327,6 +333,13 @@ export function findRecentPrimaryImageReimbursementReport(
 export function findForwardTextOnlyReimbursementReport(
   input: ForwardTextOnlyReportLookupInput,
 ): ReimbursementReportRecord | null {
+  const match = findForwardTextOnlyReimbursementReportMatch(input);
+  return match?.report ?? null;
+}
+
+export function findForwardTextOnlyReimbursementReportMatch(
+  input: ForwardTextOnlyReportLookupInput,
+): ForwardTextOnlyReportMatch | null {
   const db = getDatabase();
   const senderCondition = input.senderExternalId
     ? "rm.sender_external_id = ?"
@@ -338,6 +351,8 @@ export function findForwardTextOnlyReimbursementReport(
     .prepare(
       `
         SELECT rr.id
+             , rm.id as rawMessageId
+             , rm.event_received_at as eventReceivedAt
         FROM reimbursement_reports rr
         INNER JOIN reimbursement_report_sources rrs
           ON rrs.reimbursement_report_id = rr.id AND rrs.role = 'primary'
@@ -366,10 +381,16 @@ export function findForwardTextOnlyReimbursementReport(
       input.currentRawMessageId ?? null,
       input.untilIso,
     ) as
-    | { id: number }
+    | { id: number; rawMessageId: number; eventReceivedAt: string }
     | undefined;
 
-  return row ? selectReportById(row.id) : null;
+  return row
+    ? {
+        report: selectReportById(row.id),
+        rawMessageId: row.rawMessageId,
+        eventReceivedAt: row.eventReceivedAt,
+      }
+    : null;
 }
 
 export function findRecentTextOnlyReimbursementReport(

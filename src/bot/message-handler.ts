@@ -12,7 +12,7 @@ import { extractLossReportByModel } from "../scenarios/loss-report/model-provide
 import { extractReimbursementReport } from "../scenarios/reimbursement/extractor.js";
 import {
   attachRemarkToReimbursementReport,
-  findForwardTextOnlyReimbursementReport,
+  findForwardTextOnlyReimbursementReportMatch,
   findNextImageRawMessage,
   findRecentImageRawMessage,
   findRecentRemarkTextSource,
@@ -359,17 +359,33 @@ async function handleReimbursementMessage(
       senderName: parsed.senderName,
       untilIso,
     });
-    forwardTextReport = findForwardTextOnlyReimbursementReport(
-      {
-        afterIso: parsed.eventReceivedAt,
-        channelCode: parsed.channel.code,
-        channelName: parsed.roomTopic,
-        currentRawMessageId: saveResult.rawMessageId,
-        senderExternalId: parsed.senderExternalId,
-        senderName: parsed.senderName,
-        untilIso,
-      },
-    );
+    const forwardTextMatch = findForwardTextOnlyReimbursementReportMatch({
+      afterIso: parsed.eventReceivedAt,
+      channelCode: parsed.channel.code,
+      channelName: parsed.roomTopic,
+      currentRawMessageId: saveResult.rawMessageId,
+      senderExternalId: parsed.senderExternalId,
+      senderName: parsed.senderName,
+      untilIso,
+    });
+    const preferredImageUntilIso = new Date(
+      new Date(forwardTextMatch?.eventReceivedAt ?? parsed.eventReceivedAt).getTime() +
+        context.reimbursementBackwardTextMergeWindowSeconds * 1000,
+    ).toISOString();
+    const competingImageRawMessage =
+      forwardTextMatch && context.reimbursementBackwardTextMergeWindowSeconds > 0
+        ? findNextImageRawMessage({
+            afterIso: forwardTextMatch.eventReceivedAt,
+            channelCode: parsed.channel.code,
+            channelName: parsed.roomTopic,
+            currentRawMessageId: forwardTextMatch.rawMessageId,
+            senderExternalId: parsed.senderExternalId,
+            senderName: parsed.senderName,
+            untilIso: preferredImageUntilIso,
+          })
+        : null;
+
+    forwardTextReport = competingImageRawMessage ? null : (forwardTextMatch?.report ?? null);
 
     if (forwardTextReport) {
       logger.info("Matched forward reimbursement text context for image merge", {
@@ -383,6 +399,7 @@ async function handleReimbursementMessage(
     } else {
       logger.info("No forward reimbursement text context matched for image merge", {
         channelCode: parsed.channel.code,
+        competingImageRawMessageId: competingImageRawMessage?.rawMessageId,
         messageExternalId: parsed.messageExternalId,
         rawMessageId: saveResult.rawMessageId,
         roomTopic: parsed.roomTopic,
@@ -668,7 +685,7 @@ async function handleReimbursementMessage(
       senderName: parsed.senderName,
       untilIso: forwardTextUntilIso,
     });
-    forwardTextReport = findForwardTextOnlyReimbursementReport({
+    const forwardTextMatch = findForwardTextOnlyReimbursementReportMatch({
       afterIso: parsed.eventReceivedAt,
       channelCode: parsed.channel.code,
       channelName: parsed.roomTopic,
@@ -677,6 +694,23 @@ async function handleReimbursementMessage(
       senderName: parsed.senderName,
       untilIso: forwardTextUntilIso,
     });
+    const preferredImageUntilIso = new Date(
+      new Date(forwardTextMatch?.eventReceivedAt ?? parsed.eventReceivedAt).getTime() +
+        context.reimbursementBackwardTextMergeWindowSeconds * 1000,
+    ).toISOString();
+    const competingImageRawMessage =
+      forwardTextMatch && context.reimbursementBackwardTextMergeWindowSeconds > 0
+        ? findNextImageRawMessage({
+            afterIso: forwardTextMatch.eventReceivedAt,
+            channelCode: parsed.channel.code,
+            channelName: parsed.roomTopic,
+            currentRawMessageId: forwardTextMatch.rawMessageId,
+            senderExternalId: parsed.senderExternalId,
+            senderName: parsed.senderName,
+            untilIso: preferredImageUntilIso,
+          })
+        : null;
+    forwardTextReport = competingImageRawMessage ? null : (forwardTextMatch?.report ?? null);
 
     if (forwardTextReport) {
       logger.info("Matched forward reimbursement text context after extraction", {
@@ -690,6 +724,7 @@ async function handleReimbursementMessage(
     } else {
       logger.info("No forward reimbursement text context matched after extraction", {
         channelCode: parsed.channel.code,
+        competingImageRawMessageId: competingImageRawMessage?.rawMessageId,
         messageExternalId: parsed.messageExternalId,
         rawMessageId: saveResult.rawMessageId,
         roomTopic: parsed.roomTopic,
