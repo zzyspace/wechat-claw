@@ -1,11 +1,14 @@
 import { getDatabasePath } from "../storage/database.js";
 import type { ReimbursementReportDetail } from "../../scenarios/reimbursement/types.js";
+import { getZonedDateParts } from "./timezone.js";
 
 const DEFAULT_LIMIT = 50;
+const DEFAULT_TIME_ZONE = "Asia/Shanghai";
 
 export interface PrintReimbursementCliOptions {
   channelCode?: string;
   limit?: number;
+  timeZone?: string;
 }
 
 export function buildPrintReimbursementUsageText() {
@@ -89,14 +92,43 @@ function compactText(text: string) {
   return normalized || "(空)";
 }
 
+function pad(value: number) {
+  return String(value).padStart(2, "0");
+}
+
+function parseUtcDatabaseTimestamp(value: string) {
+  const normalized = value.trim().replace(" ", "T");
+  const withZone = /(?:Z|[+-]\d{2}:\d{2})$/.test(normalized) ? normalized : `${normalized}Z`;
+  const date = new Date(withZone);
+
+  if (!Number.isFinite(date.getTime())) {
+    return null;
+  }
+
+  return date;
+}
+
+function formatRuntimeTimestamp(value: string, timeZone: string) {
+  const date = parseUtcDatabaseTimestamp(value);
+
+  if (!date) {
+    return `${value} (${timeZone})`;
+  }
+
+  const parts = getZonedDateParts(date, timeZone);
+  return `${parts.year}-${pad(parts.month)}-${pad(parts.day)} ${pad(parts.hour)}:${pad(parts.minute)}:${pad(parts.second)} (${timeZone})`;
+}
+
 export function renderReimbursementReportList(
   reports: ReimbursementReportDetail[],
   options?: PrintReimbursementCliOptions,
 ) {
+  const timeZone = options?.timeZone ?? DEFAULT_TIME_ZONE;
   const lines = [
     `database=${getDatabasePath()}`,
     `channel_code=${options?.channelCode ?? "(all)"}`,
     `limit=${options?.limit ?? "(all)"}`,
+    `timezone=${timeZone}`,
     `reports=${reports.length}`,
   ];
 
@@ -121,8 +153,8 @@ export function renderReimbursementReportList(
     lines.push(`OCR: ${formatOptional(report.ocrText)}`);
     lines.push(`置信度: ${report.confidence.toFixed(2)}`);
     lines.push(`需复核: ${formatYesNo(report.needsReview)}`);
-    lines.push(`创建时间: ${report.createdAt}`);
-    lines.push(`更新时间: ${report.updatedAt}`);
+    lines.push(`创建时间: ${formatRuntimeTimestamp(report.createdAt, timeZone)}`);
+    lines.push(`更新时间: ${formatRuntimeTimestamp(report.updatedAt, timeZone)}`);
     lines.push(`来源消息数: ${report.sources.length}`);
 
     for (const source of report.sources) {

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
+import type { ReimbursementReportDetail } from "../../scenarios/reimbursement/types.js";
 import { saveRawMessage } from "../storage/raw-message-repository.js";
 import {
   buildPrintReimbursementUsageText,
@@ -84,6 +85,7 @@ test("renderReimbursementReportList prints readable report details with sources"
     channelCode: "reimbursement_print_test",
   });
 
+  assert.match(text, /timezone=Asia\/Shanghai/);
   assert.match(text, /reports=1/);
   assert.match(text, /报账ID: \d+/);
   assert.match(text, /群聊: 报账打印测试群 \(reimbursement_print_test\)/);
@@ -95,4 +97,39 @@ test("renderReimbursementReportList prints readable report details with sources"
   assert.match(text, /\[primary\] raw_message_id=\d+/);
   assert.match(text, /\[remark\] raw_message_id=\d+/);
   assert.match(text, /text=晚餐食材采购/);
+});
+
+test("renderReimbursementReportList formats runtime timestamps in the selected timezone", () => {
+  const reports: ReimbursementReportDetail[] = [
+    {
+      id: 1,
+      channelCode: "reimbursement_print_test",
+      channelName: "报账打印测试群",
+      reporter: "小周",
+      amount: 128.5,
+      currency: "CNY",
+      expenseCategory: "food",
+      voucherDate: "2026-05-20",
+      voucherDateSource: "model",
+      note: "晚餐食材采购",
+      evidenceType: "image+text",
+      merchant: "测试菜场",
+      documentNo: "A-001",
+      voucherType: "小票",
+      ocrText: "测试菜场 合计128.50",
+      confidence: 0.91,
+      needsReview: false,
+      createdAt: "2026-05-21 00:00:00",
+      updatedAt: "2026-05-21 00:00:14",
+      sources: [],
+    },
+  ];
+
+  const text = renderReimbursementReportList(reports, {
+    channelCode: "reimbursement_print_test",
+    timeZone: "Asia/Shanghai",
+  });
+
+  assert.match(text, /创建时间: 2026-05-21 08:00:00 \(Asia\/Shanghai\)/);
+  assert.match(text, /更新时间: 2026-05-21 08:00:14 \(Asia\/Shanghai\)/);
 });

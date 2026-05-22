@@ -34,8 +34,10 @@ function main() {
     limit: options.limit,
   });
 
-  console.log(renderReimbursementReportList(reports, options));
-  console.log(`timezone=${config.timeZone}`);
+  console.log(renderReimbursementReportList(reports, {
+    ...options,
+    timeZone: config.timeZone,
+  }));
 }
 
 main();
