@@ -1260,6 +1260,7 @@ async function sendReimbursementReceiptNotification(
   report: {
     amount: number | null;
     channelCode?: string;
+    expenseCategory?: string | null;
     id: number;
     merchant?: string | null;
     ocrText?: string | null;
@@ -1539,6 +1540,7 @@ function cryptoRandomId() {
 
 function buildReimbursementReceiptText(report: {
   amount: number | null;
+  expenseCategory?: string | null;
   merchant?: string | null;
   ocrText?: string | null;
 }) {
@@ -1546,13 +1548,13 @@ function buildReimbursementReceiptText(report: {
     return `${REIMBURSEMENT_RECEIPT_PENDING_TEXT}${buildPendingReceiptSuffix(report)}`;
   }
 
-  return `报账${formatReimbursementReceiptAmount(report.amount)}元已录入`;
+  return `报账${formatReimbursementReceiptAmount(report.amount)}元已录入${buildRecordedReceiptSuffix(report)}`;
 }
 
 function isReimbursementReceiptText(text: string) {
   return (
     /^此次报账待核验(?:\((?:商户|OCR): [\s\S]+?\))?$/.test(text) ||
-    /^报账\d+(?:\.\d+)?元已录入$/.test(text)
+    /^报账\d+(?:\.\d+)?元已录入(?:\(category: [^)]+?\))?$/.test(text)
   );
 }
 
@@ -1585,6 +1587,18 @@ function buildPendingReceiptSuffix(report: {
   }
 
   return "";
+}
+
+function buildRecordedReceiptSuffix(report: {
+  expenseCategory?: string | null;
+}) {
+  const expenseCategory = normalizeReceiptSummaryText(report.expenseCategory);
+
+  if (!expenseCategory) {
+    return "";
+  }
+
+  return `(category: ${expenseCategory})`;
 }
 
 function normalizeReceiptSummaryText(value: string | null | undefined) {

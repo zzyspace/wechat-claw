@@ -156,8 +156,8 @@ WECHATY_CHANNELS_JSON=[{"code":"loss_a","enabled":true,"scenario":"loss-report",
 - `summarySchedule`: 日报 cron，例如每天 `22:00` 用 `0 22 * * *`
 - `weeklySummarySchedule`: 周报 cron，例如每周日 `22:10` 用 `10 22 * * 0`
 - `summarySchedule` 或 `weeklySummarySchedule` 留空 `""`，表示关闭对应的自动发送
-- 报账群可以不配置发送目标；但若要发送“报账xx元已录入 / 此次报账待核验”回执，需要在 `deliveryTargets` 中配置目标，可直接填写当前报账群的 `room_topic`
-- 当 bot 在报账群发送“报账xx元已录入”或“此次报账待核验”后，可以直接回复这条回执做人工修正：
+- 报账群可以不配置发送目标；但若要发送“报账xx元已录入(category: x) / 此次报账待核验”回执，需要在 `deliveryTargets` 中配置目标，可直接填写当前报账群的 `room_topic`
+- 当 bot 在报账群发送“报账xx元已录入(category: x)”或“此次报账待核验”后，可以直接回复这条回执做人工修正：
   - 回复 `delete`：删除对应报账记录
   - 回复纯数字：将对应报账金额改为该数字，并把 `needs_review` 更新为 `false`
   - 指令执行成功后，bot 会回复 `已处理`
