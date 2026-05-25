@@ -398,6 +398,18 @@ async function handleReimbursementMessage(
     return;
   }
 
+  if (receiptReply && isReimbursementCommandResponseText(receiptReply.quotedText)) {
+    logger.info("Ignored reimbursement reply to bot command response", {
+      channelCode: parsed.channel.code,
+      commandText: receiptReply.commandText,
+      messageExternalId: parsed.messageExternalId,
+      quotedText: receiptReply.quotedText,
+      roomTopic: parsed.roomTopic,
+      senderName: parsed.senderName,
+    });
+    return;
+  }
+
   if (isTextOnlyUrlMessage(parsed)) {
     logger.info("Skipped reimbursement text-only URL message", {
       channelCode: parsed.channel.code,
@@ -1529,6 +1541,14 @@ function buildReimbursementReceiptText(amount: number | null) {
 
 function isReimbursementReceiptText(text: string) {
   return text === REIMBURSEMENT_RECEIPT_PENDING_TEXT || /^报账\d+(?:\.\d+)?元已录入$/.test(text);
+}
+
+function isReimbursementCommandResponseText(text: string) {
+  return (
+    text === REIMBURSEMENT_COMMAND_PROCESSED_TEXT ||
+    text === REIMBURSEMENT_COMMAND_NOT_FOUND_TEXT ||
+    text === REIMBURSEMENT_COMMAND_UNSUPPORTED_TEXT
+  );
 }
 
 function formatReimbursementReceiptAmount(amount: number) {

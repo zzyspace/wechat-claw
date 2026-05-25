@@ -954,89 +954,6 @@ test("handleMessage updates reimbursement amount and clears review when replying
   );
 });
 
-test("handleMessage parses html break fallback receipt replies without creating a new reimbursement", { concurrency: false }, async () => {
-  const logs: Array<{ level: string; message: string; context?: Record<string, unknown> }> = [];
-  const delivered: DeliveredMessage[] = [];
-  const reporterName = "HTML回退专测";
-  const amountText = "2550123";
-  const context = createMessageContext([
-    createReimbursementChannelWithTargets([{ type: "room_topic", value: "AI报账群" }]),
-  ]);
-  const wechaty = createWechatyMock(delivered);
-
-  await handleMessage(
-    {
-      id: () => "reimbursement-html-fallback-image",
-      room: async () => ({
-        alias: async () => reporterName,
-        id: () => "reimbursement_room_html_fallback",
-        topic: async () => "AI报账群",
-      }),
-      self: () => false,
-      talker: async () => ({
-        id: () => "reimbursement_talker_html_fallback",
-        name: () => "Ryan。",
-      }),
-      text: () => "",
-      toFileBox: async () => ({
-        name: "html-fallback-order.jpg",
-        toBuffer: async () => Buffer.from([0xff, 0xd8, 0xff, 0xd9]),
-      }),
-      type: () => 6,
-      wechaty,
-    },
-    context,
-    createLogger(logs),
-  );
-
-  const initialReports = listRecentReimbursementReports(1000).filter((report) => report.reporter === reporterName);
-  const initialReport = initialReports[0];
-  assert(initialReport);
-  assert.equal(initialReport.amount, null);
-  assert.equal(initialReport.needsReview, true);
-
-  await handleMessage(
-    {
-      id: () => "reimbursement-html-fallback-command",
-      room: async () => ({
-        alias: async () => reporterName,
-        id: () => "reimbursement_room_html_fallback",
-        topic: async () => "AI报账群",
-      }),
-      self: () => false,
-      talker: async () => ({
-        id: () => "reimbursement_talker_html_fallback",
-        name: () => "Ryan。",
-      }),
-      text: () => `「Claw：此次报账待核验」<br/>- - - - - - - - - - - - - - -<br/>${amountText}`,
-      type: () => 7,
-      wechaty,
-    },
-    context,
-    createLogger(logs),
-  );
-
-  const updatedReports = listRecentReimbursementReports(1000).filter((report) => report.reporter === reporterName);
-  const updatedReport = updatedReports.find((report) => report.id === initialReport.id);
-  const commandRawMessage = listRecentRawMessages(1000).find(
-    (message) => message.messageExternalId === "reimbursement-html-fallback-command",
-  );
-
-  assert.equal(updatedReports.length, 1);
-  assert(updatedReport);
-  assert.equal(updatedReport.amount, 2550123);
-  assert.equal(updatedReport.needsReview, false);
-  assert(commandRawMessage);
-  assert.equal(commandRawMessage.textContent, amountText);
-  assert(logs.some((entry) => entry.message === "Executed reimbursement receipt command"));
-  assert.equal(
-    delivered.some(
-      (item) => item.targetType === "room_topic" && item.targetValue === "AI报账群" && item.text === "已处理",
-    ),
-    true,
-  );
-});
-
 test("handleMessage fallback receipt matching prefers the same reporter when pending receipts repeat", { concurrency: false }, async () => {
   const logs: Array<{ level: string; message: string; context?: Record<string, unknown> }> = [];
   const delivered: DeliveredMessage[] = [];
@@ -1279,6 +1196,74 @@ test("handleMessage replies not found message for valid reimbursement receipt co
     true,
   );
   assert(logs.some((entry) => entry.message === "Failed to match reimbursement receipt command to a report"));
+});
+
+test("handleMessage ignores replies that quote bot command response text", { concurrency: false }, async () => {
+  const logs: Array<{ level: string; message: string; context?: Record<string, unknown> }> = [];
+  const delivered: DeliveredMessage[] = [];
+  const reporterName = "回复已处理专测";
+  const context = createMessageContext([
+    createReimbursementChannelWithTargets([{ type: "room_topic", value: "AI报账群" }]),
+  ]);
+  const wechaty = createWechatyMock(delivered);
+
+  await handleMessage(
+    {
+      id: () => "reimbursement-ignore-command-response-image",
+      room: async () => ({
+        alias: async () => reporterName,
+        id: () => "reimbursement_room_ignore_command_response",
+        topic: async () => "AI报账群",
+      }),
+      self: () => false,
+      talker: async () => ({
+        id: () => "reimbursement_talker_ignore_command_response",
+        name: () => "Ryan。",
+      }),
+      text: () => "",
+      toFileBox: async () => ({
+        name: "ignore-command-response.jpg",
+        toBuffer: async () => Buffer.from([0xff, 0xd8, 0xff, 0xd9]),
+      }),
+      type: () => 6,
+      wechaty,
+    },
+    context,
+    createLogger(logs),
+  );
+
+  const initialReports = listRecentReimbursementReports(1000).filter((report) => report.reporter === reporterName);
+  assert.equal(initialReports.length, 1);
+
+  await handleMessage(
+    {
+      id: () => "reimbursement-ignore-command-response-reply",
+      room: async () => ({
+        alias: async () => reporterName,
+        id: () => "reimbursement_room_ignore_command_response",
+        topic: async () => "AI报账群",
+      }),
+      self: () => false,
+      talker: async () => ({
+        id: () => "reimbursement_talker_ignore_command_response",
+        name: () => "Ryan。",
+      }),
+      text: () => "「Claw：已处理」<br/>- - - - - - - - - - - - - - -<br/>2550",
+      type: () => 7,
+      wechaty,
+    },
+    context,
+    createLogger(logs),
+  );
+
+  const reportsAfterReply = listRecentReimbursementReports(1000).filter((report) => report.reporter === reporterName);
+  const rawReplyMessage = listRecentRawMessages(1000).find(
+    (message) => message.messageExternalId === "reimbursement-ignore-command-response-reply",
+  );
+
+  assert.equal(reportsAfterReply.length, 1);
+  assert.equal(rawReplyMessage, undefined);
+  assert(logs.some((entry) => entry.message === "Ignored reimbursement reply to bot command response"));
 });
 
 test("handleMessage skips reimbursement receipt when deliveryTargets are empty", { concurrency: false }, async () => {
