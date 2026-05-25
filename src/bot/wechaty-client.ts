@@ -18,6 +18,155 @@ export interface BotLifecycleHooks {
   onMessage?: () => void;
 }
 
+function readSnapshotValue(
+  value: unknown,
+  options: {
+    depth: number;
+    maxDepth: number;
+    maxEntries: number;
+    seen: WeakSet<object>;
+  },
+): unknown {
+  if (value === null || value === undefined) {
+    return value;
+  }
+
+  if (
+    typeof value === "string" ||
+    typeof value === "number" ||
+    typeof value === "boolean" ||
+    typeof value === "bigint"
+  ) {
+    return value;
+  }
+
+  if (typeof value === "function") {
+    return `[Function ${value.name || "anonymous"}]`;
+  }
+
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+
+  if (value instanceof Error) {
+    return {
+      message: value.message,
+      name: value.name,
+      stack: value.stack,
+    };
+  }
+
+  if (typeof value !== "object") {
+    return String(value);
+  }
+
+  if (options.seen.has(value)) {
+    return "[Circular]";
+  }
+
+  options.seen.add(value);
+
+  if (Array.isArray(value)) {
+    if (options.depth >= options.maxDepth) {
+      return {
+        length: value.length,
+        type: "array",
+      };
+    }
+
+    return value.slice(0, options.maxEntries).map((item) =>
+      readSnapshotValue(item, {
+        ...options,
+        depth: options.depth + 1,
+      }),
+    );
+  }
+
+  const ownPropertyNames = Object.getOwnPropertyNames(value);
+
+  if (options.depth >= options.maxDepth) {
+    return {
+      constructorName: (value as { constructor?: { name?: string } }).constructor?.name ?? "Object",
+      ownPropertyNames,
+      type: "object",
+    };
+  }
+
+  const snapshot: Record<string, unknown> = {
+    constructorName: (value as { constructor?: { name?: string } }).constructor?.name ?? "Object",
+  };
+
+  for (const propertyName of ownPropertyNames.slice(0, options.maxEntries)) {
+    try {
+      snapshot[propertyName] = readSnapshotValue((value as Record<string, unknown>)[propertyName], {
+        ...options,
+        depth: options.depth + 1,
+      });
+    } catch (error) {
+      snapshot[propertyName] = `[Thrown ${error instanceof Error ? error.message : String(error)}]`;
+    }
+  }
+
+  if (ownPropertyNames.length > options.maxEntries) {
+    snapshot.__truncatedPropertyCount = ownPropertyNames.length - options.maxEntries;
+  }
+
+  return snapshot;
+}
+
+export function createWechatyMessageDebugSnapshot(message: unknown) {
+  const ownPropertyNames =
+    message && (typeof message === "object" || typeof message === "function")
+      ? Object.getOwnPropertyNames(message)
+      : [];
+  const ownSymbols =
+    message && (typeof message === "object" || typeof message === "function")
+      ? Object.getOwnPropertySymbols(message).map((symbol) => symbol.toString())
+      : [];
+  const ownProperties: Record<string, unknown> = {};
+  const prototypeChain: Array<{
+    constructorName: string;
+    propertyNames: string[];
+  }> = [];
+  const seen = new WeakSet<object>();
+
+  if (message && (typeof message === "object" || typeof message === "function")) {
+    for (const propertyName of ownPropertyNames) {
+      try {
+        ownProperties[propertyName] = readSnapshotValue((message as Record<string, unknown>)[propertyName], {
+          depth: 0,
+          maxDepth: 2,
+          maxEntries: 30,
+          seen,
+        });
+      } catch (error) {
+        ownProperties[propertyName] = `[Thrown ${error instanceof Error ? error.message : String(error)}]`;
+      }
+    }
+
+    let currentPrototype = Object.getPrototypeOf(message);
+
+    while (currentPrototype && currentPrototype !== Object.prototype) {
+      prototypeChain.push({
+        constructorName: currentPrototype.constructor?.name ?? "Object",
+        propertyNames: Object.getOwnPropertyNames(currentPrototype),
+      });
+      currentPrototype = Object.getPrototypeOf(currentPrototype);
+    }
+  }
+
+  return {
+    constructorName:
+      message && (typeof message === "object" || typeof message === "function")
+        ? (message as { constructor?: { name?: string } }).constructor?.name ?? "Object"
+        : typeof message,
+    ownPropertyNames,
+    ownSymbols,
+    ownProperties,
+    prototypeChain,
+  };
+}
+
 function resolveScanStatusName(scanStatus: Record<string, string | number>, value: unknown) {
   for (const [key, statusValue] of Object.entries(scanStatus)) {
     if (statusValue === value) {
@@ -166,6 +315,10 @@ export async function startBot(
 
   bot.on("message", async (message: any) => {
     hooks.onMessage?.();
+
+    logger.info("[ CUSTOM LOG ] Raw wechaty message snapshot", {
+      wechatyMessage: createWechatyMessageDebugSnapshot(message),
+    });
 
     const coldStartDecision = shouldIgnoreColdStartMessage(message, {
       botStartedAt,

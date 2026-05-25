@@ -10,6 +10,7 @@ import { getReimbursementRawStorageDir } from "../core/runtime/state-paths.js";
 import { listRecentRawMessages } from "../core/storage/raw-message-repository.js";
 import { listReimbursementReportDetails, listRecentReimbursementReports } from "../scenarios/reimbursement/repository.js";
 import { handleMessage } from "./message-handler.js";
+import { createWechatyMessageDebugSnapshot } from "./wechaty-client.js";
 import type { WechatyInstance } from "./types.js";
 
 process.env.WECHATY_STATE_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "wechat-claw-message-handler-"));
@@ -192,6 +193,38 @@ test(
     assert.equal(logs.some((entry) => entry.message === "Received room message"), false);
   },
 );
+
+test("createWechatyMessageDebugSnapshot captures own fields and prototype fields", () => {
+  class FakeWechatyMessage {
+    room() {
+      return "room";
+    }
+  }
+
+  const message = new FakeWechatyMessage() as FakeWechatyMessage & {
+    enumerableField: string;
+  };
+
+  Object.defineProperty(message, "hiddenField", {
+    enumerable: false,
+    value: 42,
+  });
+  message.enumerableField = "visible";
+
+  const snapshot = createWechatyMessageDebugSnapshot(message);
+
+  assert.equal(snapshot.constructorName, "FakeWechatyMessage");
+  assert.equal(snapshot.ownPropertyNames.includes("hiddenField"), true);
+  assert.equal(snapshot.ownPropertyNames.includes("enumerableField"), true);
+  assert.equal(snapshot.ownProperties.hiddenField, 42);
+  assert.equal(snapshot.ownProperties.enumerableField, "visible");
+  assert.equal(
+    snapshot.prototypeChain.some(
+      (entry) => entry.constructorName === "FakeWechatyMessage" && entry.propertyNames.includes("room"),
+    ),
+    true,
+  );
+});
 
 test(
   "handleMessage keeps text-only messages when a recent image from the same sender exists",
