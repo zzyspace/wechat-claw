@@ -133,6 +133,36 @@ test("createLogger writes error logs to both app and error files with stack deta
   );
 });
 
+test("createLogger writes multiline details blocks readably", () => {
+  const stateDir = fs.mkdtempSync(path.join(os.tmpdir(), "wechat-claw-logger-"));
+  const logDir = path.join(stateDir, "logs");
+  const stdout: string[] = [];
+  const logger = createLogger({
+    now: () => new Date("2026-05-21T10:11:12.345Z"),
+    pid: 4242,
+    resolveConfig: () => createConfig(logDir),
+    stdout(text) {
+      stdout.push(text);
+    },
+  });
+
+  logger.info("[ CUSTOM LOG ] Raw wechaty message snapshot", {
+    details: '{\n  "id": "123"\n}',
+  });
+
+  const output = stdout.join("");
+  assert.equal(
+    output,
+    [
+      "2026-05-21 18:11:12.345 INFO [ CUSTOM LOG ] Raw wechaty message snapshot run=20260521T101112Z-4242 pid=4242",
+      "  details: {",
+      '             "id": "123"',
+      "           }",
+      "",
+    ].join("\n"),
+  );
+});
+
 test("createLogger can be configured for stdout-only logging", () => {
   const stateDir = fs.mkdtempSync(path.join(os.tmpdir(), "wechat-claw-logger-"));
   const logDir = path.join(stateDir, "logs");

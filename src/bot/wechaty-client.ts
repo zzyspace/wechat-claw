@@ -317,7 +317,7 @@ export async function startBot(
     hooks.onMessage?.();
 
     logger.info("[ CUSTOM LOG ] Raw wechaty message snapshot", {
-      wechatyMessage: createWechatyMessageDebugSnapshot(message),
+      details: JSON.stringify(createWechatyMessageDebugSnapshot(message), null, 2),
     });
 
     const coldStartDecision = shouldIgnoreColdStartMessage(message, {

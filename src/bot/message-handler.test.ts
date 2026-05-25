@@ -957,6 +957,8 @@ test("handleMessage updates reimbursement amount and clears review when replying
 test("handleMessage parses html break fallback receipt replies without creating a new reimbursement", { concurrency: false }, async () => {
   const logs: Array<{ level: string; message: string; context?: Record<string, unknown> }> = [];
   const delivered: DeliveredMessage[] = [];
+  const reporterName = "HTML回退专测";
+  const amountText = "2550123";
   const context = createMessageContext([
     createReimbursementChannelWithTargets([{ type: "room_topic", value: "AI报账群" }]),
   ]);
@@ -966,7 +968,7 @@ test("handleMessage parses html break fallback receipt replies without creating 
     {
       id: () => "reimbursement-html-fallback-image",
       room: async () => ({
-        alias: async () => "ZZY",
+        alias: async () => reporterName,
         id: () => "reimbursement_room_html_fallback",
         topic: async () => "AI报账群",
       }),
@@ -987,7 +989,7 @@ test("handleMessage parses html break fallback receipt replies without creating 
     createLogger(logs),
   );
 
-  const initialReports = listRecentReimbursementReports(1000).filter((report) => report.reporter === "ZZY");
+  const initialReports = listRecentReimbursementReports(1000).filter((report) => report.reporter === reporterName);
   const initialReport = initialReports[0];
   assert(initialReport);
   assert.equal(initialReport.amount, null);
@@ -997,7 +999,7 @@ test("handleMessage parses html break fallback receipt replies without creating 
     {
       id: () => "reimbursement-html-fallback-command",
       room: async () => ({
-        alias: async () => "ZZY",
+        alias: async () => reporterName,
         id: () => "reimbursement_room_html_fallback",
         topic: async () => "AI报账群",
       }),
@@ -1006,7 +1008,7 @@ test("handleMessage parses html break fallback receipt replies without creating 
         id: () => "reimbursement_talker_html_fallback",
         name: () => "Ryan。",
       }),
-      text: () => "「Claw：此次报账待核验」<br/>- - - - - - - - - - - - - - -<br/>2550",
+      text: () => `「Claw：此次报账待核验」<br/>- - - - - - - - - - - - - - -<br/>${amountText}`,
       type: () => 7,
       wechaty,
     },
@@ -1014,7 +1016,7 @@ test("handleMessage parses html break fallback receipt replies without creating 
     createLogger(logs),
   );
 
-  const updatedReports = listRecentReimbursementReports(1000).filter((report) => report.reporter === "ZZY");
+  const updatedReports = listRecentReimbursementReports(1000).filter((report) => report.reporter === reporterName);
   const updatedReport = updatedReports.find((report) => report.id === initialReport.id);
   const commandRawMessage = listRecentRawMessages(1000).find(
     (message) => message.messageExternalId === "reimbursement-html-fallback-command",
@@ -1022,10 +1024,10 @@ test("handleMessage parses html break fallback receipt replies without creating 
 
   assert.equal(updatedReports.length, 1);
   assert(updatedReport);
-  assert.equal(updatedReport.amount, 2550);
+  assert.equal(updatedReport.amount, 2550123);
   assert.equal(updatedReport.needsReview, false);
   assert(commandRawMessage);
-  assert.equal(commandRawMessage.textContent, "2550");
+  assert.equal(commandRawMessage.textContent, amountText);
   assert(logs.some((entry) => entry.message === "Executed reimbursement receipt command"));
   assert.equal(
     delivered.some(

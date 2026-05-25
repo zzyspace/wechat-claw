@@ -23,6 +23,7 @@ interface LoggerOptions {
 }
 
 interface PreparedContext {
+  details?: string;
   inlineParts: string[];
   stack?: string;
 }
@@ -124,8 +125,17 @@ function normalizeStack(stack: string) {
     .join("\n");
 }
 
+function normalizeMultilineBlock(label: string, text: string) {
+  return text
+    .trimEnd()
+    .split("\n")
+    .map((line, index) => (index === 0 ? `  ${label}: ${line}` : `           ${line}`))
+    .join("\n");
+}
+
 function prepareContext(context?: Record<string, unknown>): PreparedContext {
   const inlineParts: string[] = [];
+  let details: string | undefined;
   let stack: string | undefined;
 
   if (!context) {
@@ -142,6 +152,11 @@ function prepareContext(context?: Record<string, unknown>): PreparedContext {
       continue;
     }
 
+    if (key === "details" && typeof value === "string" && value.trim().length > 0) {
+      details = value;
+      continue;
+    }
+
     if (value instanceof Error) {
       inlineParts.push(`${key}=${JSON.stringify(value.message)}`);
       if (!stack && value.stack) {
@@ -154,6 +169,7 @@ function prepareContext(context?: Record<string, unknown>): PreparedContext {
   }
 
   return {
+    details,
     inlineParts,
     stack,
   };
@@ -184,11 +200,21 @@ function formatLogEntry(input: {
 
   const line = parts.join(" ");
 
-  if (!prepared.stack) {
+  if (!prepared.stack && !prepared.details) {
     return line;
   }
 
-  return `${line}\n${normalizeStack(prepared.stack)}`;
+  const blocks: string[] = [];
+
+  if (prepared.details) {
+    blocks.push(normalizeMultilineBlock("details", prepared.details));
+  }
+
+  if (prepared.stack) {
+    blocks.push(normalizeStack(prepared.stack));
+  }
+
+  return `${line}\n${blocks.join("\n")}`;
 }
 
 export function createLogger(options: LoggerOptions = {}): Logger {
