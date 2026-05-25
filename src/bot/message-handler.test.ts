@@ -500,6 +500,164 @@ test("handleMessage stores reimbursement images under reimbursement raw dir and 
   assert.equal(delivered.length, 1);
 });
 
+test("handleMessage includes merchant in pending reimbursement receipt when merchant is available", { concurrency: false }, async () => {
+  const logs: Array<{ level: string; message: string; context?: Record<string, unknown> }> = [];
+  const delivered: DeliveredMessage[] = [];
+  const context = {
+    ...createMessageContext([
+      createReimbursementChannelWithTargets([{ type: "room_topic", value: "AI报账群" }]),
+    ]),
+    reimbursementExtractionApiKey: "test-key",
+  };
+
+  globalThis.fetch = (async () =>
+    new Response(
+      JSON.stringify({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                amount: null,
+                confidence: 0.91,
+                currency: "人民币",
+                document_no: null,
+                expense_category: "other",
+                merchant: "苏州厨芯科技有限公司",
+                ocr_text: "账单待支付 2550",
+                voucher_date: "2026-05-22",
+                voucher_type: "bill",
+              }),
+            },
+          },
+        ],
+      }),
+      {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json",
+        },
+      },
+    )) as typeof fetch;
+
+  try {
+    await handleMessage(
+      {
+        id: () => "reimbursement-pending-receipt-merchant-test",
+        room: async () => ({
+          alias: async () => "小商户",
+          id: () => "reimbursement_room_pending_merchant",
+          topic: async () => "AI报账群",
+        }),
+        self: () => false,
+        talker: async () => ({
+          id: () => "reimbursement_talker_pending_merchant",
+          name: () => "Ryan。",
+        }),
+        text: () => "",
+        toFileBox: async () => ({
+          name: "pending-merchant.jpg",
+          toBuffer: async () => Buffer.from([0xff, 0xd8, 0xff, 0xd9]),
+        }),
+        type: () => 6,
+        wechaty: createWechatyMock(delivered),
+      },
+      context,
+      createLogger(logs),
+    );
+
+    assert.equal(
+      delivered.some(
+        (item) =>
+          item.targetType === "room_topic" &&
+          item.targetValue === "AI报账群" &&
+          item.text === "此次报账待核验(商户: 苏州厨芯科技有限公司)",
+      ),
+      true,
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("handleMessage includes OCR in pending reimbursement receipt when merchant is empty", { concurrency: false }, async () => {
+  const logs: Array<{ level: string; message: string; context?: Record<string, unknown> }> = [];
+  const delivered: DeliveredMessage[] = [];
+  const context = {
+    ...createMessageContext([
+      createReimbursementChannelWithTargets([{ type: "room_topic", value: "AI报账群" }]),
+    ]),
+    reimbursementExtractionApiKey: "test-key",
+  };
+
+  globalThis.fetch = (async () =>
+    new Response(
+      JSON.stringify({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                amount: null,
+                confidence: 0.91,
+                currency: "人民币",
+                document_no: null,
+                expense_category: "other",
+                merchant: null,
+                ocr_text: "账单待支付 2550",
+                voucher_date: "2026-05-22",
+                voucher_type: "bill",
+              }),
+            },
+          },
+        ],
+      }),
+      {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json",
+        },
+      },
+    )) as typeof fetch;
+
+  try {
+    await handleMessage(
+      {
+        id: () => "reimbursement-pending-receipt-ocr-test",
+        room: async () => ({
+          alias: async () => "小OCR",
+          id: () => "reimbursement_room_pending_ocr",
+          topic: async () => "AI报账群",
+        }),
+        self: () => false,
+        talker: async () => ({
+          id: () => "reimbursement_talker_pending_ocr",
+          name: () => "Ryan。",
+        }),
+        text: () => "",
+        toFileBox: async () => ({
+          name: "pending-ocr.jpg",
+          toBuffer: async () => Buffer.from([0xff, 0xd8, 0xff, 0xd9]),
+        }),
+        type: () => 6,
+        wechaty: createWechatyMock(delivered),
+      },
+      context,
+      createLogger(logs),
+    );
+
+    assert.equal(
+      delivered.some(
+        (item) =>
+          item.targetType === "room_topic" &&
+          item.targetValue === "AI报账群" &&
+          item.text === "此次报账待核验(OCR: 账单待支付 2550)",
+      ),
+      true,
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("handleMessage merges reimbursement text followed by image within 3 seconds", { concurrency: false }, async () => {
   const logs: Array<{ level: string; message: string; context?: Record<string, unknown> }> = [];
   const textMessageId = "reimbursement-text-before-image-test";

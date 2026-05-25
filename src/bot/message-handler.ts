@@ -1257,7 +1257,13 @@ async function sendReimbursementReceiptNotification(
   message: any,
   logger: Logger,
   channel: ChannelConfig,
-  report: { amount: number | null; channelCode?: string; id: number },
+  report: {
+    amount: number | null;
+    channelCode?: string;
+    id: number;
+    merchant?: string | null;
+    ocrText?: string | null;
+  },
 ) {
   if (channel.deliveryTargets.length === 0) {
     logger.info("Skipped reimbursement receipt notification", {
@@ -1275,7 +1281,7 @@ async function sendReimbursementReceiptNotification(
     return;
   }
 
-  const receiptText = buildReimbursementReceiptText(report.amount);
+  const receiptText = buildReimbursementReceiptText(report);
   const deliveryResults = await sendTextToTargets(
     bot,
     channel.deliveryTargets,
@@ -1531,16 +1537,23 @@ function cryptoRandomId() {
   return `generated_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
 }
 
-function buildReimbursementReceiptText(amount: number | null) {
-  if (amount === null) {
-    return REIMBURSEMENT_RECEIPT_PENDING_TEXT;
+function buildReimbursementReceiptText(report: {
+  amount: number | null;
+  merchant?: string | null;
+  ocrText?: string | null;
+}) {
+  if (report.amount === null) {
+    return `${REIMBURSEMENT_RECEIPT_PENDING_TEXT}${buildPendingReceiptSuffix(report)}`;
   }
 
-  return `报账${formatReimbursementReceiptAmount(amount)}元已录入`;
+  return `报账${formatReimbursementReceiptAmount(report.amount)}元已录入`;
 }
 
 function isReimbursementReceiptText(text: string) {
-  return text === REIMBURSEMENT_RECEIPT_PENDING_TEXT || /^报账\d+(?:\.\d+)?元已录入$/.test(text);
+  return (
+    /^此次报账待核验(?:\((?:商户|OCR): [\s\S]+?\))?$/.test(text) ||
+    /^报账\d+(?:\.\d+)?元已录入$/.test(text)
+  );
 }
 
 function isReimbursementCommandResponseText(text: string) {
@@ -1553,6 +1566,30 @@ function isReimbursementCommandResponseText(text: string) {
 
 function formatReimbursementReceiptAmount(amount: number) {
   return amount.toFixed(2).replace(/\.?0+$/, "");
+}
+
+function buildPendingReceiptSuffix(report: {
+  merchant?: string | null;
+  ocrText?: string | null;
+}) {
+  const merchant = normalizeReceiptSummaryText(report.merchant);
+
+  if (merchant) {
+    return `(商户: ${merchant})`;
+  }
+
+  const ocrText = normalizeReceiptSummaryText(report.ocrText);
+
+  if (ocrText) {
+    return `(OCR: ${ocrText})`;
+  }
+
+  return "";
+}
+
+function normalizeReceiptSummaryText(value: string | null | undefined) {
+  const normalized = value?.replace(/\s+/g, " ").trim();
+  return normalized ? normalized : null;
 }
 
 function isImageLikeMessage(typeValue: unknown, normalizedText: string) {
