@@ -1,7 +1,7 @@
 import type { StoredAttachment } from "../../core/storage/types.js";
 
 export type ReimbursementEvidenceType = "text" | "image" | "image+text";
-export type ReimbursementExpenseCategory = "food" | "other";
+export type ReimbursementExpenseCategory = string;
 export type ReimbursementReceiptTargetType = "contact_name" | "room_topic";
 export type ReimbursementVoucherDateSource = "model" | "message";
 export type ReimbursementSourceRole = "primary" | "remark";

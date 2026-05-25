@@ -1,4 +1,5 @@
 import { getDatabasePath } from "../storage/database.js";
+import { getReimbursementExpenseCategoryLabel } from "../../scenarios/reimbursement/categories.js";
 import type { ReimbursementReportDetail } from "../../scenarios/reimbursement/types.js";
 import { getZonedDateParts } from "./timezone.js";
 
@@ -143,7 +144,7 @@ export function renderReimbursementReportList(
     lines.push(`群聊: ${report.channelName}${report.channelCode ? ` (${report.channelCode})` : ""}`);
     lines.push(`报账人: ${report.reporter}`);
     lines.push(`金额: ${formatAmount(report)}`);
-    lines.push(`类别: ${report.expenseCategory === "food" ? "食材" : "其他"}`);
+    lines.push(`类别: ${getReimbursementExpenseCategoryLabel(report.expenseCategory)}`);
     lines.push(`票据日期: ${report.voucherDate} (${report.voucherDateSource})`);
     lines.push(`凭证类型: ${formatOptional(report.voucherType)}`);
     lines.push(`商户: ${formatOptional(report.merchant)}`);

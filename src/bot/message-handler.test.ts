@@ -1206,7 +1206,7 @@ test("handleMessage updates reimbursement category when replying category comman
     [commandMessageId]: {
       AppMsgType: 57,
       Content:
-        "<msg><appmsg><title><![CDATA[category: food]]></title><refermsg><svrid><![CDATA[" +
+        "<msg><appmsg><title><![CDATA[category: electricity]]></title><refermsg><svrid><![CDATA[" +
         receiptMessageId +
         "]]></svrid><displayname><![CDATA[机器人]]></displayname><content><![CDATA[报账36.5元已录入(category: other)]]></content></refermsg></appmsg></msg>",
       MsgType: 49,
@@ -1304,7 +1304,7 @@ test("handleMessage updates reimbursement category when replying category comman
         id: () => "reimbursement_talker_category",
         name: () => "Ryan。",
       }),
-      text: () => "<msg><appmsg><title>category: food</title></appmsg></msg>",
+      text: () => "<msg><appmsg><title>category: electricity</title></appmsg></msg>",
       type: () => 49,
       wechaty,
     },
@@ -1318,9 +1318,9 @@ test("handleMessage updates reimbursement category when replying category comman
   );
 
   assert(updatedReport);
-  assert.equal(updatedReport.expenseCategory, "food");
+  assert.equal(updatedReport.expenseCategory, "electricity");
   assert(commandRawMessage);
-  assert.equal(commandRawMessage.textContent, "category: food");
+  assert.equal(commandRawMessage.textContent, "category: electricity");
   assert(logs.some((entry) => entry.message === "Executed reimbursement receipt command"));
   assert.equal(
     delivered.some(

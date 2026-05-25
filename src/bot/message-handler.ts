@@ -29,6 +29,7 @@ import {
   updateReimbursementReportAmount,
   updateReimbursementReportExpenseCategory,
 } from "../scenarios/reimbursement/repository.js";
+import { normalizeReimbursementExpenseCategory } from "../scenarios/reimbursement/categories.js";
 import type { ReimbursementExpenseCategory } from "../scenarios/reimbursement/types.js";
 import { resolveMessageSentAt } from "./cold-start-filter.js";
 import { countSuccessfulDeliveries, sendTextToTarget, sendTextToTargets } from "./delivery-contact.js";
@@ -1558,17 +1559,7 @@ function parseReimbursementReceiptCommand(text: string): ReimbursementReceiptCom
 }
 
 function normalizeReceiptCommandExpenseCategory(value: string): ReimbursementExpenseCategory | null {
-  const normalized = value.trim().toLowerCase();
-
-  if (normalized === "food" || normalized === "食材") {
-    return "food";
-  }
-
-  if (normalized === "other" || normalized === "其他") {
-    return "other";
-  }
-
-  return null;
+  return normalizeReimbursementExpenseCategory(value);
 }
 
 function cryptoRandomId() {

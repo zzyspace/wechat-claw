@@ -3,6 +3,10 @@ import fs from "node:fs";
 import type { Logger } from "../../core/logging/logger.js";
 import { formatZonedDate } from "../../core/runtime/timezone.js";
 import type { StoredAttachment } from "../../core/storage/types.js";
+import {
+  DEFAULT_REIMBURSEMENT_EXPENSE_CATEGORY,
+  normalizeReimbursementExpenseCategory,
+} from "./categories.js";
 import type {
   ReimbursementEvidenceType,
   ReimbursementExpenseCategory,
@@ -109,14 +113,10 @@ function normalizeOptionalText(value: string | null | undefined): string | null 
 }
 
 function normalizeExpenseCategory(value: string | null | undefined, fallbackText: string): ReimbursementExpenseCategory {
-  const normalized = (value ?? "").trim().toLowerCase();
+  const normalized = normalizeReimbursementExpenseCategory(value);
 
-  if (normalized === "food" || normalized === "食材") {
-    return "food";
-  }
-
-  if (normalized === "other" || normalized === "其他") {
-    return "other";
+  if (normalized) {
+    return normalized;
   }
 
   return detectExpenseCategoryFromText(fallbackText);
@@ -145,7 +145,9 @@ function normalizeVoucherDate(
 }
 
 export function detectExpenseCategoryFromText(text: string): ReimbursementExpenseCategory {
-  return FOOD_KEYWORDS.some((keyword) => text.includes(keyword)) ? "food" : "other";
+  return FOOD_KEYWORDS.some((keyword) => text.includes(keyword))
+    ? "food"
+    : DEFAULT_REIMBURSEMENT_EXPENSE_CATEGORY;
 }
 
 export function extractAmountFromText(text: string): number | null {
@@ -191,7 +193,8 @@ function buildPrompt(input: ReimbursementExtractionInput): string {
     "如果识别结果表示这笔记录是退款、退回、退款成功或退款到账，amount 应返回负数。",
     "不要把商品单价、数量、优惠前金额、退款金额、待支付金额、账户余额、积分抵扣、手续费等误当成最终付款总金额。",
     "请只根据图片和文字提取报账字段，不要猜测不可见信息。",
-    "支出类别只能输出 food 或 other。明确是食品原料、门店食材采购才输出 food；非食材或不确定都输出 other。",
+    "支出类别优先输出已知 code。当前常用 code 包括 food、electricity、other。",
+    "明确是食品原料、门店食材采购输出 food；明确是电费、电费账单、电力缴费输出 electricity；非上述或不确定输出 other。",
     "如果票据日期清晰可见，voucher_date 输出 YYYY-MM-DD；看不到日期则输出 null。",
     "如果无法可靠判断最终付款总金额，amount 输出 null，不要猜测。",
     "必须返回 JSON，不要输出额外解释。",

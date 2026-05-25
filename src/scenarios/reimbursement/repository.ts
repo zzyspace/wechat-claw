@@ -1,5 +1,9 @@
 import { getDatabase } from "../../core/storage/database.js";
 import { getZonedDateParts, zonedDateTimeToUtc } from "../../core/runtime/timezone.js";
+import {
+  DEFAULT_REIMBURSEMENT_EXPENSE_CATEGORY,
+  mergeReimbursementExpenseCategory,
+} from "./categories.js";
 import type {
   ReimbursementEvidenceType,
   ReimbursementExpenseCategory,
@@ -367,7 +371,7 @@ export function saveReimbursementReport(input: ReimbursementReportInput): Reimbu
       input.reporter,
       input.amount,
       input.currency,
-      input.expenseCategory,
+      input.expenseCategory || DEFAULT_REIMBURSEMENT_EXPENSE_CATEGORY,
       input.voucherDate,
       input.voucherDateSource,
       input.note,
@@ -614,7 +618,7 @@ export function updateReimbursementReportExpenseCategory(input: {
         updated_at = datetime('now')
       WHERE id = ?
     `,
-  ).run(input.expenseCategory, existing.id);
+  ).run(input.expenseCategory || DEFAULT_REIMBURSEMENT_EXPENSE_CATEGORY, existing.id);
 
   return selectReportById(existing.id);
 }
@@ -1130,8 +1134,10 @@ export function mergePrimaryImageIntoTextOnlyReimbursementReport(input: {
   const mergedNote = mergeReportNotes(existing.note, input.note);
   const mergedAmount = input.amount ?? existing.amount;
   const mergedCurrency = input.amount !== null ? input.currency : existing.currency;
-  const mergedExpenseCategory =
-    existing.expenseCategory === "food" || input.expenseCategory === "food" ? "food" : "other";
+  const mergedExpenseCategory = mergeReimbursementExpenseCategory(
+    existing.expenseCategory || DEFAULT_REIMBURSEMENT_EXPENSE_CATEGORY,
+    input.expenseCategory || DEFAULT_REIMBURSEMENT_EXPENSE_CATEGORY,
+  );
   const mergedVoucherDate = input.voucherDateSource === "model" ? input.voucherDate : existing.voucherDate;
   const mergedVoucherDateSource =
     input.voucherDateSource === "model" ? input.voucherDateSource : existing.voucherDateSource;
