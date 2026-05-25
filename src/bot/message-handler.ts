@@ -27,7 +27,9 @@ import {
   saveReimbursementReceiptDelivery,
   saveReimbursementReport,
   updateReimbursementReportAmount,
+  updateReimbursementReportExpenseCategory,
 } from "../scenarios/reimbursement/repository.js";
+import type { ReimbursementExpenseCategory } from "../scenarios/reimbursement/types.js";
 import { resolveMessageSentAt } from "./cold-start-filter.js";
 import { countSuccessfulDeliveries, sendTextToTarget, sendTextToTargets } from "./delivery-contact.js";
 const REIMBURSEMENT_RECEIPT_PENDING_TEXT = "此次报账待核验";
@@ -76,6 +78,7 @@ interface ParsedReimbursementReceiptReply {
 
 type ReimbursementReceiptCommand =
   | { kind: "delete" }
+  | { expenseCategory: ReimbursementExpenseCategory; kind: "set_category" }
   | { amount: number; kind: "set_amount" };
 
 export async function handleMessage(message: any, context: MessageContext, logger: Logger) {
@@ -1157,10 +1160,15 @@ async function handleReimbursementReceiptReplyCommand(
 
   if (command.kind === "delete") {
     deleteReimbursementReport(matchedReport.id);
-  } else {
+  } else if (command.kind === "set_amount") {
     updateReimbursementReportAmount({
       reimbursementReportId: matchedReport.id,
       amount: command.amount,
+    });
+  } else {
+    updateReimbursementReportExpenseCategory({
+      reimbursementReportId: matchedReport.id,
+      expenseCategory: command.expenseCategory,
     });
   }
 
@@ -1173,6 +1181,7 @@ async function handleReimbursementReceiptReplyCommand(
     needsReview: false,
     resultJson: {
       amount: command.kind === "set_amount" ? command.amount : null,
+      category: command.kind === "set_category" ? command.expenseCategory : null,
       command: command.kind,
       commandText: receiptReply.commandText,
       eventType: "reimbursement_receipt_command",
@@ -1211,7 +1220,7 @@ async function handleReimbursementReceiptReplyCommand(
     `内容: ${receiptReply.commandText}`,
     `附件数: ${parsed.attachments.length}`,
     `入库: ${saveResult.inserted ? "新消息" : "已去重"}`,
-    `报账指令: ${command.kind} / report=${matchedReport.id}${command.kind === "set_amount" ? ` / amount=${command.amount}` : ""}`,
+    `报账指令: ${command.kind} / report=${matchedReport.id}${command.kind === "set_amount" ? ` / amount=${command.amount}` : command.kind === "set_category" ? ` / category=${command.expenseCategory}` : ""}`,
   ]);
 }
 
@@ -1524,11 +1533,39 @@ function parseReimbursementReceiptCommand(text: string): ReimbursementReceiptCom
     return { kind: "delete" };
   }
 
+  const categoryMatch = normalized.match(/^category\s*:\s*(.+)$/i);
+  if (categoryMatch) {
+    const expenseCategory = normalizeReceiptCommandExpenseCategory(categoryMatch[1] ?? "");
+
+    if (!expenseCategory) {
+      return null;
+    }
+
+    return {
+      expenseCategory,
+      kind: "set_category",
+    };
+  }
+
   if (/^\d+(?:\.\d+)?$/.test(normalized)) {
     return {
       amount: Number(normalized),
       kind: "set_amount",
     };
+  }
+
+  return null;
+}
+
+function normalizeReceiptCommandExpenseCategory(value: string): ReimbursementExpenseCategory | null {
+  const normalized = value.trim().toLowerCase();
+
+  if (normalized === "food" || normalized === "食材") {
+    return "food";
+  }
+
+  if (normalized === "other" || normalized === "其他") {
+    return "other";
   }
 
   return null;

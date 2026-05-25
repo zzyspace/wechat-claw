@@ -1112,6 +1112,139 @@ test("handleMessage updates reimbursement amount and clears review when replying
   );
 });
 
+test("handleMessage updates reimbursement category when replying category command to a receipt", { concurrency: false }, async () => {
+  const logs: Array<{ level: string; message: string; context?: Record<string, unknown> }> = [];
+  const delivered: DeliveredMessage[] = [];
+  const commandMessageId = "reimbursement-category-reply-command";
+  const receiptMessageId = "reimbursement-category-self-receipt";
+  const rawPayloadByMessageId = {
+    [commandMessageId]: {
+      AppMsgType: 57,
+      Content:
+        "<msg><appmsg><title><![CDATA[category: food]]></title><refermsg><svrid><![CDATA[" +
+        receiptMessageId +
+        "]]></svrid><displayname><![CDATA[机器人]]></displayname><content><![CDATA[报账36.5元已录入(category: other)]]></content></refermsg></appmsg></msg>",
+      MsgType: 49,
+    },
+  };
+  const context = createMessageContext([
+    createReimbursementChannelWithTargets([{ type: "room_topic", value: "AI报账群" }]),
+  ]);
+  const wechaty = createWechatyMock(delivered, {
+    rawPayloadByMessageId,
+  });
+
+  await handleMessage(
+    {
+      id: () => "reimbursement-category-text-first",
+      room: async () => ({
+        alias: async () => "小类目",
+        id: () => "reimbursement_room_category",
+        topic: async () => "AI报账群",
+      }),
+      self: () => false,
+      talker: async () => ({
+        id: () => "reimbursement_talker_category",
+        name: () => "Ryan。",
+      }),
+      text: () => "办公用品报账 36.5元",
+      type: () => 7,
+      wechaty,
+    },
+    context,
+    createLogger(logs),
+  );
+
+  await handleMessage(
+    {
+      id: () => "reimbursement-category-image-second",
+      room: async () => ({
+        alias: async () => "小类目",
+        id: () => "reimbursement_room_category",
+        topic: async () => "AI报账群",
+      }),
+      self: () => false,
+      talker: async () => ({
+        id: () => "reimbursement_talker_category",
+        name: () => "Ryan。",
+      }),
+      text: () => "",
+      toFileBox: async () => ({
+        name: "category-order.jpg",
+        toBuffer: async () => Buffer.from([0xff, 0xd8, 0xff, 0xd9]),
+      }),
+      type: () => 6,
+      wechaty,
+    },
+    context,
+    createLogger(logs),
+  );
+
+  const initialReport = listRecentReimbursementReports(1000).find((report) => report.reporter === "小类目");
+  assert(initialReport);
+  assert.equal(initialReport.expenseCategory, "other");
+  assert.equal(delivered.some((item) => item.text === "报账36.5元已录入(category: other)"), true);
+
+  await handleMessage(
+    {
+      id: () => receiptMessageId,
+      room: async () => ({
+        alias: async () => "机器人",
+        id: () => "reimbursement_room_category",
+        topic: async () => "AI报账群",
+      }),
+      self: () => true,
+      talker: async () => ({
+        id: () => "bot_self_category",
+        name: () => "Bot",
+      }),
+      text: () => "报账36.5元已录入(category: other)",
+      type: () => 7,
+      wechaty,
+    },
+    context,
+    createLogger(logs),
+  );
+
+  await handleMessage(
+    {
+      id: () => commandMessageId,
+      room: async () => ({
+        alias: async () => "小类目",
+        id: () => "reimbursement_room_category",
+        topic: async () => "AI报账群",
+      }),
+      self: () => false,
+      talker: async () => ({
+        id: () => "reimbursement_talker_category",
+        name: () => "Ryan。",
+      }),
+      text: () => "<msg><appmsg><title>category: food</title></appmsg></msg>",
+      type: () => 49,
+      wechaty,
+    },
+    context,
+    createLogger(logs),
+  );
+
+  const updatedReport = listRecentReimbursementReports(1000).find((report) => report.id === initialReport.id);
+  const commandRawMessage = listRecentRawMessages(1000).find(
+    (message) => message.messageExternalId === commandMessageId,
+  );
+
+  assert(updatedReport);
+  assert.equal(updatedReport.expenseCategory, "food");
+  assert(commandRawMessage);
+  assert.equal(commandRawMessage.textContent, "category: food");
+  assert(logs.some((entry) => entry.message === "Executed reimbursement receipt command"));
+  assert.equal(
+    delivered.some(
+      (item) => item.targetType === "room_topic" && item.targetValue === "AI报账群" && item.text === "已处理",
+    ),
+    true,
+  );
+});
+
 test("handleMessage fallback receipt matching prefers the same reporter when pending receipts repeat", { concurrency: false }, async () => {
   const logs: Array<{ level: string; message: string; context?: Record<string, unknown> }> = [];
   const delivered: DeliveredMessage[] = [];

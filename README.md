@@ -160,6 +160,8 @@ WECHATY_CHANNELS_JSON=[{"code":"loss_a","enabled":true,"scenario":"loss-report",
 - 当 bot 在报账群发送“报账xx元已录入(category: x)”或“此次报账待核验”后，可以直接回复这条回执做人工修正：
   - 回复 `delete`：删除对应报账记录
   - 回复纯数字：将对应报账金额改为该数字，并把 `needs_review` 更新为 `false`
+  - 回复 `category: x`：将对应报账的 `expense_category` 改为 `x`
+  - 当前 `x` 支持 `food / other / 食材 / 其他`
   - 指令执行成功后，bot 会回复 `已处理`
   - 指令格式正确但没找到对应报账时，bot 会回复 `未找到对应报账`
   - 指令不支持时，bot 会回复 `不支持的指令`

@@ -599,6 +599,26 @@ export function updateReimbursementReportAmount(input: {
   return selectReportById(existing.id);
 }
 
+export function updateReimbursementReportExpenseCategory(input: {
+  reimbursementReportId: number;
+  expenseCategory: ReimbursementExpenseCategory;
+}): ReimbursementReportRecord {
+  const existing = selectReportById(input.reimbursementReportId);
+  const db = getDatabase();
+
+  db.prepare(
+    `
+      UPDATE reimbursement_reports
+      SET
+        expense_category = ?,
+        updated_at = datetime('now')
+      WHERE id = ?
+    `,
+  ).run(input.expenseCategory, existing.id);
+
+  return selectReportById(existing.id);
+}
+
 export function deleteReimbursementReport(reimbursementReportId: number): boolean {
   const existing = findReportById(reimbursementReportId);
 
