@@ -10,7 +10,7 @@ import { getReimbursementRawStorageDir } from "../core/runtime/state-paths.js";
 import { listRecentRawMessages } from "../core/storage/raw-message-repository.js";
 import { listReimbursementReportDetails, listRecentReimbursementReports } from "../scenarios/reimbursement/repository.js";
 import { handleMessage } from "./message-handler.js";
-import { createWechatyMessageDebugSnapshot } from "./wechaty-client.js";
+import { createWechatyMessageMixinDebugDetails } from "./wechaty-client.js";
 import type { WechatyInstance } from "./types.js";
 
 process.env.WECHATY_STATE_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "wechat-claw-message-handler-"));
@@ -194,36 +194,121 @@ test(
   },
 );
 
-test("createWechatyMessageDebugSnapshot captures own fields and prototype fields", () => {
-  class FakeWechatyMessage {
+test("createWechatyMessageMixinDebugDetails captures requested values without invoking side-effect methods", async () => {
+  class FakeMessageMixin {
+    static Type = {
+      7: "Text",
+    };
+
+    constructor() {
+      // no-op
+    }
+
+    toString() {
+      return "fake-message";
+    }
+
+    conversation() {
+      return { id: "conversation_1" };
+    }
+
+    talker() {
+      return { id: "talker_1" };
+    }
+
+    listener() {
+      return { id: "listener_1" };
+    }
+
     room() {
-      return "room";
+      return { id: "room_1" };
+    }
+
+    text() {
+      return "hello";
+    }
+
+    async toRecalled() {
+      return undefined;
+    }
+
+    type() {
+      return 7;
+    }
+
+    self() {
+      return false;
+    }
+
+    async mentionList() {
+      return [{ id: "mention_1" }];
+    }
+
+    async mentionText() {
+      return "hello";
+    }
+
+    async mentionSelf() {
+      return false;
+    }
+
+    isReady() {
+      return true;
+    }
+
+    date() {
+      return new Date("2026-05-21T10:11:12.345Z");
+    }
+
+    age() {
+      return 12;
     }
   }
 
-  const message = new FakeWechatyMessage() as FakeWechatyMessage & {
-    enumerableField: string;
-  };
+  const details = await createWechatyMessageMixinDebugDetails(new FakeMessageMixin());
 
-  Object.defineProperty(message, "hiddenField", {
-    enumerable: false,
-    value: 42,
+  assert.equal(details.constructor, "FakeMessageMixin");
+  assert.equal(details.toString, "fake-message");
+  assert.deepEqual(details.conversation, {
+    constructorName: "Object",
+    id: "conversation_1",
   });
-  message.enumerableField = "visible";
-
-  const snapshot = createWechatyMessageDebugSnapshot(message);
-
-  assert.equal(snapshot.constructorName, "FakeWechatyMessage");
-  assert.equal(snapshot.ownPropertyNames.includes("hiddenField"), true);
-  assert.equal(snapshot.ownPropertyNames.includes("enumerableField"), true);
-  assert.equal(snapshot.ownProperties.hiddenField, 42);
-  assert.equal(snapshot.ownProperties.enumerableField, "visible");
-  assert.equal(
-    snapshot.prototypeChain.some(
-      (entry) => entry.constructorName === "FakeWechatyMessage" && entry.propertyNames.includes("room"),
-    ),
-    true,
-  );
+  assert.deepEqual(details.talker, {
+    constructorName: "Object",
+    id: "talker_1",
+  });
+  assert.deepEqual(details.listener, {
+    constructorName: "Object",
+    id: "listener_1",
+  });
+  assert.deepEqual(details.room, {
+    constructorName: "Object",
+    id: "room_1",
+  });
+  assert.equal(details.text, "hello");
+  assert.deepEqual(details.type, {
+    code: 7,
+    name: "Text",
+  });
+  assert.equal(details.self, false);
+  assert.deepEqual(details.mentionList, [
+    {
+      constructorName: "Object",
+      id: "mention_1",
+    },
+  ]);
+  assert.equal(details.mentionText, "hello");
+  assert.equal(details.mentionSelf, false);
+  assert.equal(details.isReady, true);
+  assert.equal(details.date, "2026-05-21T10:11:12.345Z");
+  assert.equal(details.age, 12);
+  assert.equal("from" in details, false);
+  assert.equal("to" in details, false);
+  assert.equal("say" in details, false);
+  assert.equal("recall" in details, false);
+  assert.equal("mention" in details, false);
+  assert.equal("ready" in details, false);
+  assert.equal("forward" in details, false);
 });
 
 test(

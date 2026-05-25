@@ -18,6 +18,27 @@ export interface BotLifecycleHooks {
   onMessage?: () => void;
 }
 
+const MESSAGE_MIXIN_DETAIL_PROPERTIES = [
+  "constructor",
+  "toString",
+  "conversation",
+  "talker",
+  "listener",
+  "room",
+  "text",
+  "toRecalled",
+  "type",
+  "self",
+  "mentionList",
+  "mentionText",
+  "mentionSelf",
+  "isReady",
+  "date",
+  "age",
+] as const;
+
+type MessageMixinDetailProperty = (typeof MESSAGE_MIXIN_DETAIL_PROPERTIES)[number];
+
 function readSnapshotValue(
   value: unknown,
   options: {
@@ -114,57 +135,105 @@ function readSnapshotValue(
   return snapshot;
 }
 
-export function createWechatyMessageDebugSnapshot(message: unknown) {
-  const ownPropertyNames =
-    message && (typeof message === "object" || typeof message === "function")
-      ? Object.getOwnPropertyNames(message)
-      : [];
-  const ownSymbols =
-    message && (typeof message === "object" || typeof message === "function")
-      ? Object.getOwnPropertySymbols(message).map((symbol) => symbol.toString())
-      : [];
-  const ownProperties: Record<string, unknown> = {};
-  const prototypeChain: Array<{
-    constructorName: string;
-    propertyNames: string[];
-  }> = [];
-  const seen = new WeakSet<object>();
+function formatInvocationError(error: unknown) {
+  return `[Thrown ${error instanceof Error ? error.message : String(error)}]`;
+}
 
-  if (message && (typeof message === "object" || typeof message === "function")) {
-    for (const propertyName of ownPropertyNames) {
-      try {
-        ownProperties[propertyName] = readSnapshotValue((message as Record<string, unknown>)[propertyName], {
-          depth: 0,
-          maxDepth: 2,
-          maxEntries: 30,
-          seen,
-        });
-      } catch (error) {
-        ownProperties[propertyName] = `[Thrown ${error instanceof Error ? error.message : String(error)}]`;
-      }
-    }
-
-    let currentPrototype = Object.getPrototypeOf(message);
-
-    while (currentPrototype && currentPrototype !== Object.prototype) {
-      prototypeChain.push({
-        constructorName: currentPrototype.constructor?.name ?? "Object",
-        propertyNames: Object.getOwnPropertyNames(currentPrototype),
-      });
-      currentPrototype = Object.getPrototypeOf(currentPrototype);
-    }
+function summarizeMessageDetailValue(value: unknown): unknown {
+  if (value instanceof Date) {
+    return value.toISOString();
   }
 
+  if (Array.isArray(value)) {
+    return value.map((item) => summarizeMessageDetailValue(item));
+  }
+
+  if (value && typeof value === "object") {
+    const seen = new WeakSet<object>();
+    const summary = readSnapshotValue(value, {
+      depth: 0,
+      maxDepth: 1,
+      maxEntries: 10,
+      seen,
+    });
+
+    return summary;
+  }
+
+  return value;
+}
+
+function resolveMessageTypeDetail(message: any) {
+  const typeValue = message.type();
+  const typeName = message?.constructor?.Type?.[typeValue];
+
   return {
-    constructorName:
-      message && (typeof message === "object" || typeof message === "function")
-        ? (message as { constructor?: { name?: string } }).constructor?.name ?? "Object"
-        : typeof message,
-    ownPropertyNames,
-    ownSymbols,
-    ownProperties,
-    prototypeChain,
+    code: typeValue,
+    name: typeof typeName === "string" ? typeName : undefined,
   };
+}
+
+async function readMessageMixinDetailPropertyValue(
+  message: any,
+  propertyName: MessageMixinDetailProperty,
+): Promise<unknown> {
+  try {
+    switch (propertyName) {
+      case "constructor":
+        return message?.constructor?.name ?? "(unknown)";
+      case "toString":
+        return message.toString();
+      case "conversation":
+        return summarizeMessageDetailValue(message.conversation());
+      case "talker":
+        return summarizeMessageDetailValue(message.talker());
+      case "listener":
+        return summarizeMessageDetailValue(message.listener());
+      case "room":
+        return summarizeMessageDetailValue(message.room());
+      case "text":
+        return message.text();
+      case "toRecalled":
+        return summarizeMessageDetailValue(await message.toRecalled());
+      case "type":
+        return resolveMessageTypeDetail(message);
+      case "self":
+        return message.self();
+      case "mentionList":
+        return summarizeMessageDetailValue(await message.mentionList());
+      case "mentionText":
+        return await message.mentionText();
+      case "mentionSelf":
+        return await message.mentionSelf();
+      case "isReady":
+        return message.isReady();
+      case "date":
+        return summarizeMessageDetailValue(message.date());
+      case "age":
+        return message.age();
+      default:
+        return "[Unsupported property]";
+    }
+  } catch (error) {
+    return formatInvocationError(error);
+  }
+}
+
+export async function createWechatyMessageMixinDebugDetails(message: unknown) {
+  const details: Record<string, unknown> = {};
+
+  if (!message || (typeof message !== "object" && typeof message !== "function")) {
+    for (const propertyName of MESSAGE_MIXIN_DETAIL_PROPERTIES) {
+      details[propertyName] = "[Message unavailable]";
+    }
+    return details;
+  }
+
+  for (const propertyName of MESSAGE_MIXIN_DETAIL_PROPERTIES) {
+    details[propertyName] = await readMessageMixinDetailPropertyValue(message, propertyName);
+  }
+
+  return details;
 }
 
 function resolveScanStatusName(scanStatus: Record<string, string | number>, value: unknown) {
@@ -317,7 +386,7 @@ export async function startBot(
     hooks.onMessage?.();
 
     logger.info("[ CUSTOM LOG ] Raw wechaty message snapshot", {
-      details: JSON.stringify(createWechatyMessageDebugSnapshot(message), null, 2),
+      details: JSON.stringify(await createWechatyMessageMixinDebugDetails(message), null, 2),
     });
 
     const coldStartDecision = shouldIgnoreColdStartMessage(message, {
