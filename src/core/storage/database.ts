@@ -116,6 +116,27 @@ function migrate(db: Database.Database) {
 
     CREATE INDEX IF NOT EXISTS idx_reimbursement_report_sources_report_id
       ON reimbursement_report_sources(reimbursement_report_id);
+
+    CREATE TABLE IF NOT EXISTS reimbursement_receipt_deliveries (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      reimbursement_report_id INTEGER NOT NULL,
+      channel_code TEXT,
+      target_type TEXT NOT NULL,
+      target_value TEXT NOT NULL,
+      receipt_text TEXT NOT NULL,
+      sent_at TEXT NOT NULL,
+      raw_message_id INTEGER UNIQUE,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY(reimbursement_report_id) REFERENCES reimbursement_reports(id) ON DELETE CASCADE,
+      FOREIGN KEY(raw_message_id) REFERENCES raw_messages(id) ON DELETE SET NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_reimbursement_receipt_deliveries_report_id
+      ON reimbursement_receipt_deliveries(reimbursement_report_id);
+
+    CREATE INDEX IF NOT EXISTS idx_reimbursement_receipt_deliveries_target_text_sent_at
+      ON reimbursement_receipt_deliveries(target_type, target_value, receipt_text, sent_at);
   `);
 
   const columns = db.prepare(`PRAGMA table_info(raw_messages)`).all() as Array<{ name: string }>;

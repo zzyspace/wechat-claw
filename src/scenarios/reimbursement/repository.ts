@@ -4,6 +4,8 @@ import type {
   ReimbursementEvidenceType,
   ReimbursementExpenseCategory,
   ReimbursementReportDetail,
+  ReimbursementReceiptDeliveryRecord,
+  ReimbursementReceiptTargetType,
   ReimbursementReportInput,
   ReimbursementReportRecord,
   ReimbursementReportSourceDetail,
@@ -167,6 +169,32 @@ function mapReportRow(row: {
   };
 }
 
+function mapReceiptDeliveryRow(row: {
+  id: number;
+  reimbursementReportId: number;
+  channelCode?: string | null;
+  targetType: string;
+  targetValue: string;
+  receiptText: string;
+  sentAt: string;
+  rawMessageId?: number | null;
+  createdAt: string;
+  updatedAt: string;
+}): ReimbursementReceiptDeliveryRecord {
+  return {
+    id: row.id,
+    reimbursementReportId: row.reimbursementReportId,
+    channelCode: row.channelCode ?? undefined,
+    targetType: row.targetType as ReimbursementReceiptTargetType,
+    targetValue: row.targetValue,
+    receiptText: row.receiptText,
+    sentAt: row.sentAt,
+    rawMessageId: row.rawMessageId ?? undefined,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  };
+}
+
 function normalizeSourceText(text: string) {
   const normalized = text === "(非文本消息)" ? "" : text.trim();
   return normalized;
@@ -208,6 +236,69 @@ function selectReportById(id: number): ReimbursementReportRecord {
   }
 
   return mapReportRow(row);
+}
+
+function findReportById(id: number): ReimbursementReportRecord | null {
+  const db = getDatabase();
+  const row = db
+    .prepare(
+      `
+        SELECT
+          id,
+          channel_code as channelCode,
+          channel_name as channelName,
+          reporter,
+          amount,
+          currency,
+          expense_category as expenseCategory,
+          voucher_date as voucherDate,
+          voucher_date_source as voucherDateSource,
+          note,
+          evidence_type as evidenceType,
+          merchant,
+          document_no as documentNo,
+          voucher_type as voucherType,
+          ocr_text as ocrText,
+          confidence,
+          needs_review as needsReview,
+          created_at as createdAt,
+          updated_at as updatedAt
+        FROM reimbursement_reports
+        WHERE id = ?
+      `,
+    )
+    .get(id) as Parameters<typeof mapReportRow>[0] | undefined;
+
+  return row ? mapReportRow(row) : null;
+}
+
+function selectReceiptDeliveryById(id: number): ReimbursementReceiptDeliveryRecord {
+  const db = getDatabase();
+  const row = db
+    .prepare(
+      `
+        SELECT
+          id,
+          reimbursement_report_id as reimbursementReportId,
+          channel_code as channelCode,
+          target_type as targetType,
+          target_value as targetValue,
+          receipt_text as receiptText,
+          sent_at as sentAt,
+          raw_message_id as rawMessageId,
+          created_at as createdAt,
+          updated_at as updatedAt
+        FROM reimbursement_receipt_deliveries
+        WHERE id = ?
+      `,
+    )
+    .get(id) as Parameters<typeof mapReceiptDeliveryRow>[0] | undefined;
+
+  if (!row) {
+    throw new Error(`Reimbursement receipt delivery not found: ${id}`);
+  }
+
+  return mapReceiptDeliveryRow(row);
 }
 
 export function getReimbursementReportByRawMessageId(
@@ -296,6 +387,237 @@ export function saveReimbursementReport(input: ReimbursementReportInput): Reimbu
   })();
 
   return selectReportById(reportId);
+}
+
+export function saveReimbursementReceiptDelivery(input: {
+  reimbursementReportId: number;
+  channelCode?: string;
+  targetType: ReimbursementReceiptTargetType;
+  targetValue: string;
+  receiptText: string;
+  sentAt: string;
+  rawMessageId?: number;
+}): ReimbursementReceiptDeliveryRecord {
+  const db = getDatabase();
+  const existingReport = findReportById(input.reimbursementReportId);
+
+  if (!existingReport) {
+    throw new Error(`Reimbursement report not found: ${input.reimbursementReportId}`);
+  }
+
+  const rawMessageId = input.rawMessageId ?? null;
+  if (rawMessageId !== null) {
+    const existingByRawMessage = db
+      .prepare(
+        `
+          SELECT id
+          FROM reimbursement_receipt_deliveries
+          WHERE raw_message_id = ?
+        `,
+      )
+      .get(rawMessageId) as { id: number } | undefined;
+
+    if (existingByRawMessage) {
+      return selectReceiptDeliveryById(existingByRawMessage.id);
+    }
+  }
+
+  const result = db
+    .prepare(
+      `
+        INSERT INTO reimbursement_receipt_deliveries (
+          reimbursement_report_id,
+          channel_code,
+          target_type,
+          target_value,
+          receipt_text,
+          sent_at,
+          raw_message_id
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+      `,
+    )
+    .run(
+      input.reimbursementReportId,
+      input.channelCode ?? null,
+      input.targetType,
+      input.targetValue,
+      input.receiptText,
+      input.sentAt,
+      rawMessageId,
+    );
+
+  return selectReceiptDeliveryById(Number(result.lastInsertRowid));
+}
+
+export function attachRawMessageToRecentReimbursementReceiptDelivery(input: {
+  targetType: ReimbursementReceiptTargetType;
+  targetValue: string;
+  receiptText: string;
+  rawMessageId: number;
+  sentAt: string;
+  matchWindowSeconds?: number;
+}): ReimbursementReceiptDeliveryRecord | null {
+  const db = getDatabase();
+  const existingByRawMessage = db
+    .prepare(
+      `
+        SELECT id
+        FROM reimbursement_receipt_deliveries
+        WHERE raw_message_id = ?
+      `,
+    )
+    .get(input.rawMessageId) as { id: number } | undefined;
+
+  if (existingByRawMessage) {
+    return selectReceiptDeliveryById(existingByRawMessage.id);
+  }
+
+  const matchWindowSeconds = input.matchWindowSeconds ?? 90;
+  const sinceIso = new Date(new Date(input.sentAt).getTime() - matchWindowSeconds * 1000).toISOString();
+  const row = db
+    .prepare(
+      `
+        SELECT id
+        FROM reimbursement_receipt_deliveries
+        WHERE target_type = ?
+          AND target_value = ?
+          AND receipt_text = ?
+          AND raw_message_id IS NULL
+          AND sent_at >= ?
+          AND sent_at <= ?
+        ORDER BY sent_at DESC, id DESC
+        LIMIT 1
+      `,
+    )
+    .get(
+      input.targetType,
+      input.targetValue,
+      input.receiptText,
+      sinceIso,
+      input.sentAt,
+    ) as { id: number } | undefined;
+
+  if (!row) {
+    return null;
+  }
+
+  db.prepare(
+    `
+      UPDATE reimbursement_receipt_deliveries
+      SET
+        raw_message_id = ?,
+        updated_at = datetime('now')
+      WHERE id = ?
+    `,
+  ).run(input.rawMessageId, row.id);
+
+  return selectReceiptDeliveryById(row.id);
+}
+
+export function findReimbursementReportByReceiptMessageExternalId(
+  messageExternalId: string,
+): ReimbursementReportRecord | null {
+  const db = getDatabase();
+  const row = db
+    .prepare(
+      `
+        SELECT rrd.reimbursement_report_id as reimbursementReportId
+        FROM reimbursement_receipt_deliveries rrd
+        INNER JOIN raw_messages rm ON rm.id = rrd.raw_message_id
+        INNER JOIN reimbursement_reports rr ON rr.id = rrd.reimbursement_report_id
+        WHERE rm.message_external_id = ?
+        ORDER BY rrd.id DESC
+        LIMIT 1
+      `,
+    )
+    .get(messageExternalId) as { reimbursementReportId: number } | undefined;
+
+  return row ? selectReportById(row.reimbursementReportId) : null;
+}
+
+export function findLatestReimbursementReportByReceiptText(input: {
+  targetType: ReimbursementReceiptTargetType;
+  targetValue: string;
+  receiptText: string;
+  beforeIso: string;
+}): ReimbursementReportRecord | null {
+  const db = getDatabase();
+  const row = db
+    .prepare(
+      `
+        SELECT rrd.reimbursement_report_id as reimbursementReportId
+        FROM reimbursement_receipt_deliveries rrd
+        INNER JOIN reimbursement_reports rr ON rr.id = rrd.reimbursement_report_id
+        LEFT JOIN raw_messages rm ON rm.id = rrd.raw_message_id
+        WHERE rrd.target_type = ?
+          AND rrd.target_value = ?
+          AND rrd.receipt_text = ?
+          AND COALESCE(rm.event_received_at, rrd.sent_at) < ?
+        ORDER BY
+          CASE WHEN rrd.raw_message_id IS NULL THEN 1 ELSE 0 END ASC,
+          COALESCE(rm.event_received_at, rrd.sent_at) DESC,
+          rrd.id DESC
+        LIMIT 1
+      `,
+    )
+    .get(input.targetType, input.targetValue, input.receiptText, input.beforeIso) as
+    | { reimbursementReportId: number }
+    | undefined;
+
+  return row ? selectReportById(row.reimbursementReportId) : null;
+}
+
+export function updateReimbursementReportAmount(input: {
+  reimbursementReportId: number;
+  amount: number;
+}): ReimbursementReportRecord {
+  const existing = selectReportById(input.reimbursementReportId);
+  const db = getDatabase();
+
+  db.prepare(
+    `
+      UPDATE reimbursement_reports
+      SET
+        amount = ?,
+        needs_review = 0,
+        updated_at = datetime('now')
+      WHERE id = ?
+    `,
+  ).run(input.amount, existing.id);
+
+  return selectReportById(existing.id);
+}
+
+export function deleteReimbursementReport(reimbursementReportId: number): boolean {
+  const existing = findReportById(reimbursementReportId);
+
+  if (!existing) {
+    return false;
+  }
+
+  const db = getDatabase();
+  db.transaction(() => {
+    db.prepare(
+      `
+        DELETE FROM reimbursement_receipt_deliveries
+        WHERE reimbursement_report_id = ?
+      `,
+    ).run(reimbursementReportId);
+    db.prepare(
+      `
+        DELETE FROM reimbursement_report_sources
+        WHERE reimbursement_report_id = ?
+      `,
+    ).run(reimbursementReportId);
+    db.prepare(
+      `
+        DELETE FROM reimbursement_reports
+        WHERE id = ?
+      `,
+    ).run(reimbursementReportId);
+  })();
+
+  return true;
 }
 
 export function findRecentPrimaryImageReimbursementReport(

@@ -11,20 +11,31 @@ import { extractLossReportHeuristically } from "../scenarios/loss-report/heurist
 import { extractLossReportByModel } from "../scenarios/loss-report/model-provider.js";
 import { extractReimbursementReport } from "../scenarios/reimbursement/extractor.js";
 import {
+  attachRawMessageToRecentReimbursementReceiptDelivery,
   attachRemarkToReimbursementReport,
+  deleteReimbursementReport,
   findForwardTextOnlyReimbursementReportMatch,
+  findLatestReimbursementReportByReceiptText,
   findNextImageRawMessage,
   findRecentImageRawMessage,
   findRecentRemarkTextSource,
   findRecentTextOnlyReimbursementReport,
+  findReimbursementReportByReceiptMessageExternalId,
   getReimbursementReportByRawMessageId,
   mergePrimaryImageIntoTextOnlyReimbursementReport,
   moveRemarkToReimbursementReport,
+  saveReimbursementReceiptDelivery,
   saveReimbursementReport,
+  updateReimbursementReportAmount,
 } from "../scenarios/reimbursement/repository.js";
 import { resolveMessageSentAt } from "./cold-start-filter.js";
 import { countSuccessfulDeliveries, sendTextToTarget, sendTextToTargets } from "./delivery-contact.js";
 const REIMBURSEMENT_RECEIPT_PENDING_TEXT = "此次报账待核验";
+const REIMBURSEMENT_COMMAND_PROCESSED_TEXT = "已处理";
+const REIMBURSEMENT_COMMAND_NOT_FOUND_TEXT = "未找到对应报账";
+const REIMBURSEMENT_COMMAND_UNSUPPORTED_TEXT = "不支持的指令";
+const REIMBURSEMENT_RECEIPT_COMMAND_EXTRACTOR_CODE = "receipt-command-v1";
+const REIMBURSEMENT_RECEIPT_SELF_MATCH_WINDOW_SECONDS = 90;
 
 export interface MessageContext {
   channels: ChannelConfig[];
@@ -57,24 +68,18 @@ interface ParsedRoomMessage {
   typeValue: unknown;
 }
 
+interface ParsedReimbursementReceiptReply {
+  commandText: string;
+  quotedMessageExternalId?: string;
+  quotedText: string;
+}
+
+type ReimbursementReceiptCommand =
+  | { kind: "delete" }
+  | { amount: number; kind: "set_amount" };
+
 export async function handleMessage(message: any, context: MessageContext, logger: Logger) {
-  if (message.self && typeof message.self === "function" && message.self()) {
-    return;
-  }
-
   const room = typeof message.room === "function" ? await message.room() : null;
-
-  if (!room) {
-    return;
-  }
-
-  const roomTopic = typeof room.topic === "function" ? await room.topic() : "";
-  const channel = matchChannelByRoomTopic(context.channels, roomTopic);
-
-  if (!channel) {
-    return;
-  }
-
   const talker = typeof message.talker === "function" ? await message.talker() : null;
   const senderName = await resolveSenderName(room, talker);
   const text = typeof message.text === "function" ? message.text() : "";
@@ -86,6 +91,37 @@ export async function handleMessage(message: any, context: MessageContext, logge
   const resolvedSentAt = resolveMessageSentAt(message, new Date());
   const messageSentAt = resolvedSentAt?.toISOString();
   const eventReceivedAt = new Date().toISOString();
+  const roomTopic = room && typeof room.topic === "function" ? await room.topic() : "";
+  const channel = roomTopic
+    ? (matchChannelByRoomTopic(context.channels, roomTopic) ?? undefined)
+    : undefined;
+  const senderExternalId = talker && typeof talker.id === "function" ? talker.id() : undefined;
+
+  if (message.self && typeof message.self === "function" && message.self()) {
+    await handleSelfMessage(
+      message,
+      {
+        channel,
+        channelExternalId: room && typeof room.id === "function" ? room.id() : undefined,
+        eventReceivedAt,
+        messageExternalId: String(messageId),
+        messageSentAt,
+        messageType: String(typeValue),
+        normalizedText,
+        roomTopic,
+        senderExternalId,
+        senderName,
+        typeValue,
+      },
+      logger,
+    );
+    return;
+  }
+
+  if (!room || !channel) {
+    return;
+  }
+
   const attachments: StoredAttachment[] = [];
 
   if (channel.scenario === "reimbursement") {
@@ -144,7 +180,6 @@ export async function handleMessage(message: any, context: MessageContext, logge
     }
   }
 
-  const senderExternalId = talker && typeof talker.id === "function" ? talker.id() : undefined;
   const parsed: ParsedRoomMessage = {
     attachments,
     channel,
@@ -168,6 +203,63 @@ export async function handleMessage(message: any, context: MessageContext, logge
   if (channel.scenario === "reimbursement") {
     await handleReimbursementMessage(message, parsed, context, logger);
   }
+}
+
+async function handleSelfMessage(
+  message: any,
+  parsed: {
+    channel?: ChannelConfig;
+    channelExternalId?: string;
+    eventReceivedAt: string;
+    messageExternalId: string;
+    messageSentAt?: string;
+    messageType: string;
+    normalizedText: string;
+    roomTopic: string;
+    senderExternalId?: string;
+    senderName: string;
+    typeValue: unknown;
+  },
+  logger: Logger,
+) {
+  if (!parsed.roomTopic || !isReimbursementReceiptText(parsed.normalizedText)) {
+    return;
+  }
+
+  const normalized = normalizeMessage({
+    messageExternalId: parsed.messageExternalId,
+    channelCode: parsed.channel?.code,
+    channelExternalId: parsed.channelExternalId,
+    channelName: parsed.roomTopic,
+    senderExternalId: parsed.senderExternalId,
+    senderName: parsed.senderName,
+    messageType: parsed.messageType,
+    textContent: parsed.normalizedText,
+    messageSentAt: parsed.messageSentAt,
+    eventReceivedAt: parsed.eventReceivedAt,
+    attachments: [],
+  });
+  const saveResult = saveRawMessage(normalized);
+  const receiptDelivery = attachRawMessageToRecentReimbursementReceiptDelivery({
+    targetType: "room_topic",
+    targetValue: parsed.roomTopic,
+    receiptText: parsed.normalizedText,
+    rawMessageId: saveResult.rawMessageId,
+    sentAt: parsed.eventReceivedAt,
+    matchWindowSeconds: REIMBURSEMENT_RECEIPT_SELF_MATCH_WINDOW_SECONDS,
+  });
+
+  logger.info("Processed self reimbursement receipt message", {
+    channelCode: parsed.channel?.code,
+    inserted: saveResult.inserted,
+    messageExternalId: parsed.messageExternalId,
+    rawMessageId: saveResult.rawMessageId,
+    receiptDeliveryId: receiptDelivery?.id,
+    reimbursementReportId: receiptDelivery?.reimbursementReportId,
+    roomTopic: parsed.roomTopic,
+    text: parsed.normalizedText,
+    typeValue: parsed.typeValue,
+  });
 }
 
 async function handleLossReportMessage(
@@ -293,6 +385,18 @@ async function handleReimbursementMessage(
     text: parsed.normalizedText,
     typeValue: parsed.typeValue,
   });
+
+  const receiptReply = await extractReimbursementReceiptReply(
+    message,
+    parsed.messageExternalId,
+    parsed.normalizedText,
+    logger,
+  );
+
+  if (receiptReply && isReimbursementReceiptText(receiptReply.quotedText)) {
+    await handleReimbursementReceiptReplyCommand(message, parsed, context, logger, receiptReply);
+    return;
+  }
 
   if (isTextOnlyUrlMessage(parsed)) {
     logger.info("Skipped reimbursement text-only URL message", {
@@ -867,7 +971,7 @@ async function handleReimbursementMessage(
   });
 
   if (parsed.attachments.length > 0 && saveResult.inserted) {
-    await sendReimbursementReceiptNotification(message, logger, parsed.channel, report.amount);
+    await sendReimbursementReceiptNotification(message, logger, parsed.channel, report);
   }
 
   await sendDebugNotification(message, context, logger, parsed.channel, [
@@ -881,6 +985,214 @@ async function handleReimbursementMessage(
     `附件数: ${parsed.attachments.length}`,
     `入库: ${saveResult.inserted ? "新消息" : "已去重"}`,
     `报账处理: ${savedExtraction.status} / amount=${report.amount ?? "待复核"} / review=${savedExtraction.needsReview ? "是" : "否"}`,
+  ]);
+}
+
+async function handleReimbursementReceiptReplyCommand(
+  message: any,
+  parsed: ParsedRoomMessage,
+  context: MessageContext,
+  logger: Logger,
+  receiptReply: ParsedReimbursementReceiptReply,
+) {
+  const normalized = normalizeMessage({
+    messageExternalId: parsed.messageExternalId,
+    channelCode: parsed.channel.code,
+    channelExternalId: parsed.channelExternalId,
+    channelName: parsed.roomTopic,
+    senderExternalId: parsed.senderExternalId,
+    senderName: parsed.senderName,
+    messageType: parsed.messageType,
+    textContent: receiptReply.commandText,
+    messageSentAt: parsed.messageSentAt,
+    eventReceivedAt: parsed.eventReceivedAt,
+    attachments: parsed.attachments,
+  });
+  const saveResult = saveRawMessage(normalized);
+  const command = parseReimbursementReceiptCommand(receiptReply.commandText);
+  const matchedReport =
+    (receiptReply.quotedMessageExternalId
+      ? findReimbursementReportByReceiptMessageExternalId(receiptReply.quotedMessageExternalId)
+      : null) ??
+    findLatestReimbursementReportByReceiptText({
+      targetType: "room_topic",
+      targetValue: parsed.roomTopic,
+      receiptText: receiptReply.quotedText,
+      beforeIso: parsed.eventReceivedAt,
+    });
+
+  logger.info("Persisted reimbursement receipt command raw message", {
+    channelCode: parsed.channel.code,
+    commandText: receiptReply.commandText,
+    inserted: saveResult.inserted,
+    matchedReportId: matchedReport?.id,
+    messageExternalId: parsed.messageExternalId,
+    quotedMessageExternalId: receiptReply.quotedMessageExternalId,
+    quotedText: receiptReply.quotedText,
+    rawMessageId: saveResult.rawMessageId,
+    roomTopic: parsed.roomTopic,
+    senderName: parsed.senderName,
+  });
+
+  if (!command) {
+    const savedExtraction = saveScenarioExtraction({
+      rawMessageId: saveResult.rawMessageId,
+      scenarioCode: "reimbursement",
+      extractorCode: REIMBURSEMENT_RECEIPT_COMMAND_EXTRACTOR_CODE,
+      status: "ignored",
+      confidence: 1,
+      needsReview: false,
+      resultJson: {
+        commandText: receiptReply.commandText,
+        eventType: "reimbursement_receipt_command",
+        quotedMessageExternalId: receiptReply.quotedMessageExternalId ?? null,
+        quotedText: receiptReply.quotedText,
+        status: "unsupported_command",
+      },
+    });
+
+    logger.info("Ignored unsupported reimbursement receipt command", {
+      channelCode: parsed.channel.code,
+      extractionId: savedExtraction.id,
+      messageExternalId: parsed.messageExternalId,
+      rawMessageId: saveResult.rawMessageId,
+      roomTopic: parsed.roomTopic,
+      senderName: parsed.senderName,
+      text: receiptReply.commandText,
+    });
+
+    await sendReimbursementCommandResponse(
+      message,
+      logger,
+      parsed.channel,
+      parsed.roomTopic,
+      REIMBURSEMENT_COMMAND_UNSUPPORTED_TEXT,
+    );
+
+    await sendDebugNotification(message, context, logger, parsed.channel, [
+      "[wechat-claw] 已收到群消息",
+      `逻辑频道: ${parsed.channel.code}`,
+      `场景: 报账`,
+      `群聊: ${parsed.roomTopic}`,
+      `发送人: ${parsed.senderName}`,
+      `消息类型: ${parsed.messageType}`,
+      `内容: ${receiptReply.commandText}`,
+      `附件数: ${parsed.attachments.length}`,
+      `入库: ${saveResult.inserted ? "新消息" : "已去重"}`,
+      `报账指令: ignored / unsupported / quote=${receiptReply.quotedText}`,
+    ]);
+    return;
+  }
+
+  if (!matchedReport) {
+    const savedExtraction = saveScenarioExtraction({
+      rawMessageId: saveResult.rawMessageId,
+      scenarioCode: "reimbursement",
+      extractorCode: REIMBURSEMENT_RECEIPT_COMMAND_EXTRACTOR_CODE,
+      status: "ignored",
+      confidence: 1,
+      needsReview: false,
+      resultJson: {
+        command: command.kind,
+        commandText: receiptReply.commandText,
+        eventType: "reimbursement_receipt_command",
+        quotedMessageExternalId: receiptReply.quotedMessageExternalId ?? null,
+        quotedText: receiptReply.quotedText,
+        status: "receipt_not_found",
+      },
+    });
+
+    logger.warn("Failed to match reimbursement receipt command to a report", {
+      channelCode: parsed.channel.code,
+      commandKind: command.kind,
+      extractionId: savedExtraction.id,
+      messageExternalId: parsed.messageExternalId,
+      rawMessageId: saveResult.rawMessageId,
+      roomTopic: parsed.roomTopic,
+      senderName: parsed.senderName,
+      text: receiptReply.commandText,
+    });
+
+    await sendReimbursementCommandResponse(
+      message,
+      logger,
+      parsed.channel,
+      parsed.roomTopic,
+      REIMBURSEMENT_COMMAND_NOT_FOUND_TEXT,
+    );
+
+    await sendDebugNotification(message, context, logger, parsed.channel, [
+      "[wechat-claw] 已收到群消息",
+      `逻辑频道: ${parsed.channel.code}`,
+      `场景: 报账`,
+      `群聊: ${parsed.roomTopic}`,
+      `发送人: ${parsed.senderName}`,
+      `消息类型: ${parsed.messageType}`,
+      `内容: ${receiptReply.commandText}`,
+      `附件数: ${parsed.attachments.length}`,
+      `入库: ${saveResult.inserted ? "新消息" : "已去重"}`,
+      `报账指令: ignored / receipt_not_found / quote=${receiptReply.quotedText}`,
+    ]);
+    return;
+  }
+
+  if (command.kind === "delete") {
+    deleteReimbursementReport(matchedReport.id);
+  } else {
+    updateReimbursementReportAmount({
+      reimbursementReportId: matchedReport.id,
+      amount: command.amount,
+    });
+  }
+
+  const savedExtraction = saveScenarioExtraction({
+    rawMessageId: saveResult.rawMessageId,
+    scenarioCode: "reimbursement",
+    extractorCode: REIMBURSEMENT_RECEIPT_COMMAND_EXTRACTOR_CODE,
+    status: "extracted",
+    confidence: 1,
+    needsReview: false,
+    resultJson: {
+      amount: command.kind === "set_amount" ? command.amount : null,
+      command: command.kind,
+      commandText: receiptReply.commandText,
+      eventType: "reimbursement_receipt_command",
+      quotedMessageExternalId: receiptReply.quotedMessageExternalId ?? null,
+      quotedText: receiptReply.quotedText,
+      reimbursementReportId: matchedReport.id,
+    },
+  });
+
+  logger.info("Executed reimbursement receipt command", {
+    channelCode: parsed.channel.code,
+    commandKind: command.kind,
+    extractionId: savedExtraction.id,
+    matchedReportId: matchedReport.id,
+    messageExternalId: parsed.messageExternalId,
+    rawMessageId: saveResult.rawMessageId,
+    roomTopic: parsed.roomTopic,
+    senderName: parsed.senderName,
+  });
+
+  await sendReimbursementCommandResponse(
+    message,
+    logger,
+    parsed.channel,
+    parsed.roomTopic,
+    REIMBURSEMENT_COMMAND_PROCESSED_TEXT,
+  );
+
+  await sendDebugNotification(message, context, logger, parsed.channel, [
+    "[wechat-claw] 已收到群消息",
+    `逻辑频道: ${parsed.channel.code}`,
+    `场景: 报账`,
+    `群聊: ${parsed.roomTopic}`,
+    `发送人: ${parsed.senderName}`,
+    `消息类型: ${parsed.messageType}`,
+    `内容: ${receiptReply.commandText}`,
+    `附件数: ${parsed.attachments.length}`,
+    `入库: ${saveResult.inserted ? "新消息" : "已去重"}`,
+    `报账指令: ${command.kind} / report=${matchedReport.id}${command.kind === "set_amount" ? ` / amount=${command.amount}` : ""}`,
   ]);
 }
 
@@ -926,7 +1238,7 @@ async function sendReimbursementReceiptNotification(
   message: any,
   logger: Logger,
   channel: ChannelConfig,
-  amount: number | null,
+  report: { amount: number | null; channelCode?: string; id: number },
 ) {
   if (channel.deliveryTargets.length === 0) {
     logger.info("Skipped reimbursement receipt notification", {
@@ -944,7 +1256,7 @@ async function sendReimbursementReceiptNotification(
     return;
   }
 
-  const receiptText = buildReimbursementReceiptText(amount);
+  const receiptText = buildReimbursementReceiptText(report.amount);
   const deliveryResults = await sendTextToTargets(
     bot,
     channel.deliveryTargets,
@@ -962,12 +1274,231 @@ async function sendReimbursementReceiptNotification(
     return;
   }
 
+  const sentAt = new Date().toISOString();
+  for (const deliveryResult of deliveryResults) {
+    if (!deliveryResult.delivered) {
+      continue;
+    }
+
+    saveReimbursementReceiptDelivery({
+      reimbursementReportId: report.id,
+      channelCode: report.channelCode ?? channel.code,
+      targetType: deliveryResult.target.type,
+      targetValue: deliveryResult.target.value,
+      receiptText,
+      sentAt,
+    });
+  }
+
   logger.info("Sent reimbursement receipt notifications", {
     channelCode: channel.code,
     deliveredTargets,
     receiptText,
     totalTargets: deliveryResults.length,
   });
+}
+
+async function sendReimbursementCommandResponse(
+  message: any,
+  logger: Logger,
+  channel: ChannelConfig,
+  roomTopic: string,
+  text: string,
+) {
+  const bot = typeof message.wechaty === "function" ? message.wechaty() : message.wechaty;
+  if (!bot) {
+    logger.warn("Wechaty instance unavailable for reimbursement command response", {
+      channelCode: channel.code,
+      roomTopic,
+      text,
+    });
+    return;
+  }
+
+  const deliveryResult = await sendTextToTarget(
+    bot,
+    {
+      type: "room_topic",
+      value: roomTopic,
+    },
+    text,
+    logger,
+  );
+
+  logger.info("Sent reimbursement command response", {
+    channelCode: channel.code,
+    delivered: deliveryResult.delivered,
+    roomTopic,
+    text,
+  });
+}
+
+async function extractReimbursementReceiptReply(
+  message: any,
+  messageExternalId: string,
+  normalizedText: string,
+  logger: Logger,
+): Promise<ParsedReimbursementReceiptReply | null> {
+  const rawPayload = await readMessageRawPayload(message, messageExternalId, logger);
+  const fromRawPayload = parseReimbursementReceiptReplyFromRawPayload(rawPayload);
+
+  if (fromRawPayload) {
+    return fromRawPayload;
+  }
+
+  return parseReimbursementReceiptReplyFromText(normalizedText);
+}
+
+async function readMessageRawPayload(message: any, messageExternalId: string, logger: Logger) {
+  const bot = typeof message.wechaty === "function" ? message.wechaty() : message.wechaty;
+  const puppet = bot?.puppet;
+
+  if (!puppet || typeof puppet.messageRawPayload !== "function") {
+    return null;
+  }
+
+  try {
+    return await puppet.messageRawPayload(messageExternalId);
+  } catch (error) {
+    logger.warn("Failed to read raw payload for reimbursement message", {
+      message: error instanceof Error ? error.message : String(error),
+      messageExternalId,
+      stack: error instanceof Error ? error.stack : undefined,
+    });
+    return null;
+  }
+}
+
+function parseReimbursementReceiptReplyFromRawPayload(
+  rawPayload: Record<string, unknown> | null,
+): ParsedReimbursementReceiptReply | null {
+  if (!rawPayload) {
+    return null;
+  }
+
+  if (Number(rawPayload.MsgType) !== 49 || Number(rawPayload.AppMsgType) !== 57) {
+    return null;
+  }
+
+  const xml = typeof rawPayload.Content === "string" ? rawPayload.Content : "";
+  if (!xml) {
+    return null;
+  }
+
+  const commandText = extractXmlTagValue(xml, "title");
+  const referXml = extractXmlTagValue(xml, "refermsg", {
+    decodeEntities: false,
+  });
+  const quotedText = referXml ? extractXmlTagValue(referXml, "content") : null;
+  const quotedMessageExternalId = referXml ? extractXmlTagValue(referXml, "svrid") : null;
+
+  if (!commandText || !quotedText) {
+    return null;
+  }
+
+  return {
+    commandText: sanitizeReplyText(commandText),
+    quotedMessageExternalId: quotedMessageExternalId?.trim() || undefined,
+    quotedText: sanitizeReplyText(quotedText),
+  };
+}
+
+function parseReimbursementReceiptReplyFromText(text: string): ParsedReimbursementReceiptReply | null {
+  const normalized = text.replace(/\r\n/g, "\n");
+  const divider = "\n- - - - - - - - - - - - - - -\n";
+  const dividerIndex = normalized.indexOf(divider);
+
+  if (dividerIndex < 0) {
+    return null;
+  }
+
+  const quotedPart = normalized.slice(0, dividerIndex).trim();
+  const commandText = normalized.slice(dividerIndex + divider.length).trim();
+  const quotedText = extractQuotedReplyText(quotedPart);
+
+  if (!quotedText || !commandText) {
+    return null;
+  }
+
+  return {
+    commandText: sanitizeReplyText(commandText),
+    quotedText: sanitizeReplyText(quotedText),
+  };
+}
+
+function extractQuotedReplyText(quotedPart: string) {
+  if (!quotedPart.startsWith("「") || !quotedPart.endsWith("」")) {
+    return null;
+  }
+
+  const inner = quotedPart.slice(1, -1);
+  const colonIndex = inner.indexOf("：");
+  const asciiColonIndex = inner.indexOf(":");
+  const splitIndex =
+    colonIndex >= 0 && asciiColonIndex >= 0
+      ? Math.min(colonIndex, asciiColonIndex)
+      : Math.max(colonIndex, asciiColonIndex);
+
+  if (splitIndex < 0) {
+    return inner.trim();
+  }
+
+  return inner.slice(splitIndex + 1).trim();
+}
+
+function extractXmlTagValue(
+  xml: string,
+  tagName: string,
+  options?: {
+    decodeEntities?: boolean;
+  },
+) {
+  const match = xml.match(new RegExp(`<${tagName}>([\\s\\S]*?)</${tagName}>`, "i"));
+
+  if (!match?.[1]) {
+    return null;
+  }
+
+  const rawValue = unwrapCdata(match[1].trim());
+  return options?.decodeEntities === false ? rawValue : decodeXmlEntities(rawValue);
+}
+
+function unwrapCdata(value: string) {
+  const match = value.match(/^<!\[CDATA\[([\s\S]*?)\]\]>$/i);
+  return match?.[1] ?? value;
+}
+
+function decodeXmlEntities(value: string) {
+  return value
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&amp;/g, "&")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'");
+}
+
+function sanitizeReplyText(text: string) {
+  return text
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<[^>]+>/g, "")
+    .trim();
+}
+
+function parseReimbursementReceiptCommand(text: string): ReimbursementReceiptCommand | null {
+  const normalized = text.trim();
+
+  if (normalized.toLowerCase() === "delete") {
+    return { kind: "delete" };
+  }
+
+  if (/^\d+(?:\.\d+)?$/.test(normalized)) {
+    return {
+      amount: Number(normalized),
+      kind: "set_amount",
+    };
+  }
+
+  return null;
 }
 
 function cryptoRandomId() {
@@ -980,6 +1511,10 @@ function buildReimbursementReceiptText(amount: number | null) {
   }
 
   return `报账${formatReimbursementReceiptAmount(amount)}元已录入`;
+}
+
+function isReimbursementReceiptText(text: string) {
+  return text === REIMBURSEMENT_RECEIPT_PENDING_TEXT || /^报账\d+(?:\.\d+)?元已录入$/.test(text);
 }
 
 function formatReimbursementReceiptAmount(amount: number) {

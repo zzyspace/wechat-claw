@@ -75,10 +75,12 @@ function createWechatyMock(
   options?: {
     missingContactNames?: string[];
     missingRoomTopics?: string[];
+    rawPayloadByMessageId?: Record<string, Record<string, unknown>>;
   },
 ) {
   const missingContactNames = new Set(options?.missingContactNames ?? []);
   const missingRoomTopics = new Set(options?.missingRoomTopics ?? []);
+  const rawPayloadByMessageId = options?.rawPayloadByMessageId ?? {};
 
   return {
     Contact: {
@@ -117,6 +119,11 @@ function createWechatyMock(
             });
           },
         };
+      },
+    },
+    puppet: {
+      async messageRawPayload(messageId: string) {
+        return rawPayloadByMessageId[messageId] ?? null;
       },
     },
     on() {
@@ -660,6 +667,405 @@ test("handleMessage reassigns a recent text-only remark to the newer image withi
   assert.equal(secondReport.sources.some((source) => source.textContent === "平" && source.role === "remark"), true);
   assert(logs.some((entry) => entry.message === "Matched recent reimbursement remark context for image merge"));
   assert(logs.some((entry) => entry.message === "Reassigned reimbursement remark context to newer image report"));
+});
+
+test("handleMessage deletes a reimbursement when replying delete to the receipt text", { concurrency: false }, async () => {
+  const logs: Array<{ level: string; message: string; context?: Record<string, unknown> }> = [];
+  const delivered: DeliveredMessage[] = [];
+  const commandMessageId = "reimbursement-delete-reply-command";
+  const receiptMessageId = "reimbursement-delete-self-receipt";
+  const rawPayloadByMessageId = {
+    [commandMessageId]: {
+      AppMsgType: 57,
+      Content:
+        "<msg><appmsg><title><![CDATA[delete]]></title><refermsg><svrid><![CDATA[" +
+        receiptMessageId +
+        "]]></svrid><displayname><![CDATA[机器人]]></displayname><content><![CDATA[报账4201.5元已录入]]></content></refermsg></appmsg></msg>",
+      MsgType: 49,
+    },
+  };
+  const context = createMessageContext([
+    createReimbursementChannelWithTargets([{ type: "room_topic", value: "AI报账群" }]),
+  ]);
+  const wechaty = createWechatyMock(delivered, {
+    rawPayloadByMessageId,
+  });
+
+  await handleMessage(
+    {
+      id: () => "reimbursement-delete-text-first",
+      room: async () => ({
+        alias: async () => "小删",
+        id: () => "reimbursement_room_delete",
+        topic: async () => "AI报账群",
+      }),
+      self: () => false,
+      talker: async () => ({
+        id: () => "reimbursement_talker_delete",
+        name: () => "Ryan。",
+      }),
+      text: () => "晚餐报账 4201.5元",
+      type: () => 7,
+      wechaty,
+    },
+    context,
+    createLogger(logs),
+  );
+
+  await handleMessage(
+    {
+      id: () => "reimbursement-delete-image-second",
+      room: async () => ({
+        alias: async () => "小删",
+        id: () => "reimbursement_room_delete",
+        topic: async () => "AI报账群",
+      }),
+      self: () => false,
+      talker: async () => ({
+        id: () => "reimbursement_talker_delete",
+        name: () => "Ryan。",
+      }),
+      text: () => "",
+      toFileBox: async () => ({
+        name: "delete-order.jpg",
+        toBuffer: async () => Buffer.from([0xff, 0xd8, 0xff, 0xd9]),
+      }),
+      type: () => 6,
+      wechaty,
+    },
+    context,
+    createLogger(logs),
+  );
+
+  const createdReport = listRecentReimbursementReports(1000).find((report) => report.reporter === "小删");
+  assert(createdReport);
+  assert.equal(createdReport.amount, 4201.5);
+  assert.equal(delivered.some((item) => item.text === "报账4201.5元已录入"), true);
+
+  await handleMessage(
+    {
+      id: () => receiptMessageId,
+      room: async () => ({
+        alias: async () => "机器人",
+        id: () => "reimbursement_room_delete",
+        topic: async () => "AI报账群",
+      }),
+      self: () => true,
+      talker: async () => ({
+        id: () => "bot_self_delete",
+        name: () => "Bot",
+      }),
+      text: () => "报账4201.5元已录入",
+      type: () => 7,
+      wechaty,
+    },
+    context,
+    createLogger(logs),
+  );
+
+  await handleMessage(
+    {
+      id: () => commandMessageId,
+      room: async () => ({
+        alias: async () => "小删",
+        id: () => "reimbursement_room_delete",
+        topic: async () => "AI报账群",
+      }),
+      self: () => false,
+      talker: async () => ({
+        id: () => "reimbursement_talker_delete",
+        name: () => "Ryan。",
+      }),
+      text: () => "<msg><appmsg><title>delete</title></appmsg></msg>",
+      type: () => 49,
+      wechaty,
+    },
+    context,
+    createLogger(logs),
+  );
+
+  const reportsAfterDelete = listRecentReimbursementReports(1000).filter((report) => report.reporter === "小删");
+  const rawCommandMessage = listRecentRawMessages(1000).find(
+    (message) => message.messageExternalId === "reimbursement-delete-reply-command",
+  );
+
+  assert.equal(reportsAfterDelete.length, 0);
+  assert(rawCommandMessage);
+  assert.equal(rawCommandMessage.textContent, "delete");
+  assert(logs.some((entry) => entry.message === "Processed self reimbursement receipt message"));
+  assert(logs.some((entry) => entry.message === "Executed reimbursement receipt command"));
+  assert.equal(
+    delivered.some(
+      (item) => item.targetType === "room_topic" && item.targetValue === "AI报账群" && item.text === "已处理",
+    ),
+    true,
+  );
+});
+
+test("handleMessage updates reimbursement amount and clears review when replying a number to a receipt", { concurrency: false }, async () => {
+  const logs: Array<{ level: string; message: string; context?: Record<string, unknown> }> = [];
+  const delivered: DeliveredMessage[] = [];
+  const commandMessageId = "reimbursement-update-reply-command";
+  const receiptMessageId = "reimbursement-update-self-receipt";
+  const rawPayloadByMessageId = {
+    [commandMessageId]: {
+      AppMsgType: 57,
+      Content:
+        "<msg><appmsg><title><![CDATA[88.5]]></title><refermsg><svrid><![CDATA[" +
+        receiptMessageId +
+        "]]></svrid><displayname><![CDATA[机器人]]></displayname><content><![CDATA[此次报账待核验]]></content></refermsg></appmsg></msg>",
+      MsgType: 49,
+    },
+  };
+  const context = createMessageContext([
+    createReimbursementChannelWithTargets([{ type: "room_topic", value: "AI报账群" }]),
+  ]);
+  const wechaty = createWechatyMock(delivered, {
+    rawPayloadByMessageId,
+  });
+
+  await handleMessage(
+    {
+      id: () => "reimbursement-update-image-first",
+      room: async () => ({
+        alias: async () => "小改",
+        id: () => "reimbursement_room_update",
+        topic: async () => "AI报账群",
+      }),
+      self: () => false,
+      talker: async () => ({
+        id: () => "reimbursement_talker_update",
+        name: () => "Ryan。",
+      }),
+      text: () => "",
+      toFileBox: async () => ({
+        name: "update-order.jpg",
+        toBuffer: async () => Buffer.from([0xff, 0xd8, 0xff, 0xd9]),
+      }),
+      type: () => 6,
+      wechaty,
+    },
+    context,
+    createLogger(logs),
+  );
+
+  const initialReport = listRecentReimbursementReports(1000).find((report) => report.reporter === "小改");
+  assert(initialReport);
+  assert.equal(initialReport.amount, null);
+  assert.equal(initialReport.needsReview, true);
+  assert.equal(delivered.some((item) => item.text === "此次报账待核验"), true);
+
+  await handleMessage(
+    {
+      id: () => receiptMessageId,
+      room: async () => ({
+        alias: async () => "机器人",
+        id: () => "reimbursement_room_update",
+        topic: async () => "AI报账群",
+      }),
+      self: () => true,
+      talker: async () => ({
+        id: () => "bot_self_update",
+        name: () => "Bot",
+      }),
+      text: () => "此次报账待核验",
+      type: () => 7,
+      wechaty,
+    },
+    context,
+    createLogger(logs),
+  );
+
+  await handleMessage(
+    {
+      id: () => commandMessageId,
+      room: async () => ({
+        alias: async () => "小改",
+        id: () => "reimbursement_room_update",
+        topic: async () => "AI报账群",
+      }),
+      self: () => false,
+      talker: async () => ({
+        id: () => "reimbursement_talker_update",
+        name: () => "Ryan。",
+      }),
+      text: () => "<msg><appmsg><title>88.5</title></appmsg></msg>",
+      type: () => 49,
+      wechaty,
+    },
+    context,
+    createLogger(logs),
+  );
+
+  const updatedReport = listRecentReimbursementReports(1000).find((report) => report.id === initialReport.id);
+  const selfReceiptRawMessage = listRecentRawMessages(1000).find(
+    (message) => message.messageExternalId === receiptMessageId,
+  );
+  const commandRawMessage = listRecentRawMessages(1000).find(
+    (message) => message.messageExternalId === commandMessageId,
+  );
+
+  assert(updatedReport);
+  assert.equal(updatedReport.amount, 88.5);
+  assert.equal(updatedReport.needsReview, false);
+  assert(selfReceiptRawMessage);
+  assert(commandRawMessage);
+  assert.equal(commandRawMessage.textContent, "88.5");
+  assert(logs.some((entry) => entry.message === "Processed self reimbursement receipt message"));
+  assert(logs.some((entry) => entry.message === "Executed reimbursement receipt command"));
+  assert.equal(
+    delivered.some(
+      (item) => item.targetType === "room_topic" && item.targetValue === "AI报账群" && item.text === "已处理",
+    ),
+    true,
+  );
+});
+
+test("handleMessage replies unsupported message for unsupported reimbursement receipt command", { concurrency: false }, async () => {
+  const logs: Array<{ level: string; message: string; context?: Record<string, unknown> }> = [];
+  const delivered: DeliveredMessage[] = [];
+  const context = createMessageContext([
+    createReimbursementChannelWithTargets([{ type: "room_topic", value: "AI报账群" }]),
+  ]);
+  const wechaty = createWechatyMock(delivered);
+
+  await handleMessage(
+    {
+      id: () => "reimbursement-unsupported-text-first",
+      room: async () => ({
+        alias: async () => "小错",
+        id: () => "reimbursement_room_unsupported",
+        topic: async () => "AI报账群",
+      }),
+      self: () => false,
+      talker: async () => ({
+        id: () => "reimbursement_talker_unsupported",
+        name: () => "Ryan。",
+      }),
+      text: () => "午餐报账 30元",
+      type: () => 7,
+      wechaty,
+    },
+    context,
+    createLogger(logs),
+  );
+
+  await handleMessage(
+    {
+      id: () => "reimbursement-unsupported-image-second",
+      room: async () => ({
+        alias: async () => "小错",
+        id: () => "reimbursement_room_unsupported",
+        topic: async () => "AI报账群",
+      }),
+      self: () => false,
+      talker: async () => ({
+        id: () => "reimbursement_talker_unsupported",
+        name: () => "Ryan。",
+      }),
+      text: () => "",
+      toFileBox: async () => ({
+        name: "unsupported-order.jpg",
+        toBuffer: async () => Buffer.from([0xff, 0xd8, 0xff, 0xd9]),
+      }),
+      type: () => 6,
+      wechaty,
+    },
+    context,
+    createLogger(logs),
+  );
+
+  const reportBeforeCommand = listRecentReimbursementReports(1000).find((report) => report.reporter === "小错");
+  assert(reportBeforeCommand);
+  assert.equal(reportBeforeCommand.amount, 30);
+
+  await handleMessage(
+    {
+      id: () => "reimbursement-unsupported-command",
+      room: async () => ({
+        alias: async () => "小错",
+        id: () => "reimbursement_room_unsupported",
+        topic: async () => "AI报账群",
+      }),
+      self: () => false,
+      talker: async () => ({
+        id: () => "reimbursement_talker_unsupported",
+        name: () => "Ryan。",
+      }),
+      text: () => "「机器人：报账30元已录入」\n- - - - - - - - - - - - - - -\n30元",
+      type: () => 7,
+      wechaty,
+    },
+    context,
+    createLogger(logs),
+  );
+
+  const reportAfterCommand = listRecentReimbursementReports(1000).find((report) => report.id === reportBeforeCommand.id);
+
+  assert(reportAfterCommand);
+  assert.equal(reportAfterCommand.amount, 30);
+  assert.equal(
+    delivered.some(
+      (item) =>
+        item.targetType === "room_topic" &&
+        item.targetValue === "AI报账群" &&
+        item.text === "不支持的指令",
+    ),
+    true,
+  );
+  assert(logs.some((entry) => entry.message === "Ignored unsupported reimbursement receipt command"));
+});
+
+test("handleMessage replies not found message for valid reimbursement receipt command without matched report", { concurrency: false }, async () => {
+  const logs: Array<{ level: string; message: string; context?: Record<string, unknown> }> = [];
+  const delivered: DeliveredMessage[] = [];
+  const commandMessageId = "reimbursement-not-found-command";
+  const rawPayloadByMessageId = {
+    [commandMessageId]: {
+      AppMsgType: 57,
+      Content:
+        "<msg><appmsg><title><![CDATA[delete]]></title><refermsg><svrid><![CDATA[missing-receipt-id]]></svrid><displayname><![CDATA[机器人]]></displayname><content><![CDATA[报账999元已录入]]></content></refermsg></appmsg></msg>",
+      MsgType: 49,
+    },
+  };
+  const context = createMessageContext([
+    createReimbursementChannelWithTargets([{ type: "room_topic", value: "AI报账群" }]),
+  ]);
+  const wechaty = createWechatyMock(delivered, {
+    rawPayloadByMessageId,
+  });
+
+  await handleMessage(
+    {
+      id: () => commandMessageId,
+      room: async () => ({
+        alias: async () => "小查",
+        id: () => "reimbursement_room_not_found",
+        topic: async () => "AI报账群",
+      }),
+      self: () => false,
+      talker: async () => ({
+        id: () => "reimbursement_talker_not_found",
+        name: () => "Ryan。",
+      }),
+      text: () => "<msg><appmsg><title>delete</title></appmsg></msg>",
+      type: () => 49,
+      wechaty,
+    },
+    context,
+    createLogger(logs),
+  );
+
+  assert.equal(
+    delivered.some(
+      (item) =>
+        item.targetType === "room_topic" &&
+        item.targetValue === "AI报账群" &&
+        item.text === "未找到对应报账",
+    ),
+    true,
+  );
+  assert(logs.some((entry) => entry.message === "Failed to match reimbursement receipt command to a report"));
 });
 
 test("handleMessage skips reimbursement receipt when deliveryTargets are empty", { concurrency: false }, async () => {

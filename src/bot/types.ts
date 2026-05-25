@@ -17,6 +17,9 @@ export interface WechatyInstance {
   Room?: {
     find(query: Record<string, unknown>): Promise<any>;
   };
+  puppet?: {
+    messageRawPayload?(messageId: string): Promise<unknown>;
+  };
   isLoggedIn?: boolean;
   on(event: string, listener: (...args: any[]) => unknown): WechatyInstance;
   start(): Promise<void>;

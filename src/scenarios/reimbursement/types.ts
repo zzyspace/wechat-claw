@@ -2,6 +2,7 @@ import type { StoredAttachment } from "../../core/storage/types.js";
 
 export type ReimbursementEvidenceType = "text" | "image" | "image+text";
 export type ReimbursementExpenseCategory = "food" | "other";
+export type ReimbursementReceiptTargetType = "contact_name" | "room_topic";
 export type ReimbursementVoucherDateSource = "model" | "message";
 export type ReimbursementSourceRole = "primary" | "remark";
 
@@ -105,4 +106,17 @@ export interface ReimbursementReportSourceDetail extends ReimbursementReportSour
 
 export interface ReimbursementReportDetail extends ReimbursementReportRecord {
   sources: ReimbursementReportSourceDetail[];
+}
+
+export interface ReimbursementReceiptDeliveryRecord {
+  id: number;
+  reimbursementReportId: number;
+  channelCode?: string;
+  targetType: ReimbursementReceiptTargetType;
+  targetValue: string;
+  receiptText: string;
+  sentAt: string;
+  rawMessageId?: number;
+  createdAt: string;
+  updatedAt: string;
 }
