@@ -161,7 +161,7 @@ WECHATY_CHANNELS_JSON=[{"code":"loss_a","enabled":true,"scenario":"loss-report",
   - 回复 `delete`：删除对应报账记录
   - 回复纯数字：将对应报账金额改为该数字，并把 `needs_review` 更新为 `false`
   - 回复 `category: x`：将对应报账的 `expense_category` 改为 `x`
-  - 当前 `x` 支持 `food / salary / rent / utilities / manager_reimbursement / planned_expense / other / 食材 / 工资 / 房租 / 水电 / 店长报账 / 预报账 / 其他`
+  - 当前 `x` 支持 `food / salary / rent / utilities / manager_reimbursement / planned_expense / other / 食材 / 工资 / 薪资 / 房租 / 租金 / 水电 / 水电费 / 电费 / 水费 / 店长报账 / 店长 / 预报账 / 其他 / 其它`
   - 后续新增类目时，只需要扩展 `src/scenarios/reimbursement/categories.ts`
   - 指令执行成功后，bot 会回复 `已处理`
   - 指令格式正确但没找到对应报账时，bot 会回复 `未找到对应报账`
