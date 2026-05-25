@@ -829,7 +829,7 @@ test("handleMessage merges reimbursement text followed by image within 3 seconds
     {
       targetType: "room_topic",
       targetValue: "AI报账群",
-      text: "报账42元已录入(category: other)",
+      text: "报账42元已录入(分类: 其他)",
     },
   ]);
 });
@@ -956,7 +956,7 @@ test("handleMessage deletes a reimbursement when replying delete to the receipt 
       Content:
         "<msg><appmsg><title><![CDATA[delete]]></title><refermsg><svrid><![CDATA[" +
         receiptMessageId +
-        "]]></svrid><displayname><![CDATA[机器人]]></displayname><content><![CDATA[报账4201.5元已录入(category: other)]]></content></refermsg></appmsg></msg>",
+        "]]></svrid><displayname><![CDATA[机器人]]></displayname><content><![CDATA[报账4201.5元已录入(分类: 其他)]]></content></refermsg></appmsg></msg>",
       MsgType: 49,
     },
   };
@@ -1016,7 +1016,7 @@ test("handleMessage deletes a reimbursement when replying delete to the receipt 
   const createdReport = listRecentReimbursementReports(1000).find((report) => report.reporter === "小删");
   assert(createdReport);
   assert.equal(createdReport.amount, 4201.5);
-  assert.equal(delivered.some((item) => item.text === "报账4201.5元已录入(category: other)"), true);
+  assert.equal(delivered.some((item) => item.text === "报账4201.5元已录入(分类: 其他)"), true);
 
   await handleMessage(
     {
@@ -1031,7 +1031,7 @@ test("handleMessage deletes a reimbursement when replying delete to the receipt 
         id: () => "bot_self_delete",
         name: () => "Bot",
       }),
-      text: () => "报账4201.5元已录入(category: other)",
+      text: () => "报账4201.5元已录入(分类: 其他)",
       type: () => 7,
       wechaty,
     },
@@ -1206,9 +1206,9 @@ test("handleMessage updates reimbursement category when replying category comman
     [commandMessageId]: {
       AppMsgType: 57,
       Content:
-        "<msg><appmsg><title><![CDATA[category: utilities]]></title><refermsg><svrid><![CDATA[" +
+        "<msg><appmsg><title><![CDATA[分类: 水电]]></title><refermsg><svrid><![CDATA[" +
         receiptMessageId +
-        "]]></svrid><displayname><![CDATA[机器人]]></displayname><content><![CDATA[报账36.5元已录入(category: other)]]></content></refermsg></appmsg></msg>",
+        "]]></svrid><displayname><![CDATA[机器人]]></displayname><content><![CDATA[报账36.5元已录入(分类: 其他)]]></content></refermsg></appmsg></msg>",
       MsgType: 49,
     },
   };
@@ -1268,7 +1268,7 @@ test("handleMessage updates reimbursement category when replying category comman
   const initialReport = listRecentReimbursementReports(1000).find((report) => report.reporter === "小类目");
   assert(initialReport);
   assert.equal(initialReport.expenseCategory, "other");
-  assert.equal(delivered.some((item) => item.text === "报账36.5元已录入(category: other)"), true);
+  assert.equal(delivered.some((item) => item.text === "报账36.5元已录入(分类: 其他)"), true);
 
   await handleMessage(
     {
@@ -1283,7 +1283,7 @@ test("handleMessage updates reimbursement category when replying category comman
         id: () => "bot_self_category",
         name: () => "Bot",
       }),
-      text: () => "报账36.5元已录入(category: other)",
+      text: () => "报账36.5元已录入(分类: 其他)",
       type: () => 7,
       wechaty,
     },
@@ -1304,7 +1304,7 @@ test("handleMessage updates reimbursement category when replying category comman
         id: () => "reimbursement_talker_category",
         name: () => "Ryan。",
       }),
-      text: () => "<msg><appmsg><title>category: utilities</title></appmsg></msg>",
+      text: () => "<msg><appmsg><title>分类: 水电</title></appmsg></msg>",
       type: () => 49,
       wechaty,
     },
@@ -1320,7 +1320,7 @@ test("handleMessage updates reimbursement category when replying category comman
   assert(updatedReport);
   assert.equal(updatedReport.expenseCategory, "utilities");
   assert(commandRawMessage);
-  assert.equal(commandRawMessage.textContent, "category: utilities");
+  assert.equal(commandRawMessage.textContent, "分类: 水电");
   assert(logs.some((entry) => entry.message === "Executed reimbursement receipt command"));
   assert.equal(
     delivered.some(

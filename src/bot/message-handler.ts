@@ -29,7 +29,10 @@ import {
   updateReimbursementReportAmount,
   updateReimbursementReportExpenseCategory,
 } from "../scenarios/reimbursement/repository.js";
-import { normalizeReimbursementExpenseCategory } from "../scenarios/reimbursement/categories.js";
+import {
+  getReimbursementExpenseCategoryLabel,
+  normalizeReimbursementExpenseCategory,
+} from "../scenarios/reimbursement/categories.js";
 import type { ReimbursementExpenseCategory } from "../scenarios/reimbursement/types.js";
 import { resolveMessageSentAt } from "./cold-start-filter.js";
 import { countSuccessfulDeliveries, sendTextToTarget, sendTextToTargets } from "./delivery-contact.js";
@@ -1534,7 +1537,7 @@ function parseReimbursementReceiptCommand(text: string): ReimbursementReceiptCom
     return { kind: "delete" };
   }
 
-  const categoryMatch = normalized.match(/^category\s*:\s*(.+)$/i);
+  const categoryMatch = normalized.match(/^(?:category|分类)\s*:\s*(.+)$/i);
   if (categoryMatch) {
     const expenseCategory = normalizeReceiptCommandExpenseCategory(categoryMatch[1] ?? "");
 
@@ -1582,7 +1585,7 @@ function buildReimbursementReceiptText(report: {
 function isReimbursementReceiptText(text: string) {
   return (
     /^此次报账待核验(?:\((?:商户|OCR): [\s\S]+?\))?$/.test(text) ||
-    /^报账\d+(?:\.\d+)?元已录入(?:\(category: [^)]+?\))?$/.test(text)
+    /^报账\d+(?:\.\d+)?元已录入(?:\((?:分类|category): [^)]+?\))?$/.test(text)
   );
 }
 
@@ -1620,13 +1623,15 @@ function buildPendingReceiptSuffix(report: {
 function buildRecordedReceiptSuffix(report: {
   expenseCategory?: string | null;
 }) {
-  const expenseCategory = normalizeReceiptSummaryText(report.expenseCategory);
+  const expenseCategory = normalizeReceiptSummaryText(
+    report.expenseCategory ? getReimbursementExpenseCategoryLabel(report.expenseCategory) : null,
+  );
 
   if (!expenseCategory) {
     return "";
   }
 
-  return `(category: ${expenseCategory})`;
+  return `(分类: ${expenseCategory})`;
 }
 
 function normalizeReceiptSummaryText(value: string | null | undefined) {

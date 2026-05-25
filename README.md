@@ -156,12 +156,12 @@ WECHATY_CHANNELS_JSON=[{"code":"loss_a","enabled":true,"scenario":"loss-report",
 - `summarySchedule`: 日报 cron，例如每天 `22:00` 用 `0 22 * * *`
 - `weeklySummarySchedule`: 周报 cron，例如每周日 `22:10` 用 `10 22 * * 0`
 - `summarySchedule` 或 `weeklySummarySchedule` 留空 `""`，表示关闭对应的自动发送
-- 报账群可以不配置发送目标；但若要发送“报账xx元已录入(category: x) / 此次报账待核验”回执，需要在 `deliveryTargets` 中配置目标，可直接填写当前报账群的 `room_topic`
-- 当 bot 在报账群发送“报账xx元已录入(category: x)”或“此次报账待核验”后，可以直接回复这条回执做人工修正：
+- 报账群可以不配置发送目标；但若要发送“报账xx元已录入(分类: 中文类目) / 此次报账待核验”回执，需要在 `deliveryTargets` 中配置目标，可直接填写当前报账群的 `room_topic`
+- 当 bot 在报账群发送“报账xx元已录入(分类: 中文类目)”或“此次报账待核验”后，可以直接回复这条回执做人工修正：
   - 回复 `delete`：删除对应报账记录
   - 回复纯数字：将对应报账金额改为该数字，并把 `needs_review` 更新为 `false`
-  - 回复 `category: x`：将对应报账的 `expense_category` 改为 `x`
-  - 当前 `x` 支持 `food / salary / rent / utilities / manager_reimbursement / planned_expense / other / 食材 / 工资 / 薪资 / 房租 / 租金 / 水电 / 水电费 / 电费 / 水费 / 店长报账 / 店长 / 预报账 / 其他 / 其它`
+  - 回复 `分类: x` 或 `category: x`：将对应报账的 `expense_category` 改为 `x`
+  - 当前 `x` 支持 `food / salary / rent / utilities / manager_reimbursement / planned_expense / other / 食材 / 工资 / 薪资 / 房租 / 租金 / 水电 / 水电费 / 电费 / 水费 / 店长报账 / 店长 / 预报账 / 其他 / 其它`；回执展示会统一使用中文 label
   - 后续新增类目时，只需要扩展 `src/scenarios/reimbursement/categories.ts`
   - 指令执行成功后，bot 会回复 `已处理`
   - 指令格式正确但没找到对应报账时，bot 会回复 `未找到对应报账`
