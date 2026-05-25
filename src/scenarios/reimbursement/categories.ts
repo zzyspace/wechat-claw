@@ -13,12 +13,32 @@ export const REIMBURSEMENT_EXPENSE_CATEGORY_DEFINITIONS: ReimbursementExpenseCat
     label: "食材",
   },
   {
-    aliases: ["electricity", "电费"],
-    code: "electricity",
-    label: "电费",
+    aliases: ["salary", "工资", "薪资"],
+    code: "salary",
+    label: "工资",
   },
   {
-    aliases: ["other", "其他"],
+    aliases: ["rent", "房租", "租金"],
+    code: "rent",
+    label: "房租",
+  },
+  {
+    aliases: ["utilities", "水电", "水电费", "电费", "水费"],
+    code: "utilities",
+    label: "水电",
+  },
+  {
+    aliases: ["manager_reimbursement", "manager reimbursement", "manager", "店长报账", "店长"],
+    code: "manager_reimbursement",
+    label: "店长报账",
+  },
+  {
+    aliases: ["planned_expense", "planned expense", "planned", "预报账"],
+    code: "planned_expense",
+    label: "预报账",
+  },
+  {
+    aliases: ["other", "其他", "其它"],
     code: "other",
     label: "其他",
   },
