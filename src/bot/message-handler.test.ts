@@ -921,6 +921,184 @@ test("handleMessage updates reimbursement amount and clears review when replying
   );
 });
 
+test("handleMessage parses html break fallback receipt replies without creating a new reimbursement", { concurrency: false }, async () => {
+  const logs: Array<{ level: string; message: string; context?: Record<string, unknown> }> = [];
+  const delivered: DeliveredMessage[] = [];
+  const context = createMessageContext([
+    createReimbursementChannelWithTargets([{ type: "room_topic", value: "AI报账群" }]),
+  ]);
+  const wechaty = createWechatyMock(delivered);
+
+  await handleMessage(
+    {
+      id: () => "reimbursement-html-fallback-image",
+      room: async () => ({
+        alias: async () => "ZZY",
+        id: () => "reimbursement_room_html_fallback",
+        topic: async () => "AI报账群",
+      }),
+      self: () => false,
+      talker: async () => ({
+        id: () => "reimbursement_talker_html_fallback",
+        name: () => "Ryan。",
+      }),
+      text: () => "",
+      toFileBox: async () => ({
+        name: "html-fallback-order.jpg",
+        toBuffer: async () => Buffer.from([0xff, 0xd8, 0xff, 0xd9]),
+      }),
+      type: () => 6,
+      wechaty,
+    },
+    context,
+    createLogger(logs),
+  );
+
+  const initialReports = listRecentReimbursementReports(1000).filter((report) => report.reporter === "ZZY");
+  const initialReport = initialReports[0];
+  assert(initialReport);
+  assert.equal(initialReport.amount, null);
+  assert.equal(initialReport.needsReview, true);
+
+  await handleMessage(
+    {
+      id: () => "reimbursement-html-fallback-command",
+      room: async () => ({
+        alias: async () => "ZZY",
+        id: () => "reimbursement_room_html_fallback",
+        topic: async () => "AI报账群",
+      }),
+      self: () => false,
+      talker: async () => ({
+        id: () => "reimbursement_talker_html_fallback",
+        name: () => "Ryan。",
+      }),
+      text: () => "「Claw：此次报账待核验」<br/>- - - - - - - - - - - - - - -<br/>2550",
+      type: () => 7,
+      wechaty,
+    },
+    context,
+    createLogger(logs),
+  );
+
+  const updatedReports = listRecentReimbursementReports(1000).filter((report) => report.reporter === "ZZY");
+  const updatedReport = updatedReports.find((report) => report.id === initialReport.id);
+  const commandRawMessage = listRecentRawMessages(1000).find(
+    (message) => message.messageExternalId === "reimbursement-html-fallback-command",
+  );
+
+  assert.equal(updatedReports.length, 1);
+  assert(updatedReport);
+  assert.equal(updatedReport.amount, 2550);
+  assert.equal(updatedReport.needsReview, false);
+  assert(commandRawMessage);
+  assert.equal(commandRawMessage.textContent, "2550");
+  assert(logs.some((entry) => entry.message === "Executed reimbursement receipt command"));
+  assert.equal(
+    delivered.some(
+      (item) => item.targetType === "room_topic" && item.targetValue === "AI报账群" && item.text === "已处理",
+    ),
+    true,
+  );
+});
+
+test("handleMessage fallback receipt matching prefers the same reporter when pending receipts repeat", { concurrency: false }, async () => {
+  const logs: Array<{ level: string; message: string; context?: Record<string, unknown> }> = [];
+  const delivered: DeliveredMessage[] = [];
+  const context = createMessageContext([
+    createReimbursementChannelWithTargets([{ type: "room_topic", value: "AI报账群" }]),
+  ]);
+  const wechaty = createWechatyMock(delivered);
+
+  await handleMessage(
+    {
+      id: () => "reimbursement-fallback-reporter-a-image",
+      room: async () => ({
+        alias: async () => "甲同学",
+        id: () => "reimbursement_room_reporter_preference",
+        topic: async () => "AI报账群",
+      }),
+      self: () => false,
+      talker: async () => ({
+        id: () => "reimbursement_talker_reporter_a",
+        name: () => "Ryan。",
+      }),
+      text: () => "",
+      toFileBox: async () => ({
+        name: "reporter-a-order.jpg",
+        toBuffer: async () => Buffer.from([0xff, 0xd8, 0xff, 0xd9]),
+      }),
+      type: () => 6,
+      wechaty,
+    },
+    context,
+    createLogger(logs),
+  );
+
+  await handleMessage(
+    {
+      id: () => "reimbursement-fallback-reporter-b-image",
+      room: async () => ({
+        alias: async () => "乙同学",
+        id: () => "reimbursement_room_reporter_preference",
+        topic: async () => "AI报账群",
+      }),
+      self: () => false,
+      talker: async () => ({
+        id: () => "reimbursement_talker_reporter_b",
+        name: () => "Ryan。",
+      }),
+      text: () => "",
+      toFileBox: async () => ({
+        name: "reporter-b-order.jpg",
+        toBuffer: async () => Buffer.from([0xff, 0xd8, 0xff, 0xd9]),
+      }),
+      type: () => 6,
+      wechaty,
+    },
+    context,
+    createLogger(logs),
+  );
+
+  const reportA = listRecentReimbursementReports(1000).find((report) => report.reporter === "甲同学");
+  const reportB = listRecentReimbursementReports(1000).find((report) => report.reporter === "乙同学");
+  assert(reportA);
+  assert(reportB);
+  assert.equal(reportA.amount, null);
+  assert.equal(reportB.amount, null);
+
+  await handleMessage(
+    {
+      id: () => "reimbursement-fallback-reporter-a-command",
+      room: async () => ({
+        alias: async () => "甲同学",
+        id: () => "reimbursement_room_reporter_preference",
+        topic: async () => "AI报账群",
+      }),
+      self: () => false,
+      talker: async () => ({
+        id: () => "reimbursement_talker_reporter_a",
+        name: () => "Ryan。",
+      }),
+      text: () => "「Claw：此次报账待核验」<br/>- - - - - - - - - - - - - - -<br/>2550",
+      type: () => 7,
+      wechaty,
+    },
+    context,
+    createLogger(logs),
+  );
+
+  const updatedReportA = listRecentReimbursementReports(1000).find((report) => report.id === reportA.id);
+  const updatedReportB = listRecentReimbursementReports(1000).find((report) => report.id === reportB.id);
+
+  assert(updatedReportA);
+  assert(updatedReportB);
+  assert.equal(updatedReportA.amount, 2550);
+  assert.equal(updatedReportA.needsReview, false);
+  assert.equal(updatedReportB.amount, null);
+  assert.equal(updatedReportB.needsReview, true);
+});
+
 test("handleMessage replies unsupported message for unsupported reimbursement receipt command", { concurrency: false }, async () => {
   const logs: Array<{ level: string; message: string; context?: Record<string, unknown> }> = [];
   const delivered: DeliveredMessage[] = [];

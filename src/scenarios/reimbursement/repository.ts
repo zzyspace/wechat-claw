@@ -540,8 +540,10 @@ export function findLatestReimbursementReportByReceiptText(input: {
   targetValue: string;
   receiptText: string;
   beforeIso: string;
+  reporter?: string;
 }): ReimbursementReportRecord | null {
   const db = getDatabase();
+  const reporterWhereSql = input.reporter ? "AND rr.reporter = ?" : "";
   const row = db
     .prepare(
       `
@@ -553,6 +555,7 @@ export function findLatestReimbursementReportByReceiptText(input: {
           AND rrd.target_value = ?
           AND rrd.receipt_text = ?
           AND COALESCE(rm.event_received_at, rrd.sent_at) < ?
+          ${reporterWhereSql}
         ORDER BY
           CASE WHEN rrd.raw_message_id IS NULL THEN 1 ELSE 0 END ASC,
           COALESCE(rm.event_received_at, rrd.sent_at) DESC,
@@ -560,7 +563,15 @@ export function findLatestReimbursementReportByReceiptText(input: {
         LIMIT 1
       `,
     )
-    .get(input.targetType, input.targetValue, input.receiptText, input.beforeIso) as
+    .get(
+      ...[
+        input.targetType,
+        input.targetValue,
+        input.receiptText,
+        input.beforeIso,
+        ...(input.reporter ? [input.reporter] : []),
+      ],
+    ) as
     | { reimbursementReportId: number }
     | undefined;
 

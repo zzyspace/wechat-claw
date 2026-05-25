@@ -1019,6 +1019,13 @@ async function handleReimbursementReceiptReplyCommand(
       targetValue: parsed.roomTopic,
       receiptText: receiptReply.quotedText,
       beforeIso: parsed.eventReceivedAt,
+      reporter: parsed.senderName,
+    }) ??
+    findLatestReimbursementReportByReceiptText({
+      targetType: "room_topic",
+      targetValue: parsed.roomTopic,
+      receiptText: receiptReply.quotedText,
+      beforeIso: parsed.eventReceivedAt,
     });
 
   logger.info("Persisted reimbursement receipt command raw message", {
@@ -1404,7 +1411,7 @@ function parseReimbursementReceiptReplyFromRawPayload(
 }
 
 function parseReimbursementReceiptReplyFromText(text: string): ParsedReimbursementReceiptReply | null {
-  const normalized = text.replace(/\r\n/g, "\n");
+  const normalized = normalizeReplyStructureText(text);
   const divider = "\n- - - - - - - - - - - - - - -\n";
   const dividerIndex = normalized.indexOf(divider);
 
@@ -1478,9 +1485,16 @@ function decodeXmlEntities(value: string) {
 }
 
 function sanitizeReplyText(text: string) {
-  return text
+  return decodeXmlEntities(text)
     .replace(/<br\s*\/?>/gi, "\n")
     .replace(/<[^>]+>/g, "")
+    .trim();
+}
+
+function normalizeReplyStructureText(text: string) {
+  return decodeXmlEntities(text)
+    .replace(/\r\n/g, "\n")
+    .replace(/<br\s*\/?>/gi, "\n")
     .trim();
 }
 
