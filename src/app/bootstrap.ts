@@ -60,6 +60,7 @@ async function main() {
     // no-op
   };
   let shuttingDown = false;
+  let supervisorRestartRequested = false;
   let healthReporter: HealthReporter | undefined;
   let shutdownPromise: Promise<void> | undefined;
   const processStartedAt = new Date();
@@ -104,6 +105,34 @@ async function main() {
     })();
 
     return shutdownPromise;
+  };
+
+  const requestSupervisorRestart = (reason: string, details: Record<string, unknown> = {}) => {
+    if (shuttingDown || supervisorRestartRequested) {
+      return;
+    }
+
+    supervisorRestartRequested = true;
+    logger.error("Requesting supervisor restart after fatal bot runtime failure", {
+      reason,
+      runtimeRunId,
+      ...details,
+    });
+
+    const forceExitHandle = setTimeout(() => {
+      logger.error("Forced process exit after supervisor restart timeout", {
+        reason,
+        timeoutMs: SHUTDOWN_TIMEOUT_MS + 1_000,
+      });
+      process.exit(1);
+    }, SHUTDOWN_TIMEOUT_MS + 1_000);
+    forceExitHandle.unref();
+
+    // When Wechaty/Puppeteer enters a logout loop, let systemd restart a clean process.
+    void shutdown(reason).finally(() => {
+      clearTimeout(forceExitHandle);
+      process.exit(1);
+    });
   };
 
   process.once("SIGINT", () => {
@@ -186,6 +215,7 @@ async function main() {
           category: "login_state_invalid",
         });
         touchWatchdogHeartbeat();
+        requestSupervisorRestart("BOT_LOGOUT", { name });
       },
       onError(error) {
         healthReporter?.markError(error, {
