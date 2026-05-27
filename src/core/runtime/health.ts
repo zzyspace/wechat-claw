@@ -19,6 +19,7 @@ export interface RuntimeHealthSnapshot {
   botName: string;
   puppet?: string;
   startedAt: string;
+  degradedSinceAt: string | null;
   lastScanAt: string | null;
   lastLoginAt: string | null;
   lastMessageAt: string | null;
@@ -47,6 +48,7 @@ export class HealthReporter {
       botName: config.botName,
       puppet: config.puppet,
       startedAt,
+      degradedSinceAt: null,
       lastScanAt: null,
       lastLoginAt: null,
       lastMessageAt: null,
@@ -68,6 +70,21 @@ export class HealthReporter {
     this.persist();
   }
 
+  private updateStatus(status: RuntimeHealthStatus, patch: Partial<RuntimeHealthSnapshot> = {}) {
+    const degradedSinceAt =
+      status === "degraded"
+        ? this.snapshot.status === "degraded"
+          ? this.snapshot.degradedSinceAt ?? new Date().toISOString()
+          : new Date().toISOString()
+        : null;
+
+    this.update({
+      ...patch,
+      status,
+      degradedSinceAt,
+    });
+  }
+
   initialize() {
     this.persist();
   }
@@ -80,19 +97,17 @@ export class HealthReporter {
   }
 
   setStatus(status: RuntimeHealthStatus) {
-    this.update({ status });
+    this.updateStatus(status);
   }
 
   markScan() {
-    this.update({
-      status: "waiting_for_scan",
+    this.updateStatus("waiting_for_scan", {
       lastScanAt: new Date().toISOString(),
     });
   }
 
   markLogin() {
-    this.update({
-      status: "logged_in",
+    this.updateStatus("logged_in", {
       lastLoginAt: new Date().toISOString(),
     });
   }
@@ -119,8 +134,7 @@ export class HealthReporter {
     const category = options?.category ?? classifyRuntimeError(error);
     const message = extractErrorMessage(error);
 
-    this.update({
-      status: options?.status ?? "degraded",
+    this.updateStatus(options?.status ?? "degraded", {
       lastError: {
         at: new Date().toISOString(),
         category,

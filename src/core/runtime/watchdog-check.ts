@@ -357,8 +357,10 @@ export function evaluateWatchdogState(input: {
   }
 
   if (input.healthSnapshot.status === "degraded") {
-    const degradedAgeMs = input.healthSnapshot.lastError?.at
-      ? ageMsFromIso(input.healthSnapshot.lastError.at, now)
+    const degradedAgeMs = input.healthSnapshot.degradedSinceAt
+      ? ageMsFromIso(input.healthSnapshot.degradedSinceAt, now)
+      : input.healthSnapshot.lastError?.at
+        ? ageMsFromIso(input.healthSnapshot.lastError.at, now)
       : ageMsFromIso(input.healthSnapshot.startedAt, now);
 
     if (degradedAgeMs >= DEGRADED_PERSISTENCE_MS) {
@@ -500,6 +502,7 @@ export function createWatchdogAlertEmail(input: {
       "",
       `Health status: ${input.evaluation.healthSnapshot?.status ?? "(missing)"}`,
       `Health startedAt: ${input.evaluation.healthSnapshot?.startedAt ?? "(missing)"}`,
+      `Health degradedSinceAt: ${input.evaluation.healthSnapshot?.degradedSinceAt ?? "(missing)"}`,
       `Health lastScanAt: ${input.evaluation.healthSnapshot?.lastScanAt ?? "(missing)"}`,
       `Health lastLoginAt: ${input.evaluation.healthSnapshot?.lastLoginAt ?? "(missing)"}`,
       `Health lastMessageAt: ${input.evaluation.healthSnapshot?.lastMessageAt ?? "(missing)"}`,
@@ -510,6 +513,7 @@ export function createWatchdogAlertEmail(input: {
       `Watchdog runId: ${input.evaluation.watchdogSnapshot?.runId ?? "(missing)"}`,
       `Watchdog pid: ${input.evaluation.watchdogSnapshot?.pid ?? 0}`,
       `Watchdog startedAt: ${input.evaluation.watchdogSnapshot?.startedAt ?? "(missing)"}`,
+      `Watchdog degradedSinceAt: ${input.evaluation.watchdogSnapshot?.degradedSinceAt ?? "(missing)"}`,
       `Watchdog lastHeartbeatAt: ${input.evaluation.watchdogSnapshot?.lastHeartbeatAt ?? "(missing)"}`,
       "",
       `Health file: ${getHealthArtifactPath(input.config)}`,

@@ -184,6 +184,7 @@ async function main() {
         botName: config.botName,
         puppet: config.puppet,
         startedAt: processStartedAt.toISOString(),
+        degradedSinceAt: null,
         lastScanAt: null,
         lastLoginAt: null,
         lastMessageAt: null,

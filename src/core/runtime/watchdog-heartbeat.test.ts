@@ -68,6 +68,7 @@ function createHealthSnapshot(patch?: Partial<RuntimeHealthSnapshot>): RuntimeHe
     botName: "wechat-loss-bot",
     puppet: "wechaty-puppet-wechat",
     startedAt: "2026-05-21T12:00:00.000Z",
+    degradedSinceAt: null,
     lastScanAt: null,
     lastLoginAt: null,
     lastMessageAt: null,

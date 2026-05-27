@@ -14,6 +14,7 @@ export interface RuntimeWatchdogSnapshot {
   startedAt: string;
   lastHeartbeatAt: string;
   lastHealthStatus: RuntimeHealthStatus;
+  degradedSinceAt: string | null;
   lastScanAt: string | null;
   lastLoginAt: string | null;
   lastMessageAt: string | null;
@@ -46,6 +47,7 @@ function buildSnapshot(input: {
     startedAt: input.startedAt,
     lastHeartbeatAt: input.now.toISOString(),
     lastHealthStatus: input.health.status,
+    degradedSinceAt: input.health.degradedSinceAt,
     lastScanAt: input.health.lastScanAt,
     lastLoginAt: input.health.lastLoginAt,
     lastMessageAt: input.health.lastMessageAt,

@@ -71,6 +71,7 @@ function createHealthSnapshot(patch?: Partial<RuntimeHealthSnapshot>): RuntimeHe
     botName: "wechat-loss-bot",
     puppet: "wechaty-puppet-wechat",
     startedAt: "2026-05-21T12:00:00.000Z",
+    degradedSinceAt: null,
     lastScanAt: null,
     lastLoginAt: "2026-05-21T12:01:00.000Z",
     lastMessageAt: "2026-05-21T12:02:00.000Z",
@@ -87,6 +88,7 @@ function createWatchdogSnapshot(patch?: Partial<RuntimeWatchdogSnapshot>): Runti
     startedAt: "2026-05-21T12:00:00.000Z",
     lastHeartbeatAt: "2026-05-21T12:02:00.000Z",
     lastHealthStatus: "logged_in",
+    degradedSinceAt: null,
     lastScanAt: null,
     lastLoginAt: "2026-05-21T12:01:00.000Z",
     lastMessageAt: "2026-05-21T12:02:00.000Z",
@@ -252,4 +254,35 @@ test("createWatchdogAlertEmail includes diagnosis details and suggested commands
   assert.match(email.subject, /\[wechat-claw\]\[recoverable\] test-host login_logged_out/);
   assert.match(email.text, /Health lastError\.message: Bot logged out: Claw/);
   assert.match(email.text, /journalctl -u wechat-claw -f -o short-iso/);
+});
+
+test("evaluateWatchdogState uses degradedSinceAt instead of a refreshed lastError timestamp", () => {
+  const evaluation = evaluateWatchdogState({
+    healthSnapshot: createHealthSnapshot({
+      status: "degraded",
+      degradedSinceAt: "2026-05-21T11:55:00.000Z",
+      lastError: {
+        at: "2026-05-21T12:09:30.000Z",
+        category: "login_state_invalid",
+        message: "Bot logged out: Claw",
+      },
+    }),
+    hostName: "test-host",
+    now: new Date("2026-05-21T12:10:00.000Z"),
+    serviceName: "wechat-claw",
+    serviceStatus: createServiceStatus(),
+    watchdogSnapshot: createWatchdogSnapshot({
+      lastHeartbeatAt: "2026-05-21T12:09:00.000Z",
+      degradedSinceAt: "2026-05-21T11:55:00.000Z",
+      lastHealthStatus: "degraded",
+      lastError: {
+        at: "2026-05-21T12:09:30.000Z",
+        category: "login_state_invalid",
+        message: "Bot logged out: Claw",
+      },
+    }),
+  });
+
+  assert.equal(evaluation.action, "email_and_restart");
+  assert.equal(evaluation.reasonCode, "login_logged_out");
 });
