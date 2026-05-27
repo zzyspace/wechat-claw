@@ -7,6 +7,7 @@ import { test } from "node:test";
 import type { AppConfig } from "../config/env.js";
 import {
   createWatchdogAlertEmail,
+  createWaitingForScanAlertEmail,
   evaluateWatchdogState,
   runWatchdogCheck,
   writeWatchdogPersistentState,
@@ -285,4 +286,29 @@ test("evaluateWatchdogState uses degradedSinceAt instead of a refreshed lastErro
 
   assert.equal(evaluation.action, "email_and_restart");
   assert.equal(evaluation.reasonCode, "login_logged_out");
+});
+
+test("createWaitingForScanAlertEmail includes qrcode url and attaches the latest qrcode artifact", () => {
+  const stateDir = fs.mkdtempSync(path.join(os.tmpdir(), "wechat-claw-waiting-scan-email-"));
+  const config = createConfig(stateDir, true);
+  const artifactPath = path.join(stateDir, "latest-qrcode.txt");
+  fs.writeFileSync(
+    artifactPath,
+    "updated_at=2026-05-21T12:00:00.000Z\nqrcode_url=https://wechaty.js.org/qrcode/example\n\nASCII-QR\n",
+    "utf8",
+  );
+
+  const email = createWaitingForScanAlertEmail({
+    artifactPath,
+    config,
+    hostName: "test-host",
+    now: new Date("2026-05-21T12:10:00.000Z"),
+    qrcodeUrl: "https://wechaty.js.org/qrcode/example",
+  });
+
+  assert.match(email.subject, /\[wechat-claw\]\[manual-action\] test-host waiting_for_scan/);
+  assert.match(email.text, /QR code URL: https:\/\/wechaty\.js\.org\/qrcode\/example/);
+  assert.equal(email.attachments?.length, 1);
+  assert.equal(email.attachments?.[0]?.filename, "latest-qrcode.txt");
+  assert.match(String(email.attachments?.[0]?.content ?? ""), /ASCII-QR/);
 });

@@ -1,4 +1,5 @@
 import { getAppConfig } from "../core/config/env.js";
+import { sendSmtpMail } from "../core/alerts/smtp-client.js";
 import { logger } from "../core/logging/logger.js";
 import { startLogRetentionManager } from "../core/runtime/log-retention.js";
 import { startRawAttachmentRetentionManager } from "../core/runtime/raw-attachment-retention.js";
@@ -6,6 +7,7 @@ import { HealthReporter } from "../core/runtime/health.js";
 import { startManualSummaryRequestPoller } from "../core/runtime/manual-summary-request-poller.js";
 import { assertLogDirWritable, assertStateDirWritable } from "../core/runtime/state-paths.js";
 import { startLossSummaryScheduler } from "../core/runtime/summary-scheduler.js";
+import { createWaitingForScanAlertEmail } from "../core/runtime/watchdog-check.js";
 import {
   createRuntimeRunId,
   startWatchdogHeartbeatManager,
@@ -202,9 +204,48 @@ async function main() {
     touchWatchdogHeartbeat();
 
     bot = await startBot(logger, {
-      onScan() {
+      async onScan({ artifactPath, qrcodeUrl }) {
+        const previousStatus = healthReporter?.getSnapshot().status;
         healthReporter?.markScan();
         touchWatchdogHeartbeat();
+
+        if (
+          previousStatus !== "waiting_for_scan" &&
+          config.alertEmailEnabled &&
+          config.alertEmailTo.length > 0
+        ) {
+          try {
+            const message = createWaitingForScanAlertEmail({
+              artifactPath,
+              config,
+              qrcodeUrl,
+            });
+            await sendSmtpMail({
+              attachments: message.attachments,
+              from: config.alertEmailFrom ?? "",
+              host: config.alertSmtpHost ?? "",
+              password: config.alertSmtpPassword,
+              port: config.alertSmtpPort,
+              secure: config.alertSmtpSecure,
+              subject: message.subject,
+              text: message.text,
+              to: config.alertEmailTo,
+              username: config.alertSmtpUsername,
+            });
+            logger.info("Waiting-for-scan alert email sent", {
+              artifactPath,
+              qrcodeUrl,
+              recipients: config.alertEmailTo,
+            });
+          } catch (error) {
+            logger.error("Waiting-for-scan alert email failed", {
+              artifactPath,
+              message: error instanceof Error ? error.message : String(error),
+              qrcodeUrl,
+              stack: error instanceof Error ? error.stack : undefined,
+            });
+          }
+        }
       },
       onLogin() {
         healthReporter?.markLogin();

@@ -4,7 +4,14 @@ import { createInterface } from "node:readline";
 import net from "node:net";
 import tls from "node:tls";
 
+export interface SmtpAttachment {
+  content: Buffer | string;
+  contentType?: string;
+  filename: string;
+}
+
 export interface SmtpSendInput {
+  attachments?: SmtpAttachment[];
   from: string;
   host: string;
   password?: string;
@@ -84,6 +91,7 @@ class LineReader {
 }
 
 function buildMessage(input: {
+  attachments?: SmtpAttachment[];
   from: string;
   subject: string;
   text: string;
@@ -95,18 +103,63 @@ function buildMessage(input: {
     .map((line) => (line.startsWith(".") ? `.${line}` : line))
     .join("\r\n");
 
-  return [
+  if (!input.attachments || input.attachments.length === 0) {
+    return [
+      `From: ${input.from}`,
+      `To: ${input.to.join(", ")}`,
+      `Subject: ${input.subject}`,
+      "MIME-Version: 1.0",
+      "Content-Type: text/plain; charset=UTF-8",
+      "Content-Transfer-Encoding: 8bit",
+      "",
+      normalizedBody,
+      "",
+    ].join("\r\n");
+  }
+
+  const boundary = `wechat-claw-${Date.now().toString(16)}-${Math.random().toString(16).slice(2)}`;
+  const parts = [
     `From: ${input.from}`,
     `To: ${input.to.join(", ")}`,
     `Subject: ${input.subject}`,
     "MIME-Version: 1.0",
+    `Content-Type: multipart/mixed; boundary="${boundary}"`,
+    "",
+    `--${boundary}`,
     "Content-Type: text/plain; charset=UTF-8",
     "Content-Transfer-Encoding: 8bit",
     "",
     normalizedBody,
-    "",
-  ].join("\r\n");
+  ];
+
+  for (const attachment of input.attachments) {
+    const base64Content = (
+      Buffer.isBuffer(attachment.content)
+        ? attachment.content
+        : Buffer.from(attachment.content, "utf8")
+    )
+      .toString("base64")
+      .replace(/(.{76})/g, "$1\r\n");
+
+    parts.push(
+      "",
+      `--${boundary}`,
+      `Content-Type: ${attachment.contentType ?? "application/octet-stream"}`,
+      "Content-Transfer-Encoding: base64",
+      `Content-Disposition: attachment; filename="${attachment.filename}"`,
+      "",
+      base64Content,
+    );
+  }
+
+  parts.push("", `--${boundary}--`, "");
+
+  return parts.join("\r\n");
 }
+
+export const __test__ = {
+  buildMessage,
+};
 
 function writeLine(socket: NodeJS.WritableStream, value: string) {
   return new Promise<void>((resolve, reject) => {

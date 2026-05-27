@@ -3,6 +3,7 @@ import { hostname as getHostname } from "node:os";
 import path from "node:path";
 
 import type { AppConfig } from "../config/env.js";
+import type { SmtpAttachment } from "../alerts/smtp-client.js";
 import { getManagedLogFilePath } from "../logging/log-files.js";
 import type { RuntimeHealthSnapshot, RuntimeHealthStatus } from "./health.js";
 import {
@@ -66,6 +67,7 @@ export interface WatchdogEvaluation {
 }
 
 export interface WatchdogAlertEmail {
+  attachments?: SmtpAttachment[];
   subject: string;
   text: string;
 }
@@ -178,6 +180,18 @@ function buildEvaluation(input: {
 function parseLoggedOutReason(snapshot: RuntimeHealthSnapshot) {
   const message = snapshot.lastError?.message?.toLowerCase() ?? "";
   return message.includes("logged out") || message.includes("logout");
+}
+
+function buildQrcodeArtifactAttachment(artifactPath: string): SmtpAttachment | undefined {
+  if (!fs.existsSync(artifactPath)) {
+    return undefined;
+  }
+
+  return {
+    content: fs.readFileSync(artifactPath, "utf8"),
+    contentType: "text/plain; charset=UTF-8",
+    filename: path.basename(artifactPath),
+  };
 }
 
 export function evaluateWatchdogState(input: {
@@ -527,6 +541,41 @@ export function createWatchdogAlertEmail(input: {
       `  tail -f ${getManagedLogFilePath(input.config, "error", today)}`,
       `  cat ${getHealthArtifactPath(input.config)}`,
       `  cat ${getWatchdogArtifactPath(input.config)}`,
+    ].join("\n"),
+  };
+}
+
+export function createWaitingForScanAlertEmail(input: {
+  artifactPath: string;
+  config: AppConfig;
+  hostName?: string;
+  now?: Date;
+  qrcodeUrl: string;
+}): WatchdogAlertEmail {
+  const now = input.now ?? new Date();
+  const hostName = input.hostName ?? getHostname();
+  const attachment = buildQrcodeArtifactAttachment(input.artifactPath);
+
+  return {
+    attachments: attachment ? [attachment] : undefined,
+    subject: `[wechat-claw][manual-action] ${hostName} waiting_for_scan`,
+    text: [
+      "The bot is waiting for scan and needs manual login.",
+      "",
+      `Bot: ${input.config.botName}`,
+      `Host: ${hostName}`,
+      `Time: ${now.toISOString()}`,
+      `State dir: ${input.config.stateDir}`,
+      `QR code URL: ${input.qrcodeUrl}`,
+      `QR code artifact: ${input.artifactPath}`,
+      attachment
+        ? "Attachment: latest-qrcode.txt with QR URL and ASCII QR code."
+        : "Attachment: unavailable (latest-qrcode.txt could not be read).",
+      "",
+      "Suggested action:",
+      "1. Open the QR code URL or attachment.",
+      "2. Scan it with the bot account.",
+      "3. Wait for the online notice.",
     ].join("\n"),
   };
 }

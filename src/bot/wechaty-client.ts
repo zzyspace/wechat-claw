@@ -11,7 +11,7 @@ import { renderTerminalQrcode } from "./terminal-qrcode.js";
 import type { WechatyInstance } from "./types.js";
 
 export interface BotLifecycleHooks {
-  onScan?: (payload: { statusName: string; qrcodeUrl: string; artifactPath: string }) => void;
+  onScan?: (payload: { statusName: string; qrcodeUrl: string; artifactPath: string }) => Promise<void> | void;
   onLogin?: (payload: { name: string }) => void;
   onLogout?: (payload: { name: string }) => void;
   onError?: (error: Error) => void;
@@ -320,7 +320,7 @@ export async function startBot(
       artifactPath,
       qrcodeUrl,
     });
-    hooks.onScan?.({
+    await hooks.onScan?.({
       statusName,
       qrcodeUrl,
       artifactPath,
