@@ -69,6 +69,7 @@ WECHATY_ALERT_EMAIL_FROM=bot@example.com
 WECHATY_ALERT_EMAIL_TO=ops@example.com
 WECHATY_TIMEZONE=Asia/Shanghai
 WECHATY_DEBUG_CONTACT_NAME=你的主微信昵称
+WECHATY_DEBUG_RECEIVED_ROOM_MESSAGE_ENABLED=false
 WECHATY_ATTACHMENT_RETENTION_DAYS=60
 WECHATY_COLD_START_IGNORE_WINDOW_SECONDS=60
 WECHATY_LOSS_MERGE_WINDOW_SECONDS=60
@@ -99,7 +100,8 @@ WECHATY_CHANNELS_JSON=[{"code":"loss_a","enabled":true,"scenario":"loss-report",
 - `WECHATY_ALERT_EMAIL_FROM`: 告警发件人邮箱
 - `WECHATY_ALERT_EMAIL_TO`: 告警收件人邮箱，支持多个，用逗号分隔
 - `WECHATY_TIMEZONE`: 日期边界和 cron 解释时区，默认 `Asia/Shanghai`
-- `WECHATY_DEBUG_CONTACT_NAME`: 所有 `"[wechat-claw]"` 调试信息统一发送到这个联系人，不参与业务日报发送
+- `WECHATY_DEBUG_CONTACT_NAME`: `"[wechat-claw]"` 调试信息的接收联系人，不参与业务日报发送；上线通知始终走这里
+- `WECHATY_DEBUG_RECEIVED_ROOM_MESSAGE_ENABLED`: 是否发送 `"[wechat-claw] 已收到群消息"` 这类调试摘要，默认 `false`
 - `WECHATY_CHANNELS_JSON`: 推荐的多群配置入口，支持 `loss-report` 和 `reimbursement` 场景
 - `WECHATY_ATTACHMENT_RETENTION_DAYS`: 图片附件保留天数，默认 `60` 天；会清理 `raw/` 和 `reimbursement/raw/` 下更早的历史目录，设为 `0` 可关闭
 - `WECHATY_COLD_START_IGNORE_WINDOW_SECONDS`: 冷启动忽略窗口，默认 `60` 秒；会忽略发送时间早于“bot 启动时间 - 窗口”的历史消息，设为 `0` 可关闭
@@ -188,6 +190,7 @@ WECHATY_BOT_NAME=wechat-loss-bot
 WECHATY_STATE_DIR=/private/tmp/wechat-claw-state
 WECHATY_TIMEZONE=Asia/Shanghai
 WECHATY_DEBUG_CONTACT_NAME=你的主微信昵称
+WECHATY_DEBUG_RECEIVED_ROOM_MESSAGE_ENABLED=false
 WECHATY_CHANNELS_JSON=[{"code":"loss_test","enabled":true,"scenario":"loss-report","match":{"type":"room_topic","value":"AI测试群"},"deliveryTargets":[{"type":"contact_name","value":"你的主微信昵称"},{"type":"room_topic","value":"AI测试日报群"}],"summarySchedule":"0 22 * * *"}]
 ```
 
@@ -205,6 +208,7 @@ WECHATY_BOT_NAME=wechat-loss-bot
 WECHATY_STATE_DIR=/private/tmp/wechat-claw-state
 WECHATY_TIMEZONE=Asia/Shanghai
 WECHATY_DEBUG_CONTACT_NAME=你的主微信昵称
+WECHATY_DEBUG_RECEIVED_ROOM_MESSAGE_ENABLED=false
 WECHATY_CHANNELS_JSON=[{"code":"loss_test","enabled":true,"scenario":"loss-report","match":{"type":"room_topic","value":"AI测试群"},"deliveryTargets":[{"type":"contact_name","value":"你的主微信昵称"}],"summarySchedule":"0 22 * * *"}]
 ```
 
@@ -712,6 +716,7 @@ WECHATY_ALERT_EMAIL_FROM=bot@example.com
 WECHATY_ALERT_EMAIL_TO=ops@example.com
 WECHATY_TIMEZONE=Asia/Shanghai
 WECHATY_DEBUG_CONTACT_NAME=你的主微信昵称
+WECHATY_DEBUG_RECEIVED_ROOM_MESSAGE_ENABLED=false
 WECHATY_CHANNELS_JSON=[{"code":"loss_prod","enabled":true,"scenario":"loss-report","match":{"type":"room_topic","value":"AI测试群"},"deliveryTargets":[{"type":"contact_name","value":"你的主微信昵称"}],"summarySchedule":"0 22 * * *"}]
 ```
 

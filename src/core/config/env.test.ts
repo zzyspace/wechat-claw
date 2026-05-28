@@ -27,6 +27,7 @@ const managedEnvKeys = [
   "WECHATY_TARGET_ROOM_TOPIC",
   "WECHATY_DELIVERY_CONTACT_NAME",
   "WECHATY_DEBUG_CONTACT_NAME",
+  "WECHATY_DEBUG_RECEIVED_ROOM_MESSAGE_ENABLED",
   "WECHATY_ATTACHMENT_RETENTION_DAYS",
   "WECHATY_COLD_START_IGNORE_WINDOW_SECONDS",
   "WECHATY_REIMBURSEMENT_BACKWARD_TEXT_MERGE_WINDOW_SECONDS",
@@ -83,6 +84,7 @@ test("getAppConfig parses WECHATY_CHANNELS_JSON with mixed delivery targets", ()
     WECHATY_COLD_START_IGNORE_WINDOW_SECONDS: "45",
     WECHATY_REIMBURSEMENT_BACKWARD_TEXT_MERGE_WINDOW_SECONDS: "5",
     WECHATY_DEBUG_CONTACT_NAME: "调试联系人",
+    WECHATY_DEBUG_RECEIVED_ROOM_MESSAGE_ENABLED: "true",
     WECHATY_CHANNELS_JSON: JSON.stringify([
       {
         code: "loss_a",
@@ -118,6 +120,7 @@ test("getAppConfig parses WECHATY_CHANNELS_JSON with mixed delivery targets", ()
   assert.equal(config.coldStartIgnoreWindowSeconds, 45);
   assert.equal(config.reimbursementBackwardTextMergeWindowSeconds, 5);
   assert.equal(config.debugContactName, "调试联系人");
+  assert.equal(config.debugReceivedRoomMessageEnabled, true);
   assert.equal(config.logLevel, "debug");
   assert.equal(config.logRetentionDays, 14);
   assert.equal(config.alertEmailEnabled, true);
@@ -231,6 +234,7 @@ test("getAppConfig defaults log settings from state dir", () => {
   assert.equal(config.logRetentionDays, 7);
   assert.equal(config.alertEmailEnabled, false);
   assert.deepEqual(config.alertEmailTo, []);
+  assert.equal(config.debugReceivedRoomMessageEnabled, false);
 });
 
 test("validateAppConfig rejects invalid log settings", () => {

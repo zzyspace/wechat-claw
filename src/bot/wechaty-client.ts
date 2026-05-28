@@ -270,6 +270,7 @@ export async function startBot(
   logger.info("Startup config loaded", {
     botName: config.botName,
     debugContactName: config.debugContactName ?? "(empty)",
+    debugReceivedRoomMessageEnabled: config.debugReceivedRoomMessageEnabled,
     channels: enabledChannels.map((channel) => ({
       code: channel.code,
       deliveryTargets: channel.deliveryTargets,
@@ -413,6 +414,7 @@ export async function startBot(
         {
           channels: config.channels,
           debugContactName: config.debugContactName,
+          debugReceivedRoomMessageEnabled: config.debugReceivedRoomMessageEnabled,
           timeZone: config.timeZone,
           lossMergeWindowSeconds: config.lossMergeWindowSeconds,
           reimbursementBackwardTextMergeWindowSeconds: config.reimbursementBackwardTextMergeWindowSeconds,

@@ -411,6 +411,90 @@ test(
   },
 );
 
+test("handleMessage does not send received-room debug notification by default", { concurrency: false }, async () => {
+  const logs: Array<{ level: string; message: string; context?: Record<string, unknown> }> = [];
+  const delivered: DeliveredMessage[] = [];
+
+  await handleMessage(
+    {
+      id: () => "received-room-debug-disabled-test",
+      room: async () => ({
+        alias: async () => null,
+        id: () => "room_debug_disabled",
+        topic: async () => "AI测试群",
+      }),
+      self: () => false,
+      talker: async () => ({
+        id: () => "talker_debug_disabled",
+        name: () => "Ryan。",
+      }),
+      text: () => "",
+      toFileBox: async () => ({
+        name: "debug-disabled.jpg",
+        toBuffer: async () => Buffer.from([0xff, 0xd8, 0xff, 0xd9]),
+      }),
+      type: () => 6,
+      wechaty: createWechatyMock(delivered),
+    },
+    {
+      ...createMessageContext([createChannel()]),
+      debugContactName: "Ryan。",
+    },
+    createLogger(logs),
+  );
+
+  assert.equal(
+    delivered.some((item) => item.text.startsWith("[wechat-claw] 已收到群消息")),
+    false,
+  );
+  assert(logs.some((entry) => entry.message === "Received room message"));
+});
+
+test("handleMessage sends received-room debug notification when explicitly enabled", { concurrency: false }, async () => {
+  const logs: Array<{ level: string; message: string; context?: Record<string, unknown> }> = [];
+  const delivered: DeliveredMessage[] = [];
+
+  await handleMessage(
+    {
+      id: () => "received-room-debug-enabled-test",
+      room: async () => ({
+        alias: async () => null,
+        id: () => "room_debug_enabled",
+        topic: async () => "AI测试群",
+      }),
+      self: () => false,
+      talker: async () => ({
+        id: () => "talker_debug_enabled",
+        name: () => "Ryan。",
+      }),
+      text: () => "",
+      toFileBox: async () => ({
+        name: "debug-enabled.jpg",
+        toBuffer: async () => Buffer.from([0xff, 0xd8, 0xff, 0xd9]),
+      }),
+      type: () => 6,
+      wechaty: createWechatyMock(delivered),
+    },
+    {
+      ...createMessageContext([createChannel()]),
+      debugContactName: "Ryan。",
+      debugReceivedRoomMessageEnabled: true,
+    },
+    createLogger(logs),
+  );
+
+  assert.equal(
+    delivered.some(
+      (item) =>
+        item.targetType === "contact_name" &&
+        item.targetValue === "Ryan。" &&
+        item.text.startsWith("[wechat-claw] 已收到群消息"),
+    ),
+    true,
+  );
+  assert(logs.some((entry) => entry.message === "Sent room message delivery notifications"));
+});
+
 test("handleMessage stores reimbursement text-only messages without recent image context", { concurrency: false }, async () => {
   const logs: Array<{ level: string; message: string; context?: Record<string, unknown> }> = [];
   const messageId = "reimbursement-text-test";

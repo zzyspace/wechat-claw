@@ -46,6 +46,7 @@ const REIMBURSEMENT_RECEIPT_SELF_MATCH_WINDOW_SECONDS = 90;
 export interface MessageContext {
   channels: ChannelConfig[];
   debugContactName?: string;
+  debugReceivedRoomMessageEnabled?: boolean;
   timeZone?: string;
   lossMergeWindowSeconds: number;
   reimbursementBackwardTextMergeWindowSeconds: number;
@@ -362,7 +363,7 @@ async function handleLossReportMessage(
     typeValue: parsed.typeValue,
   });
 
-  await sendDebugNotification(message, context, logger, parsed.channel, [
+  await sendReceivedRoomMessageDebugNotification(message, context, logger, parsed.channel, [
     "[wechat-claw] 已收到群消息",
     `逻辑频道: ${parsed.channel.code}`,
     `场景: 报损`,
@@ -721,7 +722,7 @@ async function handleReimbursementMessage(
           typeValue: parsed.typeValue,
         });
 
-        await sendDebugNotification(message, context, logger, parsed.channel, [
+        await sendReceivedRoomMessageDebugNotification(message, context, logger, parsed.channel, [
           "[wechat-claw] 已收到群消息",
           `逻辑频道: ${parsed.channel.code}`,
           `场景: 报账`,
@@ -993,7 +994,7 @@ async function handleReimbursementMessage(
     await sendReimbursementReceiptNotification(message, logger, parsed.channel, report);
   }
 
-  await sendDebugNotification(message, context, logger, parsed.channel, [
+  await sendReceivedRoomMessageDebugNotification(message, context, logger, parsed.channel, [
     "[wechat-claw] 已收到群消息",
     `逻辑频道: ${parsed.channel.code}`,
     `场景: 报账`,
@@ -1095,7 +1096,7 @@ async function handleReimbursementReceiptReplyCommand(
       REIMBURSEMENT_COMMAND_UNSUPPORTED_TEXT,
     );
 
-    await sendDebugNotification(message, context, logger, parsed.channel, [
+    await sendReceivedRoomMessageDebugNotification(message, context, logger, parsed.channel, [
       "[wechat-claw] 已收到群消息",
       `逻辑频道: ${parsed.channel.code}`,
       `场景: 报账`,
@@ -1147,7 +1148,7 @@ async function handleReimbursementReceiptReplyCommand(
       REIMBURSEMENT_COMMAND_NOT_FOUND_TEXT,
     );
 
-    await sendDebugNotification(message, context, logger, parsed.channel, [
+    await sendReceivedRoomMessageDebugNotification(message, context, logger, parsed.channel, [
       "[wechat-claw] 已收到群消息",
       `逻辑频道: ${parsed.channel.code}`,
       `场景: 报账`,
@@ -1214,7 +1215,7 @@ async function handleReimbursementReceiptReplyCommand(
     REIMBURSEMENT_COMMAND_PROCESSED_TEXT,
   );
 
-  await sendDebugNotification(message, context, logger, parsed.channel, [
+  await sendReceivedRoomMessageDebugNotification(message, context, logger, parsed.channel, [
     "[wechat-claw] 已收到群消息",
     `逻辑频道: ${parsed.channel.code}`,
     `场景: 报账`,
@@ -1264,6 +1265,20 @@ async function sendDebugNotification(
     debugContactName: context.debugContactName,
     delivered: deliveryResult.delivered,
   });
+}
+
+async function sendReceivedRoomMessageDebugNotification(
+  message: any,
+  context: MessageContext,
+  logger: Logger,
+  channel: ChannelConfig,
+  lines: string[],
+) {
+  if (!context.debugReceivedRoomMessageEnabled) {
+    return;
+  }
+
+  await sendDebugNotification(message, context, logger, channel, lines);
 }
 
 async function sendReimbursementReceiptNotification(

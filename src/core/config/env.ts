@@ -49,6 +49,7 @@ export interface AppConfig {
   alertEmailTo: string[];
   timeZone: string;
   debugContactName?: string;
+  debugReceivedRoomMessageEnabled?: boolean;
   channels: ChannelConfig[];
   channelsSource: ChannelsSource;
   channelsParseError?: string;
@@ -340,6 +341,10 @@ export function getAppConfig(): AppConfig {
     alertEmailTo: readEmailListEnv("WECHATY_ALERT_EMAIL_TO"),
     timeZone: readStringEnv("WECHATY_TIMEZONE", "Asia/Shanghai") || "Asia/Shanghai",
     debugContactName: readOptionalEnv("WECHATY_DEBUG_CONTACT_NAME"),
+    debugReceivedRoomMessageEnabled: readBooleanEnv(
+      "WECHATY_DEBUG_RECEIVED_ROOM_MESSAGE_ENABLED",
+      false,
+    ),
     channels: channelResolution.channels,
     channelsSource: channelResolution.source,
     channelsParseError: channelResolution.error,

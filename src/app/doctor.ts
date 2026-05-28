@@ -13,6 +13,7 @@ async function main() {
   logger.info("Config summary", {
     botName: config.botName,
     debugContactName: config.debugContactName ?? "(empty)",
+    debugReceivedRoomMessageEnabled: config.debugReceivedRoomMessageEnabled,
     channels: config.channels.map((channel) => ({
       code: channel.code,
       deliveryTargets: channel.deliveryTargets,
