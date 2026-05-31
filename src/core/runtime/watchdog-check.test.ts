@@ -33,6 +33,7 @@ function createConfig(stateDir: string, alertEmailEnabled = true): AppConfig {
     channels: [],
     channelsSource: "json",
     coldStartIgnoreWindowSeconds: 60,
+    debugMessageSnapshotEnabled: false,
     logDir: path.join(stateDir, "logs"),
     logLevel: "info",
     logRetentionDays: 7,
@@ -51,6 +52,8 @@ function createConfig(stateDir: string, alertEmailEnabled = true): AppConfig {
     stateDir,
     summaryPromptTemplate: "",
     timeZone: "Asia/Shanghai",
+    watchdogMemoryLimitMb: 0,
+    watchdogMemoryPersistenceSeconds: 300,
   };
 }
 
@@ -131,6 +134,7 @@ test("runWatchdogCheck sends one email for repeated identical faults within the 
     healthSnapshot: createHealthSnapshot(),
     now: new Date("2026-05-21T12:05:00.000Z"),
     persistentState: {
+      firstObservedAtByFingerprint: {},
       lastCheckAt: null,
       recentAlertsByFingerprint: {},
       recentRestartAts: [],
@@ -181,6 +185,7 @@ test("runWatchdogCheck throttles automatic restarts after the configured limit",
     healthSnapshot: createHealthSnapshot(),
     now: new Date("2026-05-21T12:10:00.000Z"),
     persistentState: {
+      firstObservedAtByFingerprint: {},
       lastCheckAt: null,
       recentAlertsByFingerprint: {},
       recentRestartAts: ["2026-05-21T12:00:00.000Z", "2026-05-21T12:05:00.000Z"],
@@ -203,10 +208,76 @@ test("runWatchdogCheck throttles automatic restarts after the configured limit",
   assert.equal(restartCount, 0);
 });
 
+test("runWatchdogCheck waits for sustained high memory before restarting", async () => {
+  const stateDir = fs.mkdtempSync(path.join(os.tmpdir(), "wechat-claw-watchdog-check-"));
+  const config = {
+    ...createConfig(stateDir, true),
+    watchdogMemoryLimitMb: 512,
+    watchdogMemoryPersistenceSeconds: 300,
+  };
+  let restartCount = 0;
+
+  const initial = await runWatchdogCheck({
+    config,
+    healthSnapshot: createHealthSnapshot(),
+    now: new Date("2026-05-21T12:00:00.000Z"),
+    persistentState: {
+      firstObservedAtByFingerprint: {},
+      lastCheckAt: null,
+      recentAlertsByFingerprint: {},
+      recentRestartAts: [],
+    },
+    readServiceStatus: () =>
+      createServiceStatus({
+        memoryCurrentBytes: 600 * 1024 * 1024,
+      }),
+    restartService: () => {
+      restartCount += 1;
+    },
+    sendAlertEmail: async () => {
+      // no-op
+    },
+    serviceName: "wechat-claw",
+    watchdogSnapshot: createWatchdogSnapshot({
+      lastHeartbeatAt: "2026-05-21T11:59:00.000Z",
+    }),
+  });
+
+  assert.equal(initial.effectiveEvaluation.action, "none");
+  assert.equal(initial.effectiveEvaluation.reasonCode, "service_memory_high");
+  assert.equal(restartCount, 0);
+
+  const later = await runWatchdogCheck({
+    config,
+    healthSnapshot: createHealthSnapshot(),
+    now: new Date("2026-05-21T12:06:00.000Z"),
+    persistentState: initial.persistentState,
+    readServiceStatus: () =>
+      createServiceStatus({
+        memoryCurrentBytes: 600 * 1024 * 1024,
+      }),
+    restartService: () => {
+      restartCount += 1;
+    },
+    sendAlertEmail: async () => {
+      // no-op
+    },
+    serviceName: "wechat-claw",
+    watchdogSnapshot: createWatchdogSnapshot({
+      lastHeartbeatAt: "2026-05-21T12:05:00.000Z",
+    }),
+  });
+
+  assert.equal(later.effectiveEvaluation.action, "email_and_restart");
+  assert.equal(later.effectiveEvaluation.reasonCode, "service_memory_high");
+  assert.equal(restartCount, 1);
+});
+
 test("watchdog persistent state can be written and read back", () => {
   const stateDir = fs.mkdtempSync(path.join(os.tmpdir(), "wechat-claw-watchdog-check-"));
   const config = createConfig(stateDir, false);
   const state: WatchdogPersistentState = {
+    firstObservedAtByFingerprint: {},
     lastCheckAt: "2026-05-21T12:05:00.000Z",
     recentAlertsByFingerprint: {
       abc: "2026-05-21T12:04:00.000Z",

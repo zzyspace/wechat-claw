@@ -20,6 +20,7 @@ const WAITING_FOR_SCAN_TIMEOUT_MS = 10 * 60 * 1000;
 const ALERT_SUPPRESSION_WINDOW_MS = 15 * 60 * 1000;
 const RESTART_THROTTLE_WINDOW_MS = 15 * 60 * 1000;
 const MAX_RESTARTS_PER_WINDOW = 2;
+const FIRST_OBSERVATION_TTL_MS = 24 * 60 * 60 * 1000;
 
 export type WatchdogReasonCode =
   | "service_not_running"
@@ -27,6 +28,7 @@ export type WatchdogReasonCode =
   | "health_degraded_persistent"
   | "login_waiting_for_scan_timeout"
   | "login_logged_out"
+  | "service_memory_high"
   | "startup_failed"
   | "restart_throttled"
   | "health_snapshot_missing"
@@ -42,11 +44,14 @@ export interface ServiceStatusSnapshot {
   activeState: string;
   execMainStatus?: number;
   mainPid?: number;
+  memoryCurrentBytes?: number;
+  memoryPeakBytes?: number;
   result?: string;
   subState?: string;
 }
 
 export interface WatchdogPersistentState {
+  firstObservedAtByFingerprint: Record<string, string>;
   lastCheckAt: string | null;
   recentAlertsByFingerprint: Record<string, string>;
   recentRestartAts: string[];
@@ -86,6 +91,14 @@ export interface WatchdogCheckResult {
   restartSuppressed: boolean;
 }
 
+function formatBytesAsMiB(bytes: number | undefined) {
+  if (!Number.isFinite(bytes) || !bytes || bytes <= 0) {
+    return "(unknown)";
+  }
+
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MiB`;
+}
+
 function writeJsonFile(pathValue: string, value: unknown) {
   const tempPath = `${pathValue}.tmp`;
   fs.writeFileSync(tempPath, `${JSON.stringify(value, null, 2)}\n`, "utf8");
@@ -98,6 +111,14 @@ function readJsonFile<T>(pathValue: string): T {
 
 function normalizePersistentState(value: Partial<WatchdogPersistentState> | undefined): WatchdogPersistentState {
   return {
+    firstObservedAtByFingerprint:
+      value?.firstObservedAtByFingerprint && typeof value.firstObservedAtByFingerprint === "object"
+        ? Object.fromEntries(
+            Object.entries(value.firstObservedAtByFingerprint).filter((entry): entry is [string, string] => {
+              return typeof entry[0] === "string" && typeof entry[1] === "string";
+            }),
+          )
+        : {},
     lastCheckAt: typeof value?.lastCheckAt === "string" ? value.lastCheckAt : null,
     recentAlertsByFingerprint:
       value?.recentAlertsByFingerprint && typeof value.recentAlertsByFingerprint === "object"
@@ -426,6 +447,12 @@ function prunePersistentState(state: WatchdogPersistentState, now: Date): Watchd
   const nowMs = now.getTime();
 
   return {
+    firstObservedAtByFingerprint: Object.fromEntries(
+      Object.entries(state.firstObservedAtByFingerprint).filter(([, value]) => {
+        const age = nowMs - Date.parse(value);
+        return !Number.isNaN(age) && age < FIRST_OBSERVATION_TTL_MS;
+      }),
+    ),
     lastCheckAt: state.lastCheckAt,
     recentAlertsByFingerprint: Object.fromEntries(
       Object.entries(state.recentAlertsByFingerprint).filter(([, value]) => {
@@ -513,6 +540,8 @@ export function createWatchdogAlertEmail(input: {
       `Service subState: ${input.evaluation.serviceStatus.subState ?? "(unknown)"}`,
       `Service result: ${input.evaluation.serviceStatus.result ?? "(unknown)"}`,
       `Service mainPid: ${input.evaluation.serviceStatus.mainPid ?? 0}`,
+      `Service memoryCurrent: ${formatBytesAsMiB(input.evaluation.serviceStatus.memoryCurrentBytes)}`,
+      `Service memoryPeak: ${formatBytesAsMiB(input.evaluation.serviceStatus.memoryPeakBytes)}`,
       "",
       `Health status: ${input.evaluation.healthSnapshot?.status ?? "(missing)"}`,
       `Health startedAt: ${input.evaluation.healthSnapshot?.startedAt ?? "(missing)"}`,
@@ -658,7 +687,7 @@ export async function runWatchdogCheck(input: {
 }): Promise<WatchdogCheckResult> {
   const now = input.now ?? new Date();
   const serviceStatus = await input.readServiceStatus();
-  const rawEvaluation = evaluateWatchdogState({
+  let rawEvaluation = evaluateWatchdogState({
     healthSnapshot: input.healthSnapshot,
     healthSnapshotError: input.healthSnapshotError,
     hostName: input.hostName,
@@ -672,11 +701,67 @@ export async function runWatchdogCheck(input: {
     normalizePersistentState(input.persistentState),
     now,
   );
+  const memoryLimitBytes =
+    input.config.watchdogMemoryLimitMb > 0
+      ? Math.round(input.config.watchdogMemoryLimitMb * 1024 * 1024)
+      : 0;
+
+  if (
+    memoryLimitBytes > 0 &&
+    serviceStatus.activeState === "active" &&
+    serviceStatus.memoryCurrentBytes !== undefined &&
+    serviceStatus.memoryCurrentBytes >= memoryLimitBytes
+  ) {
+    rawEvaluation = buildEvaluation({
+      action: "email_and_restart",
+      healthSnapshot: input.healthSnapshot,
+      hostName: input.hostName ?? getHostname(),
+      message: `The main service is using ${formatBytesAsMiB(serviceStatus.memoryCurrentBytes)} which exceeds the configured watchdog limit of ${input.config.watchdogMemoryLimitMb} MiB.`,
+      reasonCode: "service_memory_high",
+      serviceName: input.serviceName,
+      serviceStatus,
+      severity: "recoverable_error",
+      watchdogSnapshot: input.watchdogSnapshot,
+    });
+  }
+
   const effectiveEvaluation = applyRestartThrottle(rawEvaluation, baseState);
   const persistentState: WatchdogPersistentState = {
     ...baseState,
     lastCheckAt: now.toISOString(),
   };
+
+  for (const fingerprint of Object.keys(persistentState.firstObservedAtByFingerprint)) {
+    if (fingerprint.startsWith("service_memory_high|") && fingerprint !== rawEvaluation.fingerprint) {
+      delete persistentState.firstObservedAtByFingerprint[fingerprint];
+    }
+  }
+
+  let persistenceGatedEvaluation = effectiveEvaluation;
+
+  if (
+    rawEvaluation.reasonCode === "service_memory_high" &&
+    rawEvaluation.fingerprint &&
+    input.config.watchdogMemoryPersistenceSeconds > 0
+  ) {
+    const firstObservedAt =
+      persistentState.firstObservedAtByFingerprint[rawEvaluation.fingerprint] ?? now.toISOString();
+    persistentState.firstObservedAtByFingerprint[rawEvaluation.fingerprint] = firstObservedAt;
+
+    if (ageMsFromIso(firstObservedAt, now) < input.config.watchdogMemoryPersistenceSeconds * 1000) {
+      persistenceGatedEvaluation = buildEvaluation({
+        action: "none",
+        healthSnapshot: rawEvaluation.healthSnapshot,
+        hostName: rawEvaluation.hostName,
+        message: "The main service is above the memory threshold, but the persistence threshold has not been reached yet.",
+        reasonCode: rawEvaluation.reasonCode,
+        serviceName: rawEvaluation.serviceName,
+        serviceStatus: rawEvaluation.serviceStatus,
+        severity: "warn",
+        watchdogSnapshot: rawEvaluation.watchdogSnapshot,
+      });
+    }
+  }
 
   let emailAttempted = false;
   let emailSent = false;
@@ -688,13 +773,13 @@ export async function runWatchdogCheck(input: {
   let restartError: string | undefined;
 
   if (
-    effectiveEvaluation.action !== "none" &&
-    effectiveEvaluation.fingerprint &&
-    shouldSuppressAlert(persistentState, effectiveEvaluation.fingerprint, now)
+    persistenceGatedEvaluation.action !== "none" &&
+    persistenceGatedEvaluation.fingerprint &&
+    shouldSuppressAlert(persistentState, persistenceGatedEvaluation.fingerprint, now)
   ) {
     emailSuppressed = true;
   } else if (
-    effectiveEvaluation.action !== "none" &&
+    persistenceGatedEvaluation.action !== "none" &&
     input.config.alertEmailEnabled &&
     input.sendAlertEmail
   ) {
@@ -704,23 +789,23 @@ export async function runWatchdogCheck(input: {
       await input.sendAlertEmail(
         createWatchdogAlertEmail({
           config: input.config,
-          evaluation: effectiveEvaluation,
+          evaluation: persistenceGatedEvaluation,
           now,
         }),
       );
       emailSent = true;
 
-      if (effectiveEvaluation.fingerprint) {
-        persistentState.recentAlertsByFingerprint[effectiveEvaluation.fingerprint] = now.toISOString();
+      if (persistenceGatedEvaluation.fingerprint) {
+        persistentState.recentAlertsByFingerprint[persistenceGatedEvaluation.fingerprint] = now.toISOString();
       }
     } catch (error) {
       emailError = error instanceof Error ? error.message : String(error);
     }
   }
 
-  if (rawEvaluation.action === "email_and_restart" && effectiveEvaluation.reasonCode === "restart_throttled") {
+  if (rawEvaluation.action === "email_and_restart" && persistenceGatedEvaluation.reasonCode === "restart_throttled") {
     restartSuppressed = true;
-  } else if (effectiveEvaluation.action === "email_and_restart") {
+  } else if (persistenceGatedEvaluation.action === "email_and_restart") {
     restartAttempted = true;
     persistentState.recentRestartAts.push(now.toISOString());
 
@@ -733,7 +818,7 @@ export async function runWatchdogCheck(input: {
   }
 
   return {
-    effectiveEvaluation,
+    effectiveEvaluation: persistenceGatedEvaluation,
     emailAttempted,
     emailError,
     emailSent,

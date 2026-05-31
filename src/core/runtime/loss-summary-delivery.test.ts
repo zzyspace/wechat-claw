@@ -131,6 +131,7 @@ test("sendLossDailySummary renders and delivers the summary text", async () => {
     channels: [channel],
     channelsSource: "json",
     coldStartIgnoreWindowSeconds: 60,
+    debugMessageSnapshotEnabled: false,
     logDir: path.join(process.env.WECHATY_STATE_DIR, "logs"),
     logLevel: "info",
     logRetentionDays: 7,
@@ -143,6 +144,8 @@ test("sendLossDailySummary renders and delivers the summary text", async () => {
     stateDir: process.env.WECHATY_STATE_DIR,
     summaryPromptTemplate: "请汇总",
     timeZone: "Asia/Shanghai",
+    watchdogMemoryLimitMb: 0,
+    watchdogMemoryPersistenceSeconds: 300,
   };
 
   const result = await sendLossDailySummary({
@@ -189,6 +192,7 @@ test("sendLossWeeklySummary renders a Sunday weekly report for the current week"
     channels: [channel],
     channelsSource: "json",
     coldStartIgnoreWindowSeconds: 60,
+    debugMessageSnapshotEnabled: false,
     logDir: path.join(process.env.WECHATY_STATE_DIR, "logs"),
     logLevel: "info",
     logRetentionDays: 7,
@@ -201,6 +205,8 @@ test("sendLossWeeklySummary renders a Sunday weekly report for the current week"
     stateDir: process.env.WECHATY_STATE_DIR,
     summaryPromptTemplate: "",
     timeZone: "Asia/Shanghai",
+    watchdogMemoryLimitMb: 0,
+    watchdogMemoryPersistenceSeconds: 300,
   };
 
   seedLossMessage({

@@ -270,6 +270,7 @@ export async function startBot(
   logger.info("Startup config loaded", {
     botName: config.botName,
     debugContactName: config.debugContactName ?? "(empty)",
+    debugMessageSnapshotEnabled: config.debugMessageSnapshotEnabled,
     debugReceivedRoomMessageEnabled: config.debugReceivedRoomMessageEnabled,
     channels: enabledChannels.map((channel) => ({
       code: channel.code,
@@ -386,9 +387,11 @@ export async function startBot(
   bot.on("message", async (message: any) => {
     hooks.onMessage?.();
 
-    logger.info("[ CUSTOM LOG ] Raw wechaty message snapshot", {
-      details: JSON.stringify(await createWechatyMessageMixinDebugDetails(message), null, 2),
-    });
+    if (config.debugMessageSnapshotEnabled) {
+      logger.debug("[ CUSTOM LOG ] Raw wechaty message snapshot", {
+        details: JSON.stringify(await createWechatyMessageMixinDebugDetails(message), null, 2),
+      });
+    }
 
     const coldStartDecision = shouldIgnoreColdStartMessage(message, {
       botStartedAt,

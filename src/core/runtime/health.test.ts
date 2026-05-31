@@ -38,6 +38,7 @@ function createConfig(stateDir: string): AppConfig {
     channels: [],
     channelsSource: "json",
     coldStartIgnoreWindowSeconds: 60,
+    debugMessageSnapshotEnabled: false,
     logDir: path.join(stateDir, "logs"),
     logLevel: "info",
     logRetentionDays: 7,
@@ -56,6 +57,8 @@ function createConfig(stateDir: string): AppConfig {
     stateDir,
     summaryPromptTemplate: "",
     timeZone: "Asia/Shanghai",
+    watchdogMemoryLimitMb: 0,
+    watchdogMemoryPersistenceSeconds: 300,
   };
 }
 

@@ -13,6 +13,7 @@ async function main() {
   logger.info("Config summary", {
     botName: config.botName,
     debugContactName: config.debugContactName ?? "(empty)",
+    debugMessageSnapshotEnabled: config.debugMessageSnapshotEnabled,
     debugReceivedRoomMessageEnabled: config.debugReceivedRoomMessageEnabled,
     channels: config.channels.map((channel) => ({
       code: channel.code,
@@ -33,6 +34,8 @@ async function main() {
     logLevel: config.logLevel,
     alertEmailEnabled: config.alertEmailEnabled,
     alertEmailRecipients: config.alertEmailTo.length,
+    watchdogMemoryLimitMb: config.watchdogMemoryLimitMb,
+    watchdogMemoryPersistenceSeconds: config.watchdogMemoryPersistenceSeconds,
   });
 
   for (const warning of validation.warnings) {

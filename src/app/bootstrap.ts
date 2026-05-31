@@ -168,11 +168,14 @@ async function main() {
       enabledChannels: config.channels.filter((channel) => channel.enabled).length,
       alertEmailEnabled: config.alertEmailEnabled,
       alertEmailRecipients: config.alertEmailTo.length,
+      debugMessageSnapshotEnabled: config.debugMessageSnapshotEnabled,
       logDir: config.logDir,
       logLevel: config.logLevel,
       puppet: config.puppet ?? "(empty)",
       stateDir: config.stateDir,
       timeZone: config.timeZone,
+      watchdogMemoryLimitMb: config.watchdogMemoryLimitMb,
+      watchdogMemoryPersistenceSeconds: config.watchdogMemoryPersistenceSeconds,
     });
 
     healthReporter = new HealthReporter(config, logger);

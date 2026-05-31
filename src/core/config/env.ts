@@ -39,6 +39,7 @@ export interface AppConfig {
   logDir: string;
   logRetentionDays: number;
   logLevel: LogLevelName;
+  debugMessageSnapshotEnabled?: boolean;
   alertEmailEnabled: boolean;
   alertSmtpHost?: string;
   alertSmtpPort: number;
@@ -47,6 +48,8 @@ export interface AppConfig {
   alertSmtpPassword?: string;
   alertEmailFrom?: string;
   alertEmailTo: string[];
+  watchdogMemoryLimitMb: number;
+  watchdogMemoryPersistenceSeconds: number;
   timeZone: string;
   debugContactName?: string;
   debugReceivedRoomMessageEnabled?: boolean;
@@ -145,6 +148,16 @@ function readPositiveNumberEnv(name: string, fallback: number): number {
 }
 
 function readConfiguredPositiveNumberEnv(name: string, fallback: number): number {
+  const raw = process.env[name]?.trim();
+
+  if (!raw) {
+    return fallback;
+  }
+
+  return Number(raw);
+}
+
+function readConfiguredNonNegativeNumberEnv(name: string, fallback: number): number {
   const raw = process.env[name]?.trim();
 
   if (!raw) {
@@ -331,6 +344,7 @@ export function getAppConfig(): AppConfig {
       `${readStringEnv("WECHATY_STATE_DIR", "/var/lib/wechat-claw") || "/var/lib/wechat-claw"}/logs`,
     logRetentionDays: readConfiguredPositiveNumberEnv("WECHATY_LOG_RETENTION_DAYS", 7),
     logLevel: readLogLevelEnv("WECHATY_LOG_LEVEL", "info"),
+    debugMessageSnapshotEnabled: readBooleanEnv("WECHATY_DEBUG_MESSAGE_SNAPSHOT_ENABLED", false),
     alertEmailEnabled: readBooleanEnv("WECHATY_ALERT_EMAIL_ENABLED", false),
     alertSmtpHost: readOptionalEnv("WECHATY_ALERT_SMTP_HOST"),
     alertSmtpPort: readConfiguredPositiveNumberEnv("WECHATY_ALERT_SMTP_PORT", 587),
@@ -339,6 +353,11 @@ export function getAppConfig(): AppConfig {
     alertSmtpPassword: readOptionalEnv("WECHATY_ALERT_SMTP_PASSWORD"),
     alertEmailFrom: readOptionalEnv("WECHATY_ALERT_EMAIL_FROM"),
     alertEmailTo: readEmailListEnv("WECHATY_ALERT_EMAIL_TO"),
+    watchdogMemoryLimitMb: readConfiguredNonNegativeNumberEnv("WECHATY_WATCHDOG_MEMORY_LIMIT_MB", 0),
+    watchdogMemoryPersistenceSeconds: readConfiguredPositiveNumberEnv(
+      "WECHATY_WATCHDOG_MEMORY_PERSISTENCE_SECONDS",
+      300,
+    ),
     timeZone: readStringEnv("WECHATY_TIMEZONE", "Asia/Shanghai") || "Asia/Shanghai",
     debugContactName: readOptionalEnv("WECHATY_DEBUG_CONTACT_NAME"),
     debugReceivedRoomMessageEnabled: readBooleanEnv(
@@ -400,6 +419,19 @@ export function validateAppConfig(config: AppConfig): ConfigValidationResult {
 
   if (!isValidLogLevel(config.logLevel)) {
     errors.push(`Invalid WECHATY_LOG_LEVEL: ${config.logLevel}`);
+  }
+
+  if (!Number.isFinite(config.watchdogMemoryLimitMb) || config.watchdogMemoryLimitMb < 0) {
+    errors.push(`Invalid WECHATY_WATCHDOG_MEMORY_LIMIT_MB: ${config.watchdogMemoryLimitMb}`);
+  }
+
+  if (
+    !Number.isFinite(config.watchdogMemoryPersistenceSeconds) ||
+    config.watchdogMemoryPersistenceSeconds <= 0
+  ) {
+    errors.push(
+      `Invalid WECHATY_WATCHDOG_MEMORY_PERSISTENCE_SECONDS: ${config.watchdogMemoryPersistenceSeconds}`,
+    );
   }
 
   if (rawAlertEmailEnabled && !isBooleanLiteral(rawAlertEmailEnabled)) {

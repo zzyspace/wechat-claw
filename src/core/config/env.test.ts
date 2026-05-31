@@ -13,6 +13,7 @@ const managedEnvKeys = [
   "WECHATY_LOG_DIR",
   "WECHATY_LOG_RETENTION_DAYS",
   "WECHATY_LOG_LEVEL",
+  "WECHATY_DEBUG_MESSAGE_SNAPSHOT_ENABLED",
   "WECHATY_ALERT_EMAIL_ENABLED",
   "WECHATY_ALERT_SMTP_HOST",
   "WECHATY_ALERT_SMTP_PORT",
@@ -21,6 +22,8 @@ const managedEnvKeys = [
   "WECHATY_ALERT_SMTP_PASSWORD",
   "WECHATY_ALERT_EMAIL_FROM",
   "WECHATY_ALERT_EMAIL_TO",
+  "WECHATY_WATCHDOG_MEMORY_LIMIT_MB",
+  "WECHATY_WATCHDOG_MEMORY_PERSISTENCE_SECONDS",
   "WECHATY_TIMEZONE",
   "WECHATY_SUMMARY_CRON",
   "WECHATY_CHANNELS_JSON",
@@ -79,6 +82,9 @@ test("getAppConfig parses WECHATY_CHANNELS_JSON with mixed delivery targets", ()
     WECHATY_ALERT_EMAIL_FROM: "bot@example.com",
     WECHATY_ALERT_EMAIL_TO: "ops@example.com,dev@example.com",
     WECHATY_LOG_LEVEL: "debug",
+    WECHATY_DEBUG_MESSAGE_SNAPSHOT_ENABLED: "true",
+    WECHATY_WATCHDOG_MEMORY_LIMIT_MB: "512",
+    WECHATY_WATCHDOG_MEMORY_PERSISTENCE_SECONDS: "420",
     WECHATY_LOG_RETENTION_DAYS: "14",
     WECHATY_PUPPET: "wechaty-puppet-wechat",
     WECHATY_COLD_START_IGNORE_WINDOW_SECONDS: "45",
@@ -122,6 +128,7 @@ test("getAppConfig parses WECHATY_CHANNELS_JSON with mixed delivery targets", ()
   assert.equal(config.debugContactName, "调试联系人");
   assert.equal(config.debugReceivedRoomMessageEnabled, true);
   assert.equal(config.logLevel, "debug");
+  assert.equal(config.debugMessageSnapshotEnabled, true);
   assert.equal(config.logRetentionDays, 14);
   assert.equal(config.alertEmailEnabled, true);
   assert.equal(config.alertSmtpHost, "smtp.example.com");
@@ -131,6 +138,8 @@ test("getAppConfig parses WECHATY_CHANNELS_JSON with mixed delivery targets", ()
   assert.equal(config.alertSmtpPassword, "smtp-password");
   assert.equal(config.alertEmailFrom, "bot@example.com");
   assert.deepEqual(config.alertEmailTo, ["ops@example.com", "dev@example.com"]);
+  assert.equal(config.watchdogMemoryLimitMb, 512);
+  assert.equal(config.watchdogMemoryPersistenceSeconds, 420);
   assert.equal(config.channels.length, 2);
   assert.equal(config.channels[1]?.scenario, "reimbursement");
   assert.equal(config.reimbursementExtractionProvider, "qwen");
@@ -216,6 +225,7 @@ test("getAppConfig defaults log settings from state dir", () => {
     ]),
     WECHATY_LOG_DIR: undefined,
     WECHATY_LOG_LEVEL: undefined,
+    WECHATY_DEBUG_MESSAGE_SNAPSHOT_ENABLED: undefined,
     WECHATY_LOG_RETENTION_DAYS: undefined,
     WECHATY_ALERT_EMAIL_ENABLED: undefined,
     WECHATY_ALERT_SMTP_HOST: undefined,
@@ -225,6 +235,8 @@ test("getAppConfig defaults log settings from state dir", () => {
     WECHATY_ALERT_SMTP_PASSWORD: undefined,
     WECHATY_ALERT_EMAIL_FROM: undefined,
     WECHATY_ALERT_EMAIL_TO: undefined,
+    WECHATY_WATCHDOG_MEMORY_LIMIT_MB: undefined,
+    WECHATY_WATCHDOG_MEMORY_PERSISTENCE_SECONDS: undefined,
   });
 
   const config = getAppConfig();
@@ -232,8 +244,11 @@ test("getAppConfig defaults log settings from state dir", () => {
   assert.equal(config.logDir, "/tmp/wechat-claw-state/logs");
   assert.equal(config.logLevel, "info");
   assert.equal(config.logRetentionDays, 7);
+  assert.equal(config.debugMessageSnapshotEnabled, false);
   assert.equal(config.alertEmailEnabled, false);
   assert.deepEqual(config.alertEmailTo, []);
+  assert.equal(config.watchdogMemoryLimitMb, 0);
+  assert.equal(config.watchdogMemoryPersistenceSeconds, 300);
   assert.equal(config.debugReceivedRoomMessageEnabled, false);
 });
 
@@ -281,6 +296,8 @@ test("validateAppConfig rejects invalid alert email settings when enabled", () =
     WECHATY_ALERT_SMTP_PASSWORD: "",
     WECHATY_ALERT_EMAIL_FROM: "bad-address",
     WECHATY_ALERT_EMAIL_TO: "ops@example.com,broken-address",
+    WECHATY_WATCHDOG_MEMORY_LIMIT_MB: "-1",
+    WECHATY_WATCHDOG_MEMORY_PERSISTENCE_SECONDS: "0",
   });
 
   const validation = validateAppConfig(getAppConfig());
@@ -292,6 +309,10 @@ test("validateAppConfig rejects invalid alert email settings when enabled", () =
   assert(validation.errors.some((error) => error.includes("Missing WECHATY_ALERT_SMTP_PASSWORD")));
   assert(validation.errors.some((error) => error.includes("Invalid WECHATY_ALERT_EMAIL_FROM")));
   assert(validation.errors.some((error) => error.includes("Invalid WECHATY_ALERT_EMAIL_TO address")));
+  assert(validation.errors.some((error) => error.includes("Invalid WECHATY_WATCHDOG_MEMORY_LIMIT_MB")));
+  assert(
+    validation.errors.some((error) => error.includes("Invalid WECHATY_WATCHDOG_MEMORY_PERSISTENCE_SECONDS")),
+  );
 });
 
 test("validateAppConfig warns about unusual alert smtp secure and port combinations", () => {

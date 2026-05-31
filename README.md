@@ -94,11 +94,14 @@ WECHATY_CHANNELS_JSON=[{"code":"loss_a","enabled":true,"scenario":"loss-report",
 - `WECHATY_LOG_DIR`: 文本日志目录，默认 `${WECHATY_STATE_DIR}/logs`
 - `WECHATY_LOG_RETENTION_DAYS`: 文本日志保留天数，默认 `7` 天；会清理更早的 `app-YYYY-MM-DD.log` 和 `error-YYYY-MM-DD.log`
 - `WECHATY_LOG_LEVEL`: 日志级别，支持 `debug / info / warn / error`，默认 `info`
+- `WECHATY_DEBUG_MESSAGE_SNAPSHOT_ENABLED`: 是否记录完整的 wechaty 原始消息快照，默认 `false`；生产环境建议关闭
 - `WECHATY_ALERT_EMAIL_ENABLED`: 是否启用异常邮件告警，默认 `false`
 - `WECHATY_ALERT_SMTP_HOST/PORT/SECURE`: SMTP 服务器配置
 - `WECHATY_ALERT_SMTP_USERNAME/PASSWORD`: SMTP 登录凭据
 - `WECHATY_ALERT_EMAIL_FROM`: 告警发件人邮箱
 - `WECHATY_ALERT_EMAIL_TO`: 告警收件人邮箱，支持多个，用逗号分隔
+- `WECHATY_WATCHDOG_MEMORY_LIMIT_MB`: watchdog 内存阈值，单位 MiB，默认 `0`（关闭）
+- `WECHATY_WATCHDOG_MEMORY_PERSISTENCE_SECONDS`: 内存阈值持续多久才触发重启，单位秒，默认 `300`
 - `WECHATY_TIMEZONE`: 日期边界和 cron 解释时区，默认 `Asia/Shanghai`
 - `WECHATY_DEBUG_CONTACT_NAME`: `"[wechat-claw]"` 调试信息的接收联系人，不参与业务日报发送；上线通知始终走这里
 - `WECHATY_DEBUG_RECEIVED_ROOM_MESSAGE_ENABLED`: 是否发送 `"[wechat-claw] 已收到群消息"` 这类调试摘要，默认 `false`

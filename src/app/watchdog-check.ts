@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import { execFileSync } from "node:child_process";
 
 import { getAppConfig, validateAppConfig } from "../core/config/env.js";
@@ -67,7 +68,28 @@ function readServiceStatus(serviceName: string): ServiceStatusSnapshot {
     { encoding: "utf8" },
   );
 
-  return parseSystemctlShowOutput(output);
+  return {
+    ...parseSystemctlShowOutput(output),
+    memoryCurrentBytes: readServiceCgroupMemoryValue(serviceName, "memory.current"),
+    memoryPeakBytes: readServiceCgroupMemoryValue(serviceName, "memory.peak"),
+  };
+}
+
+function readServiceCgroupMemoryValue(serviceName: string, fileName: string) {
+  const cgroupPath = `/sys/fs/cgroup/system.slice/${serviceName}.service/${fileName}`;
+
+  try {
+    const raw = fs.readFileSync(cgroupPath, "utf8").trim();
+
+    if (!raw || raw === "max") {
+      return undefined;
+    }
+
+    const value = Number(raw);
+    return Number.isFinite(value) && value >= 0 ? value : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function restartService(serviceName: string) {
