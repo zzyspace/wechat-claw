@@ -39,6 +39,13 @@ const MESSAGE_MIXIN_DETAIL_PROPERTIES = [
 
 type MessageMixinDetailProperty = (typeof MESSAGE_MIXIN_DETAIL_PROPERTIES)[number];
 
+const ONLINE_NOTICE_CONTACT_RETRY_DELAYS_MS = [1_000, 2_000];
+
+export interface OnlineNoticeRetryOptions {
+  retryDelaysMs?: number[];
+  sleep?: (ms: number) => Promise<void>;
+}
+
 function readSnapshotValue(
   value: unknown,
   options: {
@@ -246,6 +253,48 @@ function resolveScanStatusName(scanStatus: Record<string, string | number>, valu
   return String(value);
 }
 
+async function sleep(ms: number) {
+  await new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+function shouldRetryOnlineNoticeDelivery(error?: string) {
+  return typeof error === "string" && error.startsWith("Delivery target not found:");
+}
+
+export async function sendOnlineNoticeWithRetry(
+  bot: WechatyInstance,
+  debugContactName: string,
+  text: string,
+  logger: Logger,
+  options: OnlineNoticeRetryOptions = {},
+) {
+  const retryDelaysMs = options.retryDelaysMs ?? ONLINE_NOTICE_CONTACT_RETRY_DELAYS_MS;
+  const sleepFn = options.sleep ?? sleep;
+  const target = {
+    type: "contact_name" as const,
+    value: debugContactName,
+  };
+
+  let deliveryResult = await sendTextToTarget(bot, target, text, logger);
+
+  for (const delayMs of retryDelaysMs) {
+    if (deliveryResult.delivered || !shouldRetryOnlineNoticeDelivery(deliveryResult.error)) {
+      return deliveryResult;
+    }
+
+    logger.warn("Retrying online notice delivery after contact lookup miss", {
+      attemptDelayMs: delayMs,
+      debugContactName,
+    });
+    await sleepFn(delayMs);
+    deliveryResult = await sendTextToTarget(bot, target, text, logger);
+  }
+
+  return deliveryResult;
+}
+
 export async function startBot(
   logger: Logger,
   hooks: BotLifecycleHooks = {},
@@ -349,18 +398,16 @@ export async function startBot(
       return;
     }
 
-    const deliveryResult = await sendTextToTarget(
+    const onlineNoticeText = [
+      "[wechat-claw] bot 已上线",
+      `当前账号: ${name}`,
+      "监听群:",
+      ...enabledChannels.map((channel) => `- ${getChannelDisplayName(channel)} (${channel.code})`),
+    ].join("\n");
+    const deliveryResult = await sendOnlineNoticeWithRetry(
       bot,
-      {
-        type: "contact_name",
-        value: config.debugContactName,
-      },
-      [
-        "[wechat-claw] bot 已上线",
-        `当前账号: ${name}`,
-        "监听群:",
-        ...enabledChannels.map((channel) => `- ${getChannelDisplayName(channel)} (${channel.code})`),
-      ].join("\n"),
+      config.debugContactName,
+      onlineNoticeText,
       logger,
     );
 
