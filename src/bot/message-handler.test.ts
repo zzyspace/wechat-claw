@@ -7,6 +7,7 @@ import { test } from "node:test";
 import type { ChannelConfig, DeliveryTarget } from "../core/channels/types.js";
 import type { Logger } from "../core/logging/logger.js";
 import { getReimbursementRawStorageDir } from "../core/runtime/state-paths.js";
+import { getZonedDateParts, zonedDateTimeToUtc } from "../core/runtime/timezone.js";
 import { listRecentRawMessages } from "../core/storage/raw-message-repository.js";
 import { listReimbursementReportDetails, listRecentReimbursementReports } from "../scenarios/reimbursement/repository.js";
 import { handleMessage } from "./message-handler.js";
@@ -31,6 +32,24 @@ function createLogger(records: Array<{ level: string; message: string; context?:
       records.push({ level: "warn", message, context });
     },
   } satisfies Logger;
+}
+
+function formatLocalTimestamp(value: string, timeZone: string) {
+  const date = new Date(`${value.replace(" ", "T")}Z`);
+  const parts = getZonedDateParts(date, timeZone);
+  return `${parts.year}-${String(parts.month).padStart(2, "0")}-${String(parts.day).padStart(2, "0")} ${String(parts.hour).padStart(2, "0")}:${String(parts.minute).padStart(2, "0")}:${String(parts.second).padStart(2, "0")}`;
+}
+
+function resolveExpectedMonthlyLedgerLocalTimestamp(note: string, referenceDateTime: string, timeZone: string) {
+  const match = note.match(/(\d{1,2})月账/);
+  assert(match);
+  const month = Number(match[1]);
+  const referenceDate = new Date(referenceDateTime);
+  const anchorDate = new Date(referenceDate.getTime() - 15 * 24 * 60 * 60 * 1000);
+  const anchorYear = getZonedDateParts(anchorDate, timeZone).year;
+  const lastDay = new Date(Date.UTC(anchorYear, month, 0)).getUTCDate();
+  const utcDate = zonedDateTimeToUtc(anchorYear, month, lastDay, 0, 0, 0, timeZone);
+  return formatLocalTimestamp(utcDate.toISOString().slice(0, 19).replace("T", " "), timeZone);
 }
 
 function createChannel(): ChannelConfig {
@@ -1405,6 +1424,148 @@ test("handleMessage updates reimbursement category when replying category comman
   assert.equal(updatedReport.expenseCategory, "utilities");
   assert(commandRawMessage);
   assert.equal(commandRawMessage.textContent, "分类: 水电");
+  assert(logs.some((entry) => entry.message === "Executed reimbursement receipt command"));
+  assert.equal(
+    delivered.some(
+      (item) => item.targetType === "room_topic" && item.targetValue === "AI报账群" && item.text === "已处理",
+    ),
+    true,
+  );
+});
+
+test("handleMessage appends monthly ledger note when replying x月账 to a receipt", { concurrency: false }, async () => {
+  const logs: Array<{ level: string; message: string; context?: Record<string, unknown> }> = [];
+  const delivered: DeliveredMessage[] = [];
+  const commandMessageId = "reimbursement-monthly-ledger-reply-command";
+  const receiptMessageId = "reimbursement-monthly-ledger-self-receipt";
+  const rawPayloadByMessageId = {
+    [commandMessageId]: {
+      AppMsgType: 57,
+      Content:
+        "<msg><appmsg><title><![CDATA[4月账]]></title><refermsg><svrid><![CDATA[" +
+        receiptMessageId +
+        "]]></svrid><displayname><![CDATA[机器人]]></displayname><content><![CDATA[报账30元已录入(分类: 其他)]]></content></refermsg></appmsg></msg>",
+      MsgType: 49,
+    },
+  };
+  const context = createMessageContext([
+    createReimbursementChannelWithTargets([{ type: "room_topic", value: "AI报账群" }]),
+  ]);
+  const wechaty = createWechatyMock(delivered, {
+    rawPayloadByMessageId,
+  });
+
+  await handleMessage(
+    {
+      id: () => "reimbursement-monthly-ledger-text-first",
+      room: async () => ({
+        alias: async () => "小月账",
+        id: () => "reimbursement_room_monthly_ledger",
+        topic: async () => "AI报账群",
+      }),
+      self: () => false,
+      talker: async () => ({
+        id: () => "reimbursement_talker_monthly_ledger",
+        name: () => "Ryan。",
+      }),
+      text: () => "午餐报账 30元",
+      type: () => 7,
+      wechaty,
+    },
+    context,
+    createLogger(logs),
+  );
+
+  await handleMessage(
+    {
+      id: () => "reimbursement-monthly-ledger-image-second",
+      room: async () => ({
+        alias: async () => "小月账",
+        id: () => "reimbursement_room_monthly_ledger",
+        topic: async () => "AI报账群",
+      }),
+      self: () => false,
+      talker: async () => ({
+        id: () => "reimbursement_talker_monthly_ledger",
+        name: () => "Ryan。",
+      }),
+      text: () => "",
+      toFileBox: async () => ({
+        name: "monthly-ledger-order.jpg",
+        toBuffer: async () => Buffer.from([0xff, 0xd8, 0xff, 0xd9]),
+      }),
+      type: () => 6,
+      wechaty,
+    },
+    context,
+    createLogger(logs),
+  );
+
+  const initialReport = listRecentReimbursementReports(1000).find((report) => report.reporter === "小月账");
+  assert(initialReport);
+  assert.equal(initialReport.amount, 30);
+  assert.equal(delivered.some((item) => item.text === "报账30元已录入(分类: 其他)"), true);
+
+  await handleMessage(
+    {
+      id: () => receiptMessageId,
+      room: async () => ({
+        alias: async () => "机器人",
+        id: () => "reimbursement_room_monthly_ledger",
+        topic: async () => "AI报账群",
+      }),
+      self: () => true,
+      talker: async () => ({
+        id: () => "bot_self_monthly_ledger",
+        name: () => "Bot",
+      }),
+      text: () => "报账30元已录入(分类: 其他)",
+      type: () => 7,
+      wechaty,
+    },
+    context,
+    createLogger(logs),
+  );
+
+  await handleMessage(
+    {
+      id: () => commandMessageId,
+      room: async () => ({
+        alias: async () => "小月账",
+        id: () => "reimbursement_room_monthly_ledger",
+        topic: async () => "AI报账群",
+      }),
+      self: () => false,
+      talker: async () => ({
+        id: () => "reimbursement_talker_monthly_ledger",
+        name: () => "Ryan。",
+      }),
+      text: () => "<msg><appmsg><title>4月账</title></appmsg></msg>",
+      type: () => 49,
+      wechaty,
+    },
+    context,
+    createLogger(logs),
+  );
+
+  const updatedReport = listRecentReimbursementReports(1000).find((report) => report.id === initialReport.id);
+  const reportDetails = listReimbursementReportDetails({ channelCode: "reimbursement_a", limit: 20 }).find(
+    (report) => report.id === initialReport.id,
+  );
+  const commandRawMessage = listRecentRawMessages(1000).find(
+    (message) => message.messageExternalId === commandMessageId,
+  );
+
+  assert(updatedReport);
+  assert.equal(updatedReport.note, "午餐报账 30元；4月账");
+  assert(commandRawMessage);
+  assert.equal(commandRawMessage.textContent, "4月账");
+  assert.equal(
+    formatLocalTimestamp(updatedReport.createdAt, "Asia/Shanghai"),
+    resolveExpectedMonthlyLedgerLocalTimestamp("4月账", commandRawMessage.eventReceivedAt, "Asia/Shanghai"),
+  );
+  assert(reportDetails);
+  assert.equal(reportDetails.sources.some((source) => source.role === "remark" && source.textContent === "4月账"), true);
   assert(logs.some((entry) => entry.message === "Executed reimbursement receipt command"));
   assert.equal(
     delivered.some(

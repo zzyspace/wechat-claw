@@ -83,6 +83,7 @@ interface ParsedReimbursementReceiptReply {
 
 type ReimbursementReceiptCommand =
   | { kind: "delete" }
+  | { kind: "set_monthly_ledger_note"; note: string }
   | { expenseCategory: ReimbursementExpenseCategory; kind: "set_category" }
   | { amount: number; kind: "set_amount" };
 
@@ -1170,6 +1171,14 @@ async function handleReimbursementReceiptReplyCommand(
       reimbursementReportId: matchedReport.id,
       amount: command.amount,
     });
+  } else if (command.kind === "set_monthly_ledger_note") {
+    attachRemarkToReimbursementReport({
+      reimbursementReportId: matchedReport.id,
+      rawMessageId: saveResult.rawMessageId,
+      note: command.note,
+      timeZone: context.timeZone ?? "Asia/Shanghai",
+      referenceDateTime: parsed.eventReceivedAt,
+    });
   } else {
     updateReimbursementReportExpenseCategory({
       reimbursementReportId: matchedReport.id,
@@ -1190,6 +1199,7 @@ async function handleReimbursementReceiptReplyCommand(
       command: command.kind,
       commandText: receiptReply.commandText,
       eventType: "reimbursement_receipt_command",
+      note: command.kind === "set_monthly_ledger_note" ? command.note : null,
       quotedMessageExternalId: receiptReply.quotedMessageExternalId ?? null,
       quotedText: receiptReply.quotedText,
       reimbursementReportId: matchedReport.id,
@@ -1225,7 +1235,7 @@ async function handleReimbursementReceiptReplyCommand(
     `内容: ${receiptReply.commandText}`,
     `附件数: ${parsed.attachments.length}`,
     `入库: ${saveResult.inserted ? "新消息" : "已去重"}`,
-    `报账指令: ${command.kind} / report=${matchedReport.id}${command.kind === "set_amount" ? ` / amount=${command.amount}` : command.kind === "set_category" ? ` / category=${command.expenseCategory}` : ""}`,
+    `报账指令: ${command.kind} / report=${matchedReport.id}${command.kind === "set_amount" ? ` / amount=${command.amount}` : command.kind === "set_category" ? ` / category=${command.expenseCategory}` : command.kind === "set_monthly_ledger_note" ? ` / note=${command.note}` : ""}`,
   ]);
 }
 
@@ -1552,6 +1562,13 @@ function parseReimbursementReceiptCommand(text: string): ReimbursementReceiptCom
     return { kind: "delete" };
   }
 
+  if (isMonthlyLedgerReceiptCommandText(normalized)) {
+    return {
+      kind: "set_monthly_ledger_note",
+      note: normalized,
+    };
+  }
+
   const categoryMatch = normalized.match(/^(?:category|分类)\s*:\s*(.+)$/i);
   if (categoryMatch) {
     const expenseCategory = normalizeReceiptCommandExpenseCategory(categoryMatch[1] ?? "");
@@ -1578,6 +1595,16 @@ function parseReimbursementReceiptCommand(text: string): ReimbursementReceiptCom
 
 function normalizeReceiptCommandExpenseCategory(value: string): ReimbursementExpenseCategory | null {
   return normalizeReimbursementExpenseCategory(value);
+}
+
+function isMonthlyLedgerReceiptCommandText(text: string) {
+  const match = text.match(/^(\d{1,2})月账$/);
+  if (!match) {
+    return false;
+  }
+
+  const month = Number(match[1]);
+  return Number.isInteger(month) && month >= 1 && month <= 12;
 }
 
 function cryptoRandomId() {
