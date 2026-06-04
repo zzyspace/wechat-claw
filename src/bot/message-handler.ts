@@ -42,6 +42,7 @@ const REIMBURSEMENT_COMMAND_NOT_FOUND_TEXT = "未找到对应报账";
 const REIMBURSEMENT_COMMAND_UNSUPPORTED_TEXT = "不支持的指令";
 const REIMBURSEMENT_RECEIPT_COMMAND_EXTRACTOR_CODE = "receipt-command-v1";
 const REIMBURSEMENT_RECEIPT_SELF_MATCH_WINDOW_SECONDS = 90;
+const REIMBURSEMENT_AMOUNT_PATTERN = "-?\\d+(?:\\.\\d+)?";
 
 export interface MessageContext {
   channels: ChannelConfig[];
@@ -1583,7 +1584,7 @@ function parseReimbursementReceiptCommand(text: string): ReimbursementReceiptCom
     };
   }
 
-  if (/^\d+(?:\.\d+)?$/.test(normalized)) {
+  if (new RegExp(`^${REIMBURSEMENT_AMOUNT_PATTERN}$`).test(normalized)) {
     return {
       amount: Number(normalized),
       kind: "set_amount",
@@ -1627,7 +1628,7 @@ function buildReimbursementReceiptText(report: {
 function isReimbursementReceiptText(text: string) {
   return (
     /^此次报账待核验(?:\((?:商户|OCR): [\s\S]+?\))?$/.test(text) ||
-    /^报账\d+(?:\.\d+)?元已录入(?:\((?:分类|category): [^)]+?\))?$/.test(text)
+    new RegExp(`^报账${REIMBURSEMENT_AMOUNT_PATTERN}元已录入(?:\\((?:分类|category): [^)]+?\\))?$`).test(text)
   );
 }
 

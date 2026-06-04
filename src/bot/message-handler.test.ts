@@ -1181,6 +1181,157 @@ test("handleMessage deletes a reimbursement when replying delete to the receipt 
   );
 });
 
+test("handleMessage deletes a negative reimbursement when replying delete to a negative receipt", { concurrency: false }, async () => {
+  const logs: Array<{ level: string; message: string; context?: Record<string, unknown> }> = [];
+  const delivered: DeliveredMessage[] = [];
+  const commandMessageId = "reimbursement-negative-delete-reply-command";
+  const receiptMessageId = "reimbursement-negative-delete-self-receipt";
+  const receiptText = "报账-36.5元已录入(分类: 其他)";
+  const rawPayloadByMessageId = {
+    [commandMessageId]: {
+      AppMsgType: 57,
+      Content:
+        "<msg><appmsg><title><![CDATA[delete]]></title><refermsg><svrid><![CDATA[" +
+        receiptMessageId +
+        "]]></svrid><displayname><![CDATA[机器人]]></displayname><content><![CDATA[" +
+        receiptText +
+        "]]></content></refermsg></appmsg></msg>",
+      MsgType: 49,
+    },
+  };
+  const context = {
+    ...createMessageContext([
+      createReimbursementChannelWithTargets([{ type: "room_topic", value: "AI报账群" }]),
+    ]),
+    reimbursementExtractionApiKey: "test-key",
+  };
+  const wechaty = createWechatyMock(delivered, {
+    rawPayloadByMessageId,
+  });
+
+  globalThis.fetch = (async () =>
+    new Response(
+      JSON.stringify({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                amount: -36.5,
+                confidence: 0.91,
+                currency: "人民币",
+                document_no: null,
+                expense_category: "other",
+                merchant: "退款测试商户",
+                ocr_text: "退款到账 36.5",
+                voucher_date: "2026-05-22",
+                voucher_type: "refund",
+              }),
+            },
+          },
+        ],
+      }),
+      {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json",
+        },
+      },
+    )) as typeof fetch;
+
+  try {
+    await handleMessage(
+      {
+        id: () => "reimbursement-negative-delete-image-first",
+        room: async () => ({
+          alias: async () => "小负删",
+          id: () => "reimbursement_room_negative_delete",
+          topic: async () => "AI报账群",
+        }),
+        self: () => false,
+        talker: async () => ({
+          id: () => "reimbursement_talker_negative_delete",
+          name: () => "Ryan。",
+        }),
+        text: () => "",
+        toFileBox: async () => ({
+          name: "negative-delete-order.jpg",
+          toBuffer: async () => Buffer.from([0xff, 0xd8, 0xff, 0xd9]),
+        }),
+        type: () => 6,
+        wechaty,
+      },
+      context,
+      createLogger(logs),
+    );
+
+    const createdReport = listRecentReimbursementReports(1000).find((report) => report.reporter === "小负删");
+    assert(createdReport);
+    assert.equal(createdReport.amount, -36.5);
+    assert.equal(delivered.some((item) => item.text === receiptText), true);
+
+    await handleMessage(
+      {
+        id: () => receiptMessageId,
+        room: async () => ({
+          alias: async () => "机器人",
+          id: () => "reimbursement_room_negative_delete",
+          topic: async () => "AI报账群",
+        }),
+        self: () => true,
+        talker: async () => ({
+          id: () => "bot_self_negative_delete",
+          name: () => "Bot",
+        }),
+        text: () => receiptText,
+        type: () => 7,
+        wechaty,
+      },
+      context,
+      createLogger(logs),
+    );
+
+    await handleMessage(
+      {
+        id: () => commandMessageId,
+        room: async () => ({
+          alias: async () => "小负删",
+          id: () => "reimbursement_room_negative_delete",
+          topic: async () => "AI报账群",
+        }),
+        self: () => false,
+        talker: async () => ({
+          id: () => "reimbursement_talker_negative_delete",
+          name: () => "Ryan。",
+        }),
+        text: () => "<msg><appmsg><title>delete</title></appmsg></msg>",
+        type: () => 49,
+        wechaty,
+      },
+      context,
+      createLogger(logs),
+    );
+
+    const reportsAfterDelete = listRecentReimbursementReports(1000).filter((report) => report.reporter === "小负删");
+    const rawCommandMessage = listRecentRawMessages(1000).find(
+      (message) => message.messageExternalId === commandMessageId,
+    );
+
+    assert.equal(reportsAfterDelete.length, 0);
+    assert(rawCommandMessage);
+    assert.equal(rawCommandMessage.textContent, "delete");
+    assert(logs.some((entry) => entry.message === "Processed self reimbursement receipt message"));
+    assert(logs.some((entry) => entry.message === "Executed reimbursement receipt command"));
+    assert.equal(
+      delivered.some(
+        (item) => item.targetType === "room_topic" && item.targetValue === "AI报账群" && item.text === "已处理",
+      ),
+      true,
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("handleMessage updates reimbursement amount and clears review when replying a number to a receipt", { concurrency: false }, async () => {
   const logs: Array<{ level: string; message: string; context?: Record<string, unknown> }> = [];
   const delivered: DeliveredMessage[] = [];
@@ -1291,6 +1442,119 @@ test("handleMessage updates reimbursement amount and clears review when replying
   assert(commandRawMessage);
   assert.equal(commandRawMessage.textContent, "88.5");
   assert(logs.some((entry) => entry.message === "Processed self reimbursement receipt message"));
+  assert(logs.some((entry) => entry.message === "Executed reimbursement receipt command"));
+  assert.equal(
+    delivered.some(
+      (item) => item.targetType === "room_topic" && item.targetValue === "AI报账群" && item.text === "已处理",
+    ),
+    true,
+  );
+});
+
+test("handleMessage updates reimbursement amount to a negative value when replying a negative number to a receipt", { concurrency: false }, async () => {
+  const logs: Array<{ level: string; message: string; context?: Record<string, unknown> }> = [];
+  const delivered: DeliveredMessage[] = [];
+  const commandMessageId = "reimbursement-negative-update-reply-command";
+  const receiptMessageId = "reimbursement-negative-update-self-receipt";
+  const rawPayloadByMessageId = {
+    [commandMessageId]: {
+      AppMsgType: 57,
+      Content:
+        "<msg><appmsg><title><![CDATA[-88.5]]></title><refermsg><svrid><![CDATA[" +
+        receiptMessageId +
+        "]]></svrid><displayname><![CDATA[机器人]]></displayname><content><![CDATA[此次报账待核验]]></content></refermsg></appmsg></msg>",
+      MsgType: 49,
+    },
+  };
+  const context = createMessageContext([
+    createReimbursementChannelWithTargets([{ type: "room_topic", value: "AI报账群" }]),
+  ]);
+  const wechaty = createWechatyMock(delivered, {
+    rawPayloadByMessageId,
+  });
+
+  await handleMessage(
+    {
+      id: () => "reimbursement-negative-update-image-first",
+      room: async () => ({
+        alias: async () => "小负改",
+        id: () => "reimbursement_room_negative_update",
+        topic: async () => "AI报账群",
+      }),
+      self: () => false,
+      talker: async () => ({
+        id: () => "reimbursement_talker_negative_update",
+        name: () => "Ryan。",
+      }),
+      text: () => "",
+      toFileBox: async () => ({
+        name: "negative-update-order.jpg",
+        toBuffer: async () => Buffer.from([0xff, 0xd8, 0xff, 0xd9]),
+      }),
+      type: () => 6,
+      wechaty,
+    },
+    context,
+    createLogger(logs),
+  );
+
+  const initialReport = listRecentReimbursementReports(1000).find((report) => report.reporter === "小负改");
+  assert(initialReport);
+  assert.equal(initialReport.amount, null);
+  assert.equal(initialReport.needsReview, true);
+
+  await handleMessage(
+    {
+      id: () => receiptMessageId,
+      room: async () => ({
+        alias: async () => "机器人",
+        id: () => "reimbursement_room_negative_update",
+        topic: async () => "AI报账群",
+      }),
+      self: () => true,
+      talker: async () => ({
+        id: () => "bot_self_negative_update",
+        name: () => "Bot",
+      }),
+      text: () => "此次报账待核验",
+      type: () => 7,
+      wechaty,
+    },
+    context,
+    createLogger(logs),
+  );
+
+  await handleMessage(
+    {
+      id: () => commandMessageId,
+      room: async () => ({
+        alias: async () => "小负改",
+        id: () => "reimbursement_room_negative_update",
+        topic: async () => "AI报账群",
+      }),
+      self: () => false,
+      talker: async () => ({
+        id: () => "reimbursement_talker_negative_update",
+        name: () => "Ryan。",
+      }),
+      text: () => "<msg><appmsg><title>-88.5</title></appmsg></msg>",
+      type: () => 49,
+      wechaty,
+    },
+    context,
+    createLogger(logs),
+  );
+
+  const updatedReport = listRecentReimbursementReports(1000).find((report) => report.id === initialReport.id);
+  const commandRawMessage = listRecentRawMessages(1000).find(
+    (message) => message.messageExternalId === commandMessageId,
+  );
+
+  assert(updatedReport);
+  assert.equal(updatedReport.amount, -88.5);
+  assert.equal(updatedReport.needsReview, false);
+  assert(commandRawMessage);
+  assert.equal(commandRawMessage.textContent, "-88.5");
   assert(logs.some((entry) => entry.message === "Executed reimbursement receipt command"));
   assert.equal(
     delivered.some(
