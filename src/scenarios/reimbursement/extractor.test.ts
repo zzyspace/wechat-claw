@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, test } from "node:test";
 
+import type { Logger } from "../../core/logging/logger.js";
 import { extractReimbursementReport } from "./extractor.js";
 
 const originalFetch = globalThis.fetch;
@@ -11,6 +12,23 @@ const originalFetch = globalThis.fetch;
 afterEach(() => {
   globalThis.fetch = originalFetch;
 });
+
+function createLogger(records: Array<{ level: string; message: string; context?: Record<string, unknown> }>) {
+  return {
+    debug(message: string, context?: Record<string, unknown>) {
+      records.push({ level: "debug", message, context });
+    },
+    error(message: string, context?: Record<string, unknown>) {
+      records.push({ level: "error", message, context });
+    },
+    info(message: string, context?: Record<string, unknown>) {
+      records.push({ level: "info", message, context });
+    },
+    warn(message: string, context?: Record<string, unknown>) {
+      records.push({ level: "warn", message, context });
+    },
+  } satisfies Logger;
+}
 
 test("extractReimbursementReport calls qwen3.5-flash and normalizes amount, date, and category", async () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "wechat-claw-reimbursement-extractor-"));
@@ -124,4 +142,193 @@ test("extractReimbursementReport falls back to message date and other category w
   assert.equal(result.resultJson.voucherDate, "2026-05-21");
   assert.equal(result.resultJson.voucherDateSource, "message");
   assert.equal(result.needsReview, false);
+});
+
+test("extractReimbursementReport retries once when the model returns an empty structured result", async () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "wechat-claw-reimbursement-extractor-"));
+  const imagePath = path.join(tempDir, "receipt.jpg");
+  const logs: Array<{ level: string; message: string; context?: Record<string, unknown> }> = [];
+  let fetchCallCount = 0;
+
+  try {
+    fs.writeFileSync(imagePath, Buffer.from([0xff, 0xd8, 0xff, 0xd9]));
+
+    globalThis.fetch = (async () => {
+      fetchCallCount += 1;
+
+      if (fetchCallCount === 1) {
+        return new Response(
+          JSON.stringify({
+            choices: [
+              {
+                finish_reason: "stop",
+                message: {
+                  content: "   ",
+                },
+              },
+            ],
+            id: "empty-first-attempt",
+            usage: {
+              prompt_tokens: 120,
+              completion_tokens: 0,
+              total_tokens: 120,
+            },
+          }),
+          {
+            status: 200,
+            headers: {
+              "Content-Type": "application/json",
+            },
+          },
+        );
+      }
+
+      return new Response(
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  amount: "88",
+                  currency: "CNY",
+                  expense_category: "other",
+                  voucher_date: "2026-05-20",
+                  merchant: "测试商户",
+                  document_no: "DOC-88",
+                  voucher_type: "小票",
+                  ocr_text: "合计 88",
+                  confidence: 0.86,
+                }),
+              },
+            },
+          ],
+        }),
+        {
+          status: 200,
+          headers: {
+            "Content-Type": "application/json",
+          },
+        },
+      );
+    }) as typeof fetch;
+
+    const result = await extractReimbursementReport(
+      {
+        rawMessageId: 3,
+        channelCode: "reimbursement_a",
+        channelName: "AI报账群",
+        reporter: "小王",
+        textContent: "备注",
+        sentAt: "2026-05-21T02:00:00.000Z",
+        timeZone: "Asia/Shanghai",
+        attachments: [
+          {
+            type: "image",
+            localPath: imagePath,
+            sha256: "retry-on-empty",
+            mimeType: "image/jpeg",
+          },
+        ],
+      },
+      {
+        provider: "qwen",
+        model: "qwen3.5-flash",
+        apiKey: "test-key",
+        baseUrl: "https://example.com",
+      },
+      createLogger(logs),
+    );
+
+    assert.equal(fetchCallCount, 2);
+    assert.equal(result.extractorCode, "model-qwen-qwen3.5-flash");
+    assert.equal(result.resultJson.amount, 88);
+
+    const retryLog = logs.find((entry) => entry.message === "Reimbursement model returned empty structured result, retrying once");
+    assert(retryLog);
+    assert.equal(retryLog.level, "warn");
+    assert.equal(retryLog.context?.attempt, 1);
+    assert.equal(retryLog.context?.choiceCount, 1);
+    assert.equal(retryLog.context?.finishReason, "stop");
+    assert.equal(retryLog.context?.messageContentLength, 3);
+    assert.equal(retryLog.context?.messageContentType, "string");
+    assert.equal(retryLog.context?.responseId, "empty-first-attempt");
+    assert.equal(retryLog.context?.usageTotalTokens, 120);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test("extractReimbursementReport falls back after the retry also returns an empty structured result", async () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "wechat-claw-reimbursement-extractor-"));
+  const imagePath = path.join(tempDir, "receipt.jpg");
+  const logs: Array<{ level: string; message: string; context?: Record<string, unknown> }> = [];
+  let fetchCallCount = 0;
+
+  try {
+    fs.writeFileSync(imagePath, Buffer.from([0xff, 0xd8, 0xff, 0xd9]));
+
+    globalThis.fetch = (async () => {
+      fetchCallCount += 1;
+
+      return new Response(
+        JSON.stringify({
+          choices: [
+            {
+              finish_reason: "stop",
+              message: {
+                content: "",
+              },
+            },
+          ],
+          id: `empty-attempt-${fetchCallCount}`,
+        }),
+        {
+          status: 200,
+          headers: {
+            "Content-Type": "application/json",
+          },
+        },
+      );
+    }) as typeof fetch;
+
+    const result = await extractReimbursementReport(
+      {
+        rawMessageId: 4,
+        channelCode: "reimbursement_a",
+        channelName: "AI报账群",
+        reporter: "小王",
+        textContent: "平",
+        sentAt: "2026-05-21T02:00:00.000Z",
+        timeZone: "Asia/Shanghai",
+        attachments: [
+          {
+            type: "image",
+            localPath: imagePath,
+            sha256: "still-empty",
+            mimeType: "image/jpeg",
+          },
+        ],
+      },
+      {
+        provider: "qwen",
+        model: "qwen3.5-flash",
+        apiKey: "test-key",
+        baseUrl: "https://example.com",
+      },
+      createLogger(logs),
+    );
+
+    assert.equal(fetchCallCount, 2);
+    assert.equal(result.extractorCode, "heuristic-v1");
+    assert.equal(result.resultJson.ocrText, null);
+    assert.equal(result.needsReview, true);
+
+    const fallbackLog = logs.find((entry) => entry.message === "Reimbursement model returned no structured result, using heuristic fallback");
+    assert(fallbackLog);
+    assert.equal(fallbackLog.level, "warn");
+    assert.equal(fallbackLog.context?.attempt, 2);
+    assert.equal(fallbackLog.context?.responseId, "empty-attempt-2");
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
 });

@@ -34,6 +34,27 @@ interface ModelStructuredResponse {
   confidence?: number | null;
 }
 
+interface QwenCompletionPayload {
+  id?: string;
+  usage?: {
+    prompt_tokens?: number;
+    completion_tokens?: number;
+    total_tokens?: number;
+  };
+  choices?: Array<{
+    finish_reason?: string | null;
+    message?: {
+      content?: unknown;
+    };
+  }>;
+}
+
+interface ReimbursementModelAttemptResult {
+  emptyStructuredResult: boolean;
+  modelResult: ModelStructuredResponse | null;
+  responseSummary?: Record<string, unknown>;
+}
+
 const FOOD_KEYWORDS = [
   "食材",
   "原料",
@@ -58,6 +79,9 @@ const FOOD_KEYWORDS = [
   "豆腐",
   "火锅",
 ];
+
+const EMPTY_STRUCTURED_RESULT_MAX_RETRIES = 1;
+const MODEL_RESPONSE_PREVIEW_LIMIT = 240;
 
 function detectEvidenceType(input: ReimbursementExtractionInput): ReimbursementEvidenceType {
   const hasImage = input.attachments.length > 0;
@@ -209,15 +233,91 @@ function buildPrompt(input: ReimbursementExtractionInput): string {
   ].join("\n");
 }
 
+function truncatePreview(value: string): string {
+  const normalized = value.replace(/\s+/g, " ").trim();
+
+  if (!normalized) {
+    return "";
+  }
+
+  if (normalized.length <= MODEL_RESPONSE_PREVIEW_LIMIT) {
+    return normalized;
+  }
+
+  return `${normalized.slice(0, MODEL_RESPONSE_PREVIEW_LIMIT - 3)}...`;
+}
+
+function summarizeMessageContent(content: unknown): Record<string, unknown> {
+  if (typeof content === "string") {
+    const preview = truncatePreview(content);
+
+    return {
+      messageContentLength: content.length,
+      messageContentPreview: preview || undefined,
+      messageContentType: "string",
+    };
+  }
+
+  if (Array.isArray(content)) {
+    const preview = truncatePreview(JSON.stringify(content));
+
+    return {
+      messageContentItemCount: content.length,
+      messageContentPreview: preview || undefined,
+      messageContentType: "array",
+    };
+  }
+
+  if (content === null) {
+    return {
+      messageContentType: "null",
+    };
+  }
+
+  if (content === undefined) {
+    return {
+      messageContentType: "undefined",
+    };
+  }
+
+  const preview = truncatePreview(JSON.stringify(content));
+
+  return {
+    messageContentPreview: preview || undefined,
+    messageContentType: typeof content,
+  };
+}
+
+function summarizeQwenPayload(payload: QwenCompletionPayload): Record<string, unknown> {
+  const firstChoice = payload.choices?.[0];
+
+  return {
+    choiceCount: payload.choices?.length ?? 0,
+    finishReason: firstChoice?.finish_reason ?? null,
+    responseId: payload.id,
+    usageCompletionTokens: payload.usage?.completion_tokens,
+    usagePromptTokens: payload.usage?.prompt_tokens,
+    usageTotalTokens: payload.usage?.total_tokens,
+    ...summarizeMessageContent(firstChoice?.message?.content),
+  };
+}
+
 async function callQwenReimbursementExtraction(
   input: ReimbursementExtractionInput,
   config: ReimbursementModelProviderConfig,
-): Promise<ModelStructuredResponse | null> {
+): Promise<ReimbursementModelAttemptResult> {
   const firstAttachment = input.attachments[0];
   const imageDataUrl = firstAttachment ? buildDataUrl(firstAttachment) : null;
 
   if (!imageDataUrl) {
-    return null;
+    return {
+      emptyStructuredResult: false,
+      modelResult: null,
+      responseSummary: {
+        attachmentLocalPath: firstAttachment?.localPath,
+        reason: "image_data_unavailable",
+      },
+    };
   }
 
   const response = await fetch(`${config.baseUrl}/chat/completions`, {
@@ -257,16 +357,33 @@ async function callQwenReimbursementExtraction(
     throw new Error(`Qwen reimbursement request failed: ${response.status} ${errorText}`);
   }
 
-  const payload = (await response.json()) as {
-    choices?: Array<{
-      message?: {
-        content?: string;
-      };
-    }>;
-  };
+  const payload = (await response.json()) as QwenCompletionPayload;
   const messageContent = payload.choices?.[0]?.message?.content;
+  const responseSummary = summarizeQwenPayload(payload);
 
-  return messageContent ? (JSON.parse(messageContent) as ModelStructuredResponse) : null;
+  if (typeof messageContent !== "string") {
+    return {
+      emptyStructuredResult: messageContent == null,
+      modelResult: null,
+      responseSummary,
+    };
+  }
+
+  const trimmedContent = messageContent.trim();
+
+  if (!trimmedContent) {
+    return {
+      emptyStructuredResult: true,
+      modelResult: null,
+      responseSummary,
+    };
+  }
+
+  return {
+    emptyStructuredResult: false,
+    modelResult: JSON.parse(trimmedContent) as ModelStructuredResponse,
+    responseSummary,
+  };
 }
 
 function buildFallbackExtraction(input: ReimbursementExtractionInput): ReimbursementExtractionResult {
@@ -331,25 +448,59 @@ export async function extractReimbursementReport(
   const messageVoucherDate = getMessageVoucherDate(input);
 
   try {
-    logger?.info("Calling reimbursement model extraction", {
-      attachmentCount: input.attachments.length,
-      channelCode: input.channelCode ?? "(empty)",
-      model: config.model,
-      provider: config.provider,
-      rawMessageId: input.rawMessageId,
-      reporter: input.reporter,
-    });
-    const modelResult =
-      config.provider === "qwen" ? await callQwenReimbursementExtraction(input, config) : null;
+    let attempt = 0;
+    let modelResult: ModelStructuredResponse | null = null;
 
-    if (!modelResult) {
-      logger?.info("Reimbursement model returned no structured result, using heuristic fallback", {
+    while (attempt <= EMPTY_STRUCTURED_RESULT_MAX_RETRIES) {
+      attempt += 1;
+      logger?.info("Calling reimbursement model extraction", {
+        attachmentCount: input.attachments.length,
+        attempt,
         channelCode: input.channelCode ?? "(empty)",
         model: config.model,
         provider: config.provider,
         rawMessageId: input.rawMessageId,
         reporter: input.reporter,
       });
+      const attemptResult =
+        config.provider === "qwen"
+          ? await callQwenReimbursementExtraction(input, config)
+          : {
+              emptyStructuredResult: false,
+              modelResult: null,
+            };
+      modelResult = attemptResult.modelResult;
+
+      if (modelResult) {
+        break;
+      }
+
+      if (attemptResult.emptyStructuredResult && attempt <= EMPTY_STRUCTURED_RESULT_MAX_RETRIES) {
+        logger?.warn("Reimbursement model returned empty structured result, retrying once", {
+          attempt,
+          channelCode: input.channelCode ?? "(empty)",
+          model: config.model,
+          provider: config.provider,
+          rawMessageId: input.rawMessageId,
+          reporter: input.reporter,
+          ...attemptResult.responseSummary,
+        });
+        continue;
+      }
+
+      logger?.warn("Reimbursement model returned no structured result, using heuristic fallback", {
+        attempt,
+        channelCode: input.channelCode ?? "(empty)",
+        model: config.model,
+        provider: config.provider,
+        rawMessageId: input.rawMessageId,
+        reporter: input.reporter,
+        ...attemptResult.responseSummary,
+      });
+      return buildFallbackExtraction(input);
+    }
+
+    if (!modelResult) {
       return buildFallbackExtraction(input);
     }
 
@@ -411,12 +562,13 @@ export async function extractReimbursementReport(
     });
 
     return result;
-  } catch {
+  } catch (error) {
     const fallback = buildFallbackExtraction(input);
 
     logger?.warn("Reimbursement model extraction failed, using heuristic fallback", {
       attachmentCount: input.attachments.length,
       channelCode: input.channelCode ?? "(empty)",
+      error,
       model: config.model,
       provider: config.provider,
       rawMessageId: input.rawMessageId,
