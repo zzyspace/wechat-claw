@@ -84,6 +84,7 @@ interface ParsedReimbursementReceiptReply {
 
 type ReimbursementReceiptCommand =
   | { kind: "delete" }
+  | { kind: "append_note"; note: string }
   | { kind: "set_monthly_ledger_note"; note: string }
   | { expenseCategory: ReimbursementExpenseCategory; kind: "set_category" }
   | { amount: number; kind: "set_amount" };
@@ -1172,7 +1173,7 @@ async function handleReimbursementReceiptReplyCommand(
       reimbursementReportId: matchedReport.id,
       amount: command.amount,
     });
-  } else if (command.kind === "set_monthly_ledger_note") {
+  } else if (command.kind === "append_note" || command.kind === "set_monthly_ledger_note") {
     attachRemarkToReimbursementReport({
       reimbursementReportId: matchedReport.id,
       rawMessageId: saveResult.rawMessageId,
@@ -1200,7 +1201,10 @@ async function handleReimbursementReceiptReplyCommand(
       command: command.kind,
       commandText: receiptReply.commandText,
       eventType: "reimbursement_receipt_command",
-      note: command.kind === "set_monthly_ledger_note" ? command.note : null,
+      note:
+        command.kind === "append_note" || command.kind === "set_monthly_ledger_note"
+          ? command.note
+          : null,
       quotedMessageExternalId: receiptReply.quotedMessageExternalId ?? null,
       quotedText: receiptReply.quotedText,
       reimbursementReportId: matchedReport.id,
@@ -1236,7 +1240,7 @@ async function handleReimbursementReceiptReplyCommand(
     `内容: ${receiptReply.commandText}`,
     `附件数: ${parsed.attachments.length}`,
     `入库: ${saveResult.inserted ? "新消息" : "已去重"}`,
-    `报账指令: ${command.kind} / report=${matchedReport.id}${command.kind === "set_amount" ? ` / amount=${command.amount}` : command.kind === "set_category" ? ` / category=${command.expenseCategory}` : command.kind === "set_monthly_ledger_note" ? ` / note=${command.note}` : ""}`,
+    `报账指令: ${command.kind} / report=${matchedReport.id}${command.kind === "set_amount" ? ` / amount=${command.amount}` : command.kind === "set_category" ? ` / category=${command.expenseCategory}` : command.kind === "append_note" || command.kind === "set_monthly_ledger_note" ? ` / note=${command.note}` : ""}`,
   ]);
 }
 
@@ -1561,6 +1565,19 @@ function parseReimbursementReceiptCommand(text: string): ReimbursementReceiptCom
 
   if (normalized.toLowerCase() === "delete") {
     return { kind: "delete" };
+  }
+
+  const noteMatch = normalized.match(/^note\s*[:：]\s*(.+)$/i);
+  if (noteMatch) {
+    const note = noteMatch[1]?.trim() ?? "";
+    if (!note) {
+      return null;
+    }
+
+    return {
+      kind: "append_note",
+      note,
+    };
   }
 
   if (isMonthlyLedgerReceiptCommandText(normalized)) {
