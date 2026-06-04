@@ -81,6 +81,7 @@ const FOOD_KEYWORDS = [
 ];
 
 const EMPTY_STRUCTURED_RESULT_MAX_RETRIES = 1;
+const EMPTY_STRUCTURED_RESULT_RETRY_MODEL = "qwen3.5-plus";
 const MODEL_RESPONSE_PREVIEW_LIMIT = 240;
 
 function detectEvidenceType(input: ReimbursementExtractionInput): ReimbursementEvidenceType {
@@ -302,6 +303,10 @@ function summarizeQwenPayload(payload: QwenCompletionPayload): Record<string, un
   };
 }
 
+function resolveAttemptModel(baseModel: string, attempt: number): string {
+  return attempt <= 1 ? baseModel : EMPTY_STRUCTURED_RESULT_RETRY_MODEL;
+}
+
 async function callQwenReimbursementExtraction(
   input: ReimbursementExtractionInput,
   config: ReimbursementModelProviderConfig,
@@ -449,22 +454,27 @@ export async function extractReimbursementReport(
 
   try {
     let attempt = 0;
+    let effectiveModel = config.model;
     let modelResult: ModelStructuredResponse | null = null;
 
     while (attempt <= EMPTY_STRUCTURED_RESULT_MAX_RETRIES) {
       attempt += 1;
+      effectiveModel = resolveAttemptModel(config.model, attempt);
       logger?.info("Calling reimbursement model extraction", {
         attachmentCount: input.attachments.length,
         attempt,
         channelCode: input.channelCode ?? "(empty)",
-        model: config.model,
+        model: effectiveModel,
         provider: config.provider,
         rawMessageId: input.rawMessageId,
         reporter: input.reporter,
       });
       const attemptResult =
         config.provider === "qwen"
-          ? await callQwenReimbursementExtraction(input, config)
+          ? await callQwenReimbursementExtraction(input, {
+              ...config,
+              model: effectiveModel,
+            })
           : {
               emptyStructuredResult: false,
               modelResult: null,
@@ -479,10 +489,11 @@ export async function extractReimbursementReport(
         logger?.warn("Reimbursement model returned empty structured result, retrying once", {
           attempt,
           channelCode: input.channelCode ?? "(empty)",
-          model: config.model,
+          model: effectiveModel,
           provider: config.provider,
           rawMessageId: input.rawMessageId,
           reporter: input.reporter,
+          retryModel: EMPTY_STRUCTURED_RESULT_RETRY_MODEL,
           ...attemptResult.responseSummary,
         });
         continue;
@@ -491,7 +502,7 @@ export async function extractReimbursementReport(
       logger?.warn("Reimbursement model returned no structured result, using heuristic fallback", {
         attempt,
         channelCode: input.channelCode ?? "(empty)",
-        model: config.model,
+        model: effectiveModel,
         provider: config.provider,
         rawMessageId: input.rawMessageId,
         reporter: input.reporter,
@@ -522,7 +533,7 @@ export async function extractReimbursementReport(
 
     const result: ReimbursementExtractionResult = {
       scenarioCode: "reimbursement",
-      extractorCode: `model-${config.provider}-${config.model}`,
+      extractorCode: `model-${config.provider}-${effectiveModel}`,
       status: "extracted",
       confidence,
       needsReview: amount === null,
@@ -554,6 +565,7 @@ export async function extractReimbursementReport(
       evidenceType: result.resultJson.evidenceType,
       expenseCategory: result.resultJson.expenseCategory,
       extractorCode: result.extractorCode,
+      model: effectiveModel,
       needsReview: result.needsReview,
       rawMessageId: input.rawMessageId,
       reporter: input.reporter,

@@ -149,12 +149,14 @@ test("extractReimbursementReport retries once when the model returns an empty st
   const imagePath = path.join(tempDir, "receipt.jpg");
   const logs: Array<{ level: string; message: string; context?: Record<string, unknown> }> = [];
   let fetchCallCount = 0;
+  const requestedModels: string[] = [];
 
   try {
     fs.writeFileSync(imagePath, Buffer.from([0xff, 0xd8, 0xff, 0xd9]));
 
-    globalThis.fetch = (async () => {
+    globalThis.fetch = (async (_url, init) => {
       fetchCallCount += 1;
+      requestedModels.push(JSON.parse(String(init?.body)).model);
 
       if (fetchCallCount === 1) {
         return new Response(
@@ -240,7 +242,8 @@ test("extractReimbursementReport retries once when the model returns an empty st
     );
 
     assert.equal(fetchCallCount, 2);
-    assert.equal(result.extractorCode, "model-qwen-qwen3.5-flash");
+    assert.deepEqual(requestedModels, ["qwen3.5-flash", "qwen3.5-plus"]);
+    assert.equal(result.extractorCode, "model-qwen-qwen3.5-plus");
     assert.equal(result.resultJson.amount, 88);
 
     const retryLog = logs.find((entry) => entry.message === "Reimbursement model returned empty structured result, retrying once");
@@ -252,6 +255,7 @@ test("extractReimbursementReport retries once when the model returns an empty st
     assert.equal(retryLog.context?.messageContentLength, 3);
     assert.equal(retryLog.context?.messageContentType, "string");
     assert.equal(retryLog.context?.responseId, "empty-first-attempt");
+    assert.equal(retryLog.context?.retryModel, "qwen3.5-plus");
     assert.equal(retryLog.context?.usageTotalTokens, 120);
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });
@@ -263,12 +267,14 @@ test("extractReimbursementReport falls back after the retry also returns an empt
   const imagePath = path.join(tempDir, "receipt.jpg");
   const logs: Array<{ level: string; message: string; context?: Record<string, unknown> }> = [];
   let fetchCallCount = 0;
+  const requestedModels: string[] = [];
 
   try {
     fs.writeFileSync(imagePath, Buffer.from([0xff, 0xd8, 0xff, 0xd9]));
 
-    globalThis.fetch = (async () => {
+    globalThis.fetch = (async (_url, init) => {
       fetchCallCount += 1;
+      requestedModels.push(JSON.parse(String(init?.body)).model);
 
       return new Response(
         JSON.stringify({
@@ -319,6 +325,7 @@ test("extractReimbursementReport falls back after the retry also returns an empt
     );
 
     assert.equal(fetchCallCount, 2);
+    assert.deepEqual(requestedModels, ["qwen3.5-flash", "qwen3.5-plus"]);
     assert.equal(result.extractorCode, "heuristic-v1");
     assert.equal(result.resultJson.ocrText, null);
     assert.equal(result.needsReview, true);
@@ -327,6 +334,7 @@ test("extractReimbursementReport falls back after the retry also returns an empt
     assert(fallbackLog);
     assert.equal(fallbackLog.level, "warn");
     assert.equal(fallbackLog.context?.attempt, 2);
+    assert.equal(fallbackLog.context?.model, "qwen3.5-plus");
     assert.equal(fallbackLog.context?.responseId, "empty-attempt-2");
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });
