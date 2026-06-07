@@ -1,0 +1,10 @@
+[Unit]
+Description=Restart wechat-claw daily at 05:00
+
+[Timer]
+OnCalendar=*-*-* 05:00:00 Asia/Shanghai
+AccuracySec=1min
+Unit=wechat-claw-daily-restart.service
+
+[Install]
+WantedBy=timers.target

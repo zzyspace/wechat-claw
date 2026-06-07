@@ -497,6 +497,7 @@ npm run logs:recent -- --date 2026-05-21 --grep login
 
 - `systemd` 负责“进程退出后”自动拉起 `wechat-claw.service`
 - `watchdog timer` 每分钟执行一次 `npm run watchdog:check`
+- `daily restart timer` 每天 `05:00`（固定按 `Asia/Shanghai`）执行一次 `systemctl restart wechat-claw`
 - watchdog 会读取 `health.json` 和 `watchdog.json`
 - 对持续异常或心跳停滞执行自动重启
 - 对需要人工处理的情况发送邮件但不重启
@@ -514,8 +515,10 @@ npm run logs:recent -- --date 2026-05-21 --grep login
 ```bash
 systemctl status wechat-claw
 systemctl status wechat-claw-watchdog.timer
+systemctl status wechat-claw-daily-restart.timer
 journalctl -u wechat-claw -f -o short-iso
 journalctl -u wechat-claw-watchdog.service -f -o short-iso
+journalctl -u wechat-claw-daily-restart.service -f -o short-iso
 cat /var/lib/wechat-claw/health.json
 cat /var/lib/wechat-claw/watchdog.json
 cat /var/lib/wechat-claw/watchdog-state.json
@@ -568,6 +571,7 @@ sudo bash deploy/deploy-wechat-claw.sh
 - `git pull --ff-only origin main`
 - 安装最新的 `systemd` service 文件
 - 安装最新的 watchdog `service/timer` 文件
+- 安装最新的每日重启 `service/timer` 文件
 - 安装 `needrestart` 豁免，避免系统自动升级时重启 bot
 - `systemctl daemon-reload`
 - 仅当当前 `package-lock.json` 和已安装依赖树不一致时执行 `npm ci --include=dev`
@@ -575,6 +579,7 @@ sudo bash deploy/deploy-wechat-claw.sh
 - `npm run doctor`
 - `systemctl restart wechat-claw`
 - `systemctl enable --now wechat-claw-watchdog.timer`
+- `systemctl enable --now wechat-claw-daily-restart.timer`
 
 如果你想降低“忘记同步服务器配置”的风险，推荐以后统一只用这一条本地发布命令：
 
@@ -730,6 +735,8 @@ WECHATY_CHANNELS_JSON=[{"code":"loss_prod","enabled":true,"scenario":"loss-repor
 - `journalctl -u wechat-claw -f -o short-iso`
 - `journalctl -u wechat-claw-watchdog.service -f -o short-iso`
 - `systemctl status wechat-claw-watchdog.timer`
+- `journalctl -u wechat-claw-daily-restart.service -f -o short-iso`
+- `systemctl status wechat-claw-daily-restart.timer`
 - `/var/lib/wechat-claw/logs`
 - `/var/lib/wechat-claw/watchdog.json`
 - `/var/lib/wechat-claw/watchdog-state.json`

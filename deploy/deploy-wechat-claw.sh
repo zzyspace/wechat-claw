@@ -8,6 +8,8 @@ ENV_FILE="/etc/wechat-claw.env"
 SERVICE_NAME="wechat-claw"
 WATCHDOG_SERVICE_NAME="wechat-claw-watchdog"
 WATCHDOG_TIMER_NAME="wechat-claw-watchdog"
+DAILY_RESTART_SERVICE_NAME="wechat-claw-daily-restart"
+DAILY_RESTART_TIMER_NAME="wechat-claw-daily-restart"
 SYSTEMD_UNIT_DIR="/etc/systemd/system"
 NEEDRESTART_CONF_DIR="/etc/needrestart/conf.d"
 PUPPETEER_CACHE_DIR="${APP_DIR}/.cache/puppeteer"
@@ -81,6 +83,10 @@ watchdog_service_source="${script_dir}/wechat-claw-watchdog.service"
 watchdog_service_target="${SYSTEMD_UNIT_DIR}/${WATCHDOG_SERVICE_NAME}.service"
 watchdog_timer_source="${script_dir}/wechat-claw-watchdog.timer"
 watchdog_timer_target="${SYSTEMD_UNIT_DIR}/${WATCHDOG_TIMER_NAME}.timer"
+daily_restart_service_source="${script_dir}/wechat-claw-daily-restart.service"
+daily_restart_service_target="${SYSTEMD_UNIT_DIR}/${DAILY_RESTART_SERVICE_NAME}.service"
+daily_restart_timer_source="${script_dir}/wechat-claw-daily-restart.timer"
+daily_restart_timer_target="${SYSTEMD_UNIT_DIR}/${DAILY_RESTART_TIMER_NAME}.timer"
 needrestart_source="${script_dir}/needrestart-wechat-claw.conf"
 needrestart_target="${NEEDRESTART_CONF_DIR}/${SERVICE_NAME}.conf"
 
@@ -172,6 +178,11 @@ if systemctl list-unit-files "${WATCHDOG_TIMER_NAME}.timer" >/dev/null 2>&1; the
   systemctl stop "${WATCHDOG_TIMER_NAME}.timer" "${WATCHDOG_SERVICE_NAME}.service" || true
 fi
 
+if systemctl list-unit-files "${DAILY_RESTART_TIMER_NAME}.timer" >/dev/null 2>&1; then
+  echo "[deploy] Stopping daily restart timer during deploy"
+  systemctl stop "${DAILY_RESTART_TIMER_NAME}.timer" "${DAILY_RESTART_SERVICE_NAME}.service" || true
+fi
+
 if [[ -f "${service_source}" ]]; then
   echo "[deploy] Installing systemd unit"
   install -m 644 -o root -g root "${service_source}" "${service_target}"
@@ -185,6 +196,16 @@ fi
 if [[ -f "${watchdog_timer_source}" ]]; then
   echo "[deploy] Installing watchdog timer unit"
   install -m 644 -o root -g root "${watchdog_timer_source}" "${watchdog_timer_target}"
+fi
+
+if [[ -f "${daily_restart_service_source}" ]]; then
+  echo "[deploy] Installing daily restart service unit"
+  install -m 644 -o root -g root "${daily_restart_service_source}" "${daily_restart_service_target}"
+fi
+
+if [[ -f "${daily_restart_timer_source}" ]]; then
+  echo "[deploy] Installing daily restart timer unit"
+  install -m 644 -o root -g root "${daily_restart_timer_source}" "${daily_restart_timer_target}"
 fi
 
 if [[ -f "${needrestart_source}" ]]; then
@@ -215,6 +236,11 @@ sleep 5
 if [[ -f "${watchdog_service_source}" && -f "${watchdog_timer_source}" ]]; then
   echo "[deploy] Enabling watchdog timer"
   systemctl enable --now "${WATCHDOG_TIMER_NAME}.timer"
+fi
+
+if [[ -f "${daily_restart_service_source}" && -f "${daily_restart_timer_source}" ]]; then
+  echo "[deploy] Enabling daily restart timer"
+  systemctl enable --now "${DAILY_RESTART_TIMER_NAME}.timer"
 fi
 
 echo "[deploy] Service status"
