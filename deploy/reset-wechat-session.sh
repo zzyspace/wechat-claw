@@ -7,7 +7,7 @@ ENV_FILE="/etc/wechat-claw.env"
 STATE_DIR=""
 BOT_NAME=""
 BACKUP_DIR=""
-WAIT_SECONDS=30
+WAIT_SECONDS=60
 ASSUME_YES=0
 
 usage() {
@@ -29,7 +29,7 @@ Options:
   --backup-dir <path>    Directory used to store memory-card backups.
                          Default: <state-dir>/backups
   --wait-seconds <n>     Seconds to wait for waiting_for_scan after restart.
-                         Default: 30
+                         Default: 60
   -y, --yes              Skip the confirmation prompt.
   -h, --help             Show help.
 
@@ -183,13 +183,32 @@ print_qr_summary() {
   sed -n '1,20p' "${QR_PATH}"
 }
 
-wait_for_waiting_for_scan() {
+qr_artifact_is_fresh() {
+  if [[ ! -f "${QR_PATH}" ]]; then
+    return 1
+  fi
+
+  local qr_mtime
+  qr_mtime="$(stat -c %Y "${QR_PATH}" 2>/dev/null || true)"
+
+  if [[ -z "${qr_mtime}" ]]; then
+    return 1
+  fi
+
+  [[ "${qr_mtime}" -ge "${RESTART_REQUESTED_AT_EPOCH}" ]]
+}
+
+wait_for_recovery_ready() {
   local deadline=$((SECONDS + WAIT_SECONDS))
   local status=""
 
   while (( SECONDS < deadline )); do
     status="$(json_field_or_empty "${HEALTH_PATH}" "status")"
-    if [[ "${status}" == "waiting_for_scan" ]]; then
+    if [[ "${status}" == "waiting_for_scan" || "${status}" == "logged_in" ]]; then
+      return 0
+    fi
+
+    if qr_artifact_is_fresh; then
       return 0
     fi
     sleep 1
@@ -234,10 +253,11 @@ else
 fi
 
 echo "[reset-session] Restarting ${SERVICE_NAME}"
+RESTART_REQUESTED_AT_EPOCH="$(date +%s)"
 systemctl restart "${SERVICE_NAME}"
 
-echo "[reset-session] Waiting up to ${WAIT_SECONDS}s for health.status=waiting_for_scan"
-if wait_for_waiting_for_scan; then
+echo "[reset-session] Waiting up to ${WAIT_SECONDS}s for waiting_for_scan, logged_in, or a freshly generated QR artifact"
+if wait_for_recovery_ready; then
   print_health_summary
   print_qr_summary
   echo "[reset-session] Fresh-login recovery is ready. Scan the QR code and wait for Bot logged in."

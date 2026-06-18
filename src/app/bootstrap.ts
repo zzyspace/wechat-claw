@@ -12,7 +12,7 @@ import {
   createRuntimeRunId,
   startWatchdogHeartbeatManager,
 } from "../core/runtime/watchdog-heartbeat.js";
-import { startBot } from "../bot/wechaty-client.js";
+import { shouldSendWaitingForScanAlert, startBot } from "../bot/wechaty-client.js";
 import type { WechatyInstance } from "../bot/types.js";
 
 const SHUTDOWN_TIMEOUT_MS = 15_000;
@@ -207,13 +207,12 @@ async function main() {
     touchWatchdogHeartbeat();
 
     bot = await startBot(logger, {
-      async onScan({ artifactPath, qrcodeUrl }) {
-        const previousStatus = healthReporter?.getSnapshot().status;
+      async onScan({ artifactPath, qrcodeUrl, statusName }) {
         healthReporter?.markScan();
         touchWatchdogHeartbeat();
 
         if (
-          previousStatus !== "waiting_for_scan" &&
+          shouldSendWaitingForScanAlert(statusName) &&
           config.alertEmailEnabled &&
           config.alertEmailTo.length > 0
         ) {

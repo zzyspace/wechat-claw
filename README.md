@@ -726,7 +726,7 @@ sudo bash deploy/reset-wechat-session.sh --yes
 - `--env-file <path>`：覆盖 env 文件路径，默认 `/etc/wechat-claw.env`
 - `--state-dir <path>`：直接覆盖 `WECHATY_STATE_DIR`
 - `--bot-name <name>`：直接覆盖 `WECHATY_BOT_NAME`
-- `--wait-seconds <n>`：控制重启后等待 `waiting_for_scan` 的秒数，默认 `30`
+- `--wait-seconds <n>`：控制重启后等待恢复就绪的秒数，默认 `60`
 
 如果想在重启前先验证配置，可以执行：
 

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import type { Logger } from "../core/logging/logger.js";
-import { sendOnlineNoticeWithRetry } from "./wechaty-client.js";
+import { sendOnlineNoticeWithRetry, shouldSendWaitingForScanAlert } from "./wechaty-client.js";
 import type { WechatyInstance } from "./types.js";
 
 function createLogger(records: Array<{ level: string; message: string; context?: Record<string, unknown> }>) {
@@ -21,6 +21,13 @@ function createLogger(records: Array<{ level: string; message: string; context?:
     },
   } satisfies Logger;
 }
+
+test("shouldSendWaitingForScanAlert only returns true for Waiting scan events", () => {
+  assert.equal(shouldSendWaitingForScanAlert("Waiting"), true);
+  assert.equal(shouldSendWaitingForScanAlert("Timeout"), false);
+  assert.equal(shouldSendWaitingForScanAlert("Scanned"), false);
+  assert.equal(shouldSendWaitingForScanAlert("Confirmed"), false);
+});
 
 test("sendOnlineNoticeWithRetry retries contact lookup misses and eventually delivers", async () => {
   const logs: Array<{ level: string; message: string; context?: Record<string, unknown> }> = [];

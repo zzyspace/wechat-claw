@@ -46,6 +46,10 @@ export interface OnlineNoticeRetryOptions {
   sleep?: (ms: number) => Promise<void>;
 }
 
+export function shouldSendWaitingForScanAlert(statusName: string) {
+  return statusName === "Waiting";
+}
+
 function readSnapshotValue(
   value: unknown,
   options: {
