@@ -531,6 +531,7 @@ tail -f /var/lib/wechat-claw/logs/error-$(date +%F).log
 - 如果服务已退出：优先看 `systemctl status wechat-claw`
 - 如果服务在线但登录失效：查看 `latest-qrcode.txt`，重新扫码
 - 如果进入 `degraded` 且长期不恢复：执行 `sudo systemctl restart wechat-claw`
+- 如果服务显示 `logged_in` 但长期收不到新消息、`lastMessageAt` 不再更新：执行 `sudo bash deploy/reset-wechat-session.sh`
 - 如果怀疑 SQLite 业务数据异常：执行 `sudo bash deploy/clear-wechat-claw-db.sh`
 
 ## Linux 单机部署
@@ -695,6 +696,37 @@ sudo bash deploy/clear-wechat-claw-db.sh --yes
 - 如果启用了 `WECHATY_ATTACHMENT_RETENTION_DAYS`，bot 运行后会按保留天数自动清理更早的 raw 图片目录
 - 如果你连附件文件也想一起清理，建议先确认是否还需要保留原始取证材料，再单独删除
 - 如果服务名或数据库路径不是默认值，可以执行 `sudo bash deploy/clear-wechat-claw-db.sh --help`
+
+如果 bot 出现“服务还是 `logged_in`，但实际收不到新消息，重启服务也没恢复”的坏会话现象，可以直接执行：
+
+```bash
+cd /opt/wechat-claw/current
+sudo bash deploy/reset-wechat-session.sh
+```
+
+这个脚本会按顺序执行：
+
+- 从 `/etc/wechat-claw.env` 读取 `WECHATY_STATE_DIR` 和 `WECHATY_BOT_NAME`
+- 备份当前 `${WECHATY_STATE_DIR}/${WECHATY_BOT_NAME}.memory-card.json` 到 `${WECHATY_STATE_DIR}/backups/`
+- 将当前 `memory-card` 重命名为 `.disabled.<timestamp>`
+- 重启 `wechat-claw`
+- 轮询 `health.json`，等待服务进入 `waiting_for_scan`
+- 打印 `latest-qrcode.txt` 的路径、二维码 URL 和 ASCII 预览
+
+如果你不想手工输入确认，也可以加 `--yes`：
+
+```bash
+cd /opt/wechat-claw/current
+sudo bash deploy/reset-wechat-session.sh --yes
+```
+
+常用可选参数：
+
+- `--service-name <name>`：覆盖 systemd 服务名，默认 `wechat-claw`
+- `--env-file <path>`：覆盖 env 文件路径，默认 `/etc/wechat-claw.env`
+- `--state-dir <path>`：直接覆盖 `WECHATY_STATE_DIR`
+- `--bot-name <name>`：直接覆盖 `WECHATY_BOT_NAME`
+- `--wait-seconds <n>`：控制重启后等待 `waiting_for_scan` 的秒数，默认 `30`
 
 如果想在重启前先验证配置，可以执行：
 
