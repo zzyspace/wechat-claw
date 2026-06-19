@@ -15,7 +15,7 @@ export interface BotLifecycleHooks {
   onLogin?: (payload: { name: string }) => void;
   onLogout?: (payload: { name: string }) => void;
   onError?: (error: Error) => void;
-  onMessage?: () => void;
+  onMessage?: (message: any) => void;
 }
 
 const MESSAGE_MIXIN_DETAIL_PROPERTIES = [
@@ -436,7 +436,7 @@ export async function startBot(
   });
 
   bot.on("message", async (message: any) => {
-    hooks.onMessage?.();
+    hooks.onMessage?.(message);
 
     if (config.debugMessageSnapshotEnabled) {
       logger.debug("[ CUSTOM LOG ] Raw wechaty message snapshot", {

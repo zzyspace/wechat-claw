@@ -70,6 +70,12 @@ WECHATY_ALERT_EMAIL_TO=ops@example.com
 WECHATY_TIMEZONE=Asia/Shanghai
 WECHATY_DEBUG_CONTACT_NAME=你的主微信昵称
 WECHATY_DEBUG_RECEIVED_ROOM_MESSAGE_ENABLED=false
+WECHATY_SELF_CANARY_ENABLED=false
+WECHATY_SELF_CANARY_TARGET_CONTACT_NAME=文件传输助手
+WECHATY_SELF_CANARY_INTERVAL_SECONDS=1800
+WECHATY_SELF_CANARY_ACK_TIMEOUT_SECONDS=120
+WECHATY_SELF_CANARY_FAILURE_THRESHOLD=2
+WECHATY_SELF_CANARY_AUTO_RESET_ENABLED=false
 WECHATY_ATTACHMENT_RETENTION_DAYS=60
 WECHATY_COLD_START_IGNORE_WINDOW_SECONDS=60
 WECHATY_LOSS_MERGE_WINDOW_SECONDS=60
@@ -102,6 +108,12 @@ WECHATY_CHANNELS_JSON=[{"code":"loss_a","enabled":true,"scenario":"loss-report",
 - `WECHATY_ALERT_EMAIL_TO`: 告警收件人邮箱，支持多个，用逗号分隔
 - `WECHATY_WATCHDOG_MEMORY_LIMIT_MB`: watchdog 内存阈值，单位 MiB，默认 `0`（关闭）
 - `WECHATY_WATCHDOG_MEMORY_PERSISTENCE_SECONDS`: 内存阈值持续多久才触发重启，单位秒，默认 `300`
+- `WECHATY_SELF_CANARY_ENABLED`: 是否启用“文件传输助手”自检 canary，默认 `false`
+- `WECHATY_SELF_CANARY_TARGET_CONTACT_NAME`: 自检发送目标联系人，建议先用 `文件传输助手`
+- `WECHATY_SELF_CANARY_INTERVAL_SECONDS`: 自检发送间隔，单位秒，默认 `1800`
+- `WECHATY_SELF_CANARY_ACK_TIMEOUT_SECONDS`: 发送后等待 self message 回流的超时时间，单位秒，默认 `120`
+- `WECHATY_SELF_CANARY_FAILURE_THRESHOLD`: 连续失败多少次才算 canary 故障，默认 `2`
+- `WECHATY_SELF_CANARY_AUTO_RESET_ENABLED`: 连续失败达到阈值后，是否自动备份并停用 `memory-card` 后触发 fresh login，默认 `false`
 - `WECHATY_TIMEZONE`: 日期边界和 cron 解释时区，默认 `Asia/Shanghai`
 - `WECHATY_DEBUG_CONTACT_NAME`: `"[wechat-claw]"` 调试信息的接收联系人，不参与业务日报发送；上线通知始终走这里
 - `WECHATY_DEBUG_RECEIVED_ROOM_MESSAGE_ENABLED`: 是否发送 `"[wechat-claw] 已收到群消息"` 这类调试摘要，默认 `false`
@@ -465,6 +477,18 @@ npm start
 - `watchdog.json` 记录进程心跳、最近健康状态和关键时间戳
 - `watchdog-state.json` 记录最近巡检时间、邮件去重窗口和自动重启节流窗口
 
+## Self Canary 状态文件
+
+如果启用了“文件传输助手”自检 canary，程序还会维护：
+
+- `WECHATY_STATE_DIR/self-canary.json`
+
+用途：
+
+- 记录最近一次 canary 发送时间、token、回流确认时间
+- 记录连续失败次数、最近失败原因
+- 如果启用了自动恢复，还会记录最近一次请求 fresh login reset 的时间
+
 ## 文本日志
 
 程序会同时输出到：
@@ -759,6 +783,12 @@ WECHATY_ALERT_EMAIL_TO=ops@example.com
 WECHATY_TIMEZONE=Asia/Shanghai
 WECHATY_DEBUG_CONTACT_NAME=你的主微信昵称
 WECHATY_DEBUG_RECEIVED_ROOM_MESSAGE_ENABLED=false
+WECHATY_SELF_CANARY_ENABLED=false
+WECHATY_SELF_CANARY_TARGET_CONTACT_NAME=文件传输助手
+WECHATY_SELF_CANARY_INTERVAL_SECONDS=1800
+WECHATY_SELF_CANARY_ACK_TIMEOUT_SECONDS=120
+WECHATY_SELF_CANARY_FAILURE_THRESHOLD=2
+WECHATY_SELF_CANARY_AUTO_RESET_ENABLED=false
 WECHATY_CHANNELS_JSON=[{"code":"loss_prod","enabled":true,"scenario":"loss-report","match":{"type":"room_topic","value":"AI测试群"},"deliveryTargets":[{"type":"contact_name","value":"你的主微信昵称"}],"summarySchedule":"0 22 * * *"}]
 ```
 
@@ -772,6 +802,7 @@ WECHATY_CHANNELS_JSON=[{"code":"loss_prod","enabled":true,"scenario":"loss-repor
 - `/var/lib/wechat-claw/logs`
 - `/var/lib/wechat-claw/watchdog.json`
 - `/var/lib/wechat-claw/watchdog-state.json`
+- `/var/lib/wechat-claw/self-canary.json`
 - `tail -f /var/lib/wechat-claw/logs/app-$(date +%F).log`
 - `tail -f /var/lib/wechat-claw/logs/error-$(date +%F).log`
 - `cd /opt/wechat-claw/current && npm run watchdog:check`

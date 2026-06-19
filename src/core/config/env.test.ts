@@ -24,6 +24,12 @@ const managedEnvKeys = [
   "WECHATY_ALERT_EMAIL_TO",
   "WECHATY_WATCHDOG_MEMORY_LIMIT_MB",
   "WECHATY_WATCHDOG_MEMORY_PERSISTENCE_SECONDS",
+  "WECHATY_SELF_CANARY_ENABLED",
+  "WECHATY_SELF_CANARY_TARGET_CONTACT_NAME",
+  "WECHATY_SELF_CANARY_INTERVAL_SECONDS",
+  "WECHATY_SELF_CANARY_ACK_TIMEOUT_SECONDS",
+  "WECHATY_SELF_CANARY_FAILURE_THRESHOLD",
+  "WECHATY_SELF_CANARY_AUTO_RESET_ENABLED",
   "WECHATY_TIMEZONE",
   "WECHATY_SUMMARY_CRON",
   "WECHATY_CHANNELS_JSON",
@@ -140,6 +146,7 @@ test("getAppConfig parses WECHATY_CHANNELS_JSON with mixed delivery targets", ()
   assert.deepEqual(config.alertEmailTo, ["ops@example.com", "dev@example.com"]);
   assert.equal(config.watchdogMemoryLimitMb, 512);
   assert.equal(config.watchdogMemoryPersistenceSeconds, 420);
+  assert.equal(config.selfCanary?.enabled, false);
   assert.equal(config.channels.length, 2);
   assert.equal(config.channels[1]?.scenario, "reimbursement");
   assert.equal(config.reimbursementExtractionProvider, "qwen");
@@ -249,7 +256,71 @@ test("getAppConfig defaults log settings from state dir", () => {
   assert.deepEqual(config.alertEmailTo, []);
   assert.equal(config.watchdogMemoryLimitMb, 0);
   assert.equal(config.watchdogMemoryPersistenceSeconds, 300);
+  assert.equal(config.selfCanary?.targetContactName, "文件传输助手");
   assert.equal(config.debugReceivedRoomMessageEnabled, false);
+});
+
+test("getAppConfig parses self canary settings", () => {
+  applyEnv({
+    WECHATY_PUPPET: "wechaty-puppet-wechat",
+    WECHATY_CHANNELS_JSON: JSON.stringify([
+      {
+        code: "loss_a",
+        enabled: true,
+        scenario: "loss-report",
+        match: { type: "room_topic", value: "报损群A" },
+        deliveryTargets: [{ type: "contact_name", value: "店长A" }],
+        summarySchedule: "",
+      },
+    ]),
+    WECHATY_SELF_CANARY_ENABLED: "true",
+    WECHATY_SELF_CANARY_TARGET_CONTACT_NAME: "文件传输助手",
+    WECHATY_SELF_CANARY_INTERVAL_SECONDS: "1800",
+    WECHATY_SELF_CANARY_ACK_TIMEOUT_SECONDS: "120",
+    WECHATY_SELF_CANARY_FAILURE_THRESHOLD: "2",
+    WECHATY_SELF_CANARY_AUTO_RESET_ENABLED: "true",
+  });
+
+  const config = getAppConfig();
+  const validation = validateAppConfig(config);
+
+  assert.equal(config.selfCanary?.enabled, true);
+  assert.equal(config.selfCanary?.targetContactName, "文件传输助手");
+  assert.equal(config.selfCanary?.intervalSeconds, 1800);
+  assert.equal(config.selfCanary?.ackTimeoutSeconds, 120);
+  assert.equal(config.selfCanary?.failureThreshold, 2);
+  assert.equal(config.selfCanary?.autoResetEnabled, true);
+  assert.deepEqual(validation.errors, []);
+});
+
+test("validateAppConfig rejects invalid self canary settings", () => {
+  applyEnv({
+    WECHATY_PUPPET: "wechaty-puppet-wechat",
+    WECHATY_CHANNELS_JSON: JSON.stringify([
+      {
+        code: "loss_a",
+        enabled: true,
+        scenario: "loss-report",
+        match: { type: "room_topic", value: "报损群A" },
+        deliveryTargets: [{ type: "contact_name", value: "店长A" }],
+        summarySchedule: "",
+      },
+    ]),
+    WECHATY_SELF_CANARY_ENABLED: "maybe",
+    WECHATY_SELF_CANARY_TARGET_CONTACT_NAME: "",
+    WECHATY_SELF_CANARY_INTERVAL_SECONDS: "0",
+    WECHATY_SELF_CANARY_ACK_TIMEOUT_SECONDS: "-1",
+    WECHATY_SELF_CANARY_FAILURE_THRESHOLD: "0",
+    WECHATY_SELF_CANARY_AUTO_RESET_ENABLED: "perhaps",
+  });
+
+  const validation = validateAppConfig(getAppConfig());
+
+  assert(validation.errors.some((error) => error.includes("Invalid WECHATY_SELF_CANARY_ENABLED")));
+  assert(validation.errors.some((error) => error.includes("Invalid WECHATY_SELF_CANARY_INTERVAL_SECONDS")));
+  assert(validation.errors.some((error) => error.includes("Invalid WECHATY_SELF_CANARY_ACK_TIMEOUT_SECONDS")));
+  assert(validation.errors.some((error) => error.includes("Invalid WECHATY_SELF_CANARY_FAILURE_THRESHOLD")));
+  assert(validation.errors.some((error) => error.includes("Invalid WECHATY_SELF_CANARY_AUTO_RESET_ENABLED")));
 });
 
 test("validateAppConfig rejects invalid log settings", () => {

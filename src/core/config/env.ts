@@ -50,6 +50,7 @@ export interface AppConfig {
   alertEmailTo: string[];
   watchdogMemoryLimitMb: number;
   watchdogMemoryPersistenceSeconds: number;
+  selfCanary?: SelfCanaryConfig;
   timeZone: string;
   debugContactName?: string;
   debugReceivedRoomMessageEnabled?: boolean;
@@ -69,6 +70,15 @@ export interface AppConfig {
   reimbursementExtractionModel?: string;
   reimbursementExtractionApiKey?: string;
   reimbursementExtractionBaseUrl: string;
+}
+
+export interface SelfCanaryConfig {
+  enabled: boolean;
+  targetContactName: string;
+  intervalSeconds: number;
+  ackTimeoutSeconds: number;
+  failureThreshold: number;
+  autoResetEnabled: boolean;
 }
 
 export type LogLevelName = "debug" | "info" | "warn" | "error";
@@ -358,6 +368,14 @@ export function getAppConfig(): AppConfig {
       "WECHATY_WATCHDOG_MEMORY_PERSISTENCE_SECONDS",
       300,
     ),
+    selfCanary: {
+      enabled: readBooleanEnv("WECHATY_SELF_CANARY_ENABLED", false),
+      targetContactName: readStringEnv("WECHATY_SELF_CANARY_TARGET_CONTACT_NAME", "文件传输助手"),
+      intervalSeconds: readConfiguredPositiveNumberEnv("WECHATY_SELF_CANARY_INTERVAL_SECONDS", 1800),
+      ackTimeoutSeconds: readConfiguredPositiveNumberEnv("WECHATY_SELF_CANARY_ACK_TIMEOUT_SECONDS", 120),
+      failureThreshold: readConfiguredPositiveNumberEnv("WECHATY_SELF_CANARY_FAILURE_THRESHOLD", 2),
+      autoResetEnabled: readBooleanEnv("WECHATY_SELF_CANARY_AUTO_RESET_ENABLED", false),
+    },
     timeZone: readStringEnv("WECHATY_TIMEZONE", "Asia/Shanghai") || "Asia/Shanghai",
     debugContactName: readOptionalEnv("WECHATY_DEBUG_CONTACT_NAME"),
     debugReceivedRoomMessageEnabled: readBooleanEnv(
@@ -400,6 +418,8 @@ export function validateAppConfig(config: AppConfig): ConfigValidationResult {
   const warnings: string[] = [];
   const rawAlertEmailEnabled = process.env.WECHATY_ALERT_EMAIL_ENABLED?.trim();
   const rawAlertSmtpSecure = process.env.WECHATY_ALERT_SMTP_SECURE?.trim();
+  const rawSelfCanaryEnabled = process.env.WECHATY_SELF_CANARY_ENABLED?.trim();
+  const rawSelfCanaryAutoResetEnabled = process.env.WECHATY_SELF_CANARY_AUTO_RESET_ENABLED?.trim();
 
   if (!config.puppet) {
     errors.push("Missing WECHATY_PUPPET");
@@ -440,6 +460,32 @@ export function validateAppConfig(config: AppConfig): ConfigValidationResult {
 
   if (rawAlertSmtpSecure && !isBooleanLiteral(rawAlertSmtpSecure)) {
     errors.push(`Invalid WECHATY_ALERT_SMTP_SECURE: ${rawAlertSmtpSecure}`);
+  }
+
+  if (rawSelfCanaryEnabled && !isBooleanLiteral(rawSelfCanaryEnabled)) {
+    errors.push(`Invalid WECHATY_SELF_CANARY_ENABLED: ${rawSelfCanaryEnabled}`);
+  }
+
+  if (rawSelfCanaryAutoResetEnabled && !isBooleanLiteral(rawSelfCanaryAutoResetEnabled)) {
+    errors.push(`Invalid WECHATY_SELF_CANARY_AUTO_RESET_ENABLED: ${rawSelfCanaryAutoResetEnabled}`);
+  }
+
+  if (config.selfCanary) {
+    if (!Number.isFinite(config.selfCanary.intervalSeconds) || config.selfCanary.intervalSeconds <= 0) {
+      errors.push(`Invalid WECHATY_SELF_CANARY_INTERVAL_SECONDS: ${config.selfCanary.intervalSeconds}`);
+    }
+
+    if (!Number.isFinite(config.selfCanary.ackTimeoutSeconds) || config.selfCanary.ackTimeoutSeconds <= 0) {
+      errors.push(`Invalid WECHATY_SELF_CANARY_ACK_TIMEOUT_SECONDS: ${config.selfCanary.ackTimeoutSeconds}`);
+    }
+
+    if (!Number.isFinite(config.selfCanary.failureThreshold) || config.selfCanary.failureThreshold <= 0) {
+      errors.push(`Invalid WECHATY_SELF_CANARY_FAILURE_THRESHOLD: ${config.selfCanary.failureThreshold}`);
+    }
+
+    if (config.selfCanary.enabled && !config.selfCanary.targetContactName.trim()) {
+      errors.push("Missing WECHATY_SELF_CANARY_TARGET_CONTACT_NAME");
+    }
   }
 
   if (!config.timeZone.trim()) {

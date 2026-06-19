@@ -80,6 +80,10 @@ export function getWatchdogStatePath(config?: AppConfig): string {
   return path.join(getStateDirPath(config), "watchdog-state.json");
 }
 
+export function getSelfCanaryStatePath(config?: AppConfig): string {
+  return path.join(getStateDirPath(config), "self-canary.json");
+}
+
 export function getMemoryCardFilePath(config?: AppConfig): string {
   const resolved = resolveConfig(config);
   return path.join(getStateDirPath(resolved), `${resolved.botName}.memory-card.json`);

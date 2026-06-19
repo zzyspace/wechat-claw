@@ -6,6 +6,7 @@ import { startRawAttachmentRetentionManager } from "../core/runtime/raw-attachme
 import { HealthReporter } from "../core/runtime/health.js";
 import { startManualSummaryRequestPoller } from "../core/runtime/manual-summary-request-poller.js";
 import { assertLogDirWritable, assertStateDirWritable } from "../core/runtime/state-paths.js";
+import { backupAndDisableMemoryCard, startSelfCanaryManager } from "../core/runtime/self-canary.js";
 import { startLossSummaryScheduler } from "../core/runtime/summary-scheduler.js";
 import { createWaitingForScanAlertEmail } from "../core/runtime/watchdog-check.js";
 import {
@@ -55,6 +56,18 @@ async function main() {
   let stopLogRetentionManager = () => {
     // no-op
   };
+  let stopSelfCanaryManager = () => {
+    // no-op
+  };
+  let notifySelfCanaryLogin = () => {
+    // no-op
+  };
+  let notifySelfCanaryLogout = () => {
+    // no-op
+  };
+  let observeSelfCanaryMessage = async (_message: any) => {
+    // no-op
+  };
   let stopWatchdogHeartbeatManager = () => {
     // no-op
   };
@@ -81,6 +94,7 @@ async function main() {
       stopManualSummaryRequestPoller();
       stopRawAttachmentRetentionManager();
       stopLogRetentionManager();
+      stopSelfCanaryManager();
 
       if (bot) {
         try {
@@ -252,8 +266,10 @@ async function main() {
       onLogin() {
         healthReporter?.markLogin();
         touchWatchdogHeartbeat();
+        notifySelfCanaryLogin();
       },
       onLogout({ name }) {
+        notifySelfCanaryLogout();
         healthReporter?.markError(new Error(`Bot logged out: ${name}`), {
           status: "degraded",
           category: "login_state_invalid",
@@ -267,11 +283,53 @@ async function main() {
         });
         touchWatchdogHeartbeat();
       },
-      onMessage() {
+      async onMessage(message) {
         healthReporter?.markMessage();
         touchWatchdogHeartbeat();
+        await observeSelfCanaryMessage(message);
       },
     });
+
+    const selfCanaryManager = startSelfCanaryManager({
+      bot,
+      config,
+      logger,
+      onFailureThresholdReached(payload) {
+        try {
+          const resetResult = backupAndDisableMemoryCard(config);
+          healthReporter?.markError(new Error("Self canary failed and fresh login reset was requested."), {
+            status: "degraded",
+            category: "login_state_invalid",
+          });
+          touchWatchdogHeartbeat();
+          requestSupervisorRestart("SELF_CANARY_FAILURE", {
+            ...payload,
+            backupPath: resetResult.backupPath ?? "(none)",
+            disabledPath: resetResult.disabledPath ?? "(none)",
+          });
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          healthReporter?.markError(error, {
+            status: "degraded",
+          });
+          touchWatchdogHeartbeat();
+          logger.error("Failed to prepare self canary fresh login reset", {
+            ...payload,
+            message,
+            stack: error instanceof Error ? error.stack : undefined,
+          });
+          requestSupervisorRestart("SELF_CANARY_FAILURE_PREP_ERROR", payload);
+        }
+      },
+    });
+    stopSelfCanaryManager = () => selfCanaryManager.stop();
+    notifySelfCanaryLogin = () => selfCanaryManager.notifyLogin();
+    notifySelfCanaryLogout = () => selfCanaryManager.notifyLogout();
+    observeSelfCanaryMessage = (message: any) => selfCanaryManager.observeMessage(message);
+
+    if (bot.isLoggedIn) {
+      notifySelfCanaryLogin();
+    }
 
     const scheduler = startLossSummaryScheduler({
       bot,
