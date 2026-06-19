@@ -70,3 +70,46 @@ test("sendTextToTargets supports contact_name and room_topic without aborting on
   assert.deepEqual(delivered, ["contact:hello", "room:hello"]);
   assert.equal(results[2]?.delivered, false);
 });
+
+test("sendTextToTargets resolves 文件传输助手 via filehelper contact id", async () => {
+  const delivered: string[] = [];
+  const bot = {
+    Contact: {
+      find: async (query: Record<string, unknown>) => {
+        if (query.id === "filehelper") {
+          return {
+            async say(text: string) {
+              delivered.push(`filehelper:${text}`);
+            },
+          };
+        }
+
+        if (query.name === "文件传输助手") {
+          return null;
+        }
+
+        return null;
+      },
+    },
+    on() {
+      return this;
+    },
+    async start() {
+      // no-op
+    },
+    async stop() {
+      // no-op
+    },
+  } satisfies WechatyInstance;
+
+  const results = await sendTextToTargets(
+    bot,
+    [{ type: "contact_name", value: "文件传输助手" }],
+    "ping",
+    logger,
+  );
+
+  assert.equal(results.length, 1);
+  assert.equal(results[0]?.delivered, true);
+  assert.deepEqual(delivered, ["filehelper:ping"]);
+});

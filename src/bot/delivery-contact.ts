@@ -9,6 +9,11 @@ export interface DeliveryTargetResult {
   error?: string;
 }
 
+function isFileHelperTarget(value: string) {
+  const normalized = value.trim().toLowerCase();
+  return normalized === "filehelper" || value.trim() === "文件传输助手";
+}
+
 export async function findDeliveryTarget(
   bot: WechatyInstance,
   target: DeliveryTarget,
@@ -16,6 +21,14 @@ export async function findDeliveryTarget(
   if (target.type === "contact_name") {
     if (typeof bot.Contact?.find !== "function") {
       return null;
+    }
+
+    if (isFileHelperTarget(target.value)) {
+      const fileHelperContact = await bot.Contact.find({ id: "filehelper" });
+
+      if (fileHelperContact) {
+        return fileHelperContact;
+      }
     }
 
     return bot.Contact.find({ name: target.value });
