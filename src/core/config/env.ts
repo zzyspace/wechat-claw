@@ -75,7 +75,8 @@ export interface AppConfig {
 export interface SelfCanaryConfig {
   enabled: boolean;
   targetContactName: string;
-  intervalSeconds: number;
+  intervalMinSeconds: number;
+  intervalMaxSeconds: number;
   ackTimeoutSeconds: number;
   failureThreshold: number;
   autoResetEnabled: boolean;
@@ -165,6 +166,55 @@ function readConfiguredPositiveNumberEnv(name: string, fallback: number): number
   }
 
   return Number(raw);
+}
+
+function parsePositiveNumberRangeLiteral(raw: string): { min: number; max: number } | undefined {
+  const trimmed = raw.trim();
+
+  if (!trimmed) {
+    return undefined;
+  }
+
+  const single = Number(trimmed);
+  if (Number.isFinite(single) && single > 0) {
+    return {
+      min: single,
+      max: single,
+    };
+  }
+
+  const match = trimmed.match(/^(\d+)\s*-\s*(\d+)$/);
+  if (!match) {
+    return undefined;
+  }
+
+  const min = Number(match[1]);
+  const max = Number(match[2]);
+
+  if (!Number.isFinite(min) || !Number.isFinite(max) || min <= 0 || max <= 0 || min > max) {
+    return undefined;
+  }
+
+  return {
+    min,
+    max,
+  };
+}
+
+function readConfiguredPositiveNumberRangeEnv(
+  name: string,
+  fallback: number,
+): { min: number; max: number } {
+  const raw = process.env[name]?.trim();
+
+  if (!raw) {
+    return {
+      min: fallback,
+      max: fallback,
+    };
+  }
+
+  return parsePositiveNumberRangeLiteral(raw) ?? { min: Number.NaN, max: Number.NaN };
 }
 
 function readConfiguredNonNegativeNumberEnv(name: string, fallback: number): number {
@@ -343,6 +393,10 @@ export function getAppConfig(): AppConfig {
     legacyDeliveryContactName: readOptionalEnv("WECHATY_DELIVERY_CONTACT_NAME"),
     legacySummaryCron: summaryCron,
   });
+  const selfCanaryIntervalRange = readConfiguredPositiveNumberRangeEnv(
+    "WECHATY_SELF_CANARY_INTERVAL_SECONDS",
+    1800,
+  );
 
   return {
     puppet: readOptionalEnv("WECHATY_PUPPET"),
@@ -371,7 +425,8 @@ export function getAppConfig(): AppConfig {
     selfCanary: {
       enabled: readBooleanEnv("WECHATY_SELF_CANARY_ENABLED", false),
       targetContactName: readStringEnv("WECHATY_SELF_CANARY_TARGET_CONTACT_NAME", "文件传输助手"),
-      intervalSeconds: readConfiguredPositiveNumberEnv("WECHATY_SELF_CANARY_INTERVAL_SECONDS", 1800),
+      intervalMinSeconds: selfCanaryIntervalRange.min,
+      intervalMaxSeconds: selfCanaryIntervalRange.max,
       ackTimeoutSeconds: readConfiguredPositiveNumberEnv("WECHATY_SELF_CANARY_ACK_TIMEOUT_SECONDS", 120),
       failureThreshold: readConfiguredPositiveNumberEnv("WECHATY_SELF_CANARY_FAILURE_THRESHOLD", 2),
       autoResetEnabled: readBooleanEnv("WECHATY_SELF_CANARY_AUTO_RESET_ENABLED", false),
@@ -419,6 +474,7 @@ export function validateAppConfig(config: AppConfig): ConfigValidationResult {
   const rawAlertEmailEnabled = process.env.WECHATY_ALERT_EMAIL_ENABLED?.trim();
   const rawAlertSmtpSecure = process.env.WECHATY_ALERT_SMTP_SECURE?.trim();
   const rawSelfCanaryEnabled = process.env.WECHATY_SELF_CANARY_ENABLED?.trim();
+  const rawSelfCanaryIntervalSeconds = process.env.WECHATY_SELF_CANARY_INTERVAL_SECONDS?.trim();
   const rawSelfCanaryAutoResetEnabled = process.env.WECHATY_SELF_CANARY_AUTO_RESET_ENABLED?.trim();
 
   if (!config.puppet) {
@@ -471,8 +527,20 @@ export function validateAppConfig(config: AppConfig): ConfigValidationResult {
   }
 
   if (config.selfCanary) {
-    if (!Number.isFinite(config.selfCanary.intervalSeconds) || config.selfCanary.intervalSeconds <= 0) {
-      errors.push(`Invalid WECHATY_SELF_CANARY_INTERVAL_SECONDS: ${config.selfCanary.intervalSeconds}`);
+    if (rawSelfCanaryIntervalSeconds && !parsePositiveNumberRangeLiteral(rawSelfCanaryIntervalSeconds)) {
+      errors.push(`Invalid WECHATY_SELF_CANARY_INTERVAL_SECONDS: ${rawSelfCanaryIntervalSeconds}`);
+    }
+
+    if (
+      !Number.isFinite(config.selfCanary.intervalMinSeconds) ||
+      config.selfCanary.intervalMinSeconds <= 0 ||
+      !Number.isFinite(config.selfCanary.intervalMaxSeconds) ||
+      config.selfCanary.intervalMaxSeconds <= 0 ||
+      config.selfCanary.intervalMinSeconds > config.selfCanary.intervalMaxSeconds
+    ) {
+      errors.push(
+        `Invalid WECHATY_SELF_CANARY_INTERVAL_SECONDS range: ${config.selfCanary.intervalMinSeconds}-${config.selfCanary.intervalMaxSeconds}`,
+      );
     }
 
     if (!Number.isFinite(config.selfCanary.ackTimeoutSeconds) || config.selfCanary.ackTimeoutSeconds <= 0) {

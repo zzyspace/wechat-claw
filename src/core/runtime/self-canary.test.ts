@@ -63,7 +63,8 @@ function createConfig(
     selfCanary: {
       enabled: true,
       targetContactName: "文件传输助手",
-      intervalSeconds: 1,
+      intervalMinSeconds: 1,
+      intervalMaxSeconds: 1,
       ackTimeoutSeconds: 1,
       failureThreshold: options.failureThreshold ?? 2,
       autoResetEnabled: options.autoResetEnabled ?? false,

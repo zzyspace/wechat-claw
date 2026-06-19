@@ -15,7 +15,9 @@ export interface SelfCanaryState {
   targetContactName: string;
   enabled: boolean;
   autoResetEnabled: boolean;
-  intervalSeconds: number;
+  intervalMinSeconds: number;
+  intervalMaxSeconds: number;
+  lastScheduledIntervalSeconds: number | null;
   ackTimeoutSeconds: number;
   failureThreshold: number;
   lastSentAt: string | null;
@@ -45,7 +47,9 @@ function createState(config: AppConfig): SelfCanaryState {
     targetContactName: canary?.targetContactName ?? "",
     enabled: canary?.enabled ?? false,
     autoResetEnabled: canary?.autoResetEnabled ?? false,
-    intervalSeconds: canary?.intervalSeconds ?? 0,
+    intervalMinSeconds: canary?.intervalMinSeconds ?? 0,
+    intervalMaxSeconds: canary?.intervalMaxSeconds ?? 0,
+    lastScheduledIntervalSeconds: null,
     ackTimeoutSeconds: canary?.ackTimeoutSeconds ?? 0,
     failureThreshold: canary?.failureThreshold ?? 0,
     lastSentAt: null,
@@ -131,7 +135,8 @@ export function startSelfCanaryManager(input: {
   const { bot, config, logger } = input;
   const canary = config.selfCanary;
   const initialDelayMs = input.initialDelayMs ?? DEFAULT_INITIAL_DELAY_MS;
-  const intervalMs = (canary?.intervalSeconds ?? 0) * 1000;
+  const intervalMinMs = (canary?.intervalMinSeconds ?? 0) * 1000;
+  const intervalMaxMs = (canary?.intervalMaxSeconds ?? 0) * 1000;
   const ackTimeoutMs = (canary?.ackTimeoutSeconds ?? 0) * 1000;
   let stopped = false;
   let running = false;
@@ -161,6 +166,10 @@ export function startSelfCanaryManager(input: {
       return;
     }
 
+    updateState({
+      lastScheduledIntervalSeconds: Math.max(1, Math.round(delayMs / 1000)),
+    });
+
     if (sendTimer) {
       clearTimeout(sendTimer);
     }
@@ -169,6 +178,14 @@ export function startSelfCanaryManager(input: {
       void sendCanary();
     }, delayMs);
     sendTimer.unref();
+  }
+
+  function pickRandomIntervalMs() {
+    if (intervalMaxMs <= intervalMinMs) {
+      return intervalMinMs;
+    }
+
+    return intervalMinMs + Math.floor(Math.random() * (intervalMaxMs - intervalMinMs + 1));
   }
 
   function handleFailure(reason: string, deliveryError?: string) {
@@ -220,7 +237,7 @@ export function startSelfCanaryManager(input: {
       });
     }
 
-    scheduleNextSend(intervalMs);
+    scheduleNextSend(pickRandomIntervalMs());
   }
 
   async function sendCanary() {
@@ -315,7 +332,7 @@ export function startSelfCanaryManager(input: {
       token,
     });
 
-    scheduleNextSend(intervalMs);
+    scheduleNextSend(pickRandomIntervalMs());
   }
 
   function notifyLogin() {

@@ -275,7 +275,7 @@ test("getAppConfig parses self canary settings", () => {
     ]),
     WECHATY_SELF_CANARY_ENABLED: "true",
     WECHATY_SELF_CANARY_TARGET_CONTACT_NAME: "文件传输助手",
-    WECHATY_SELF_CANARY_INTERVAL_SECONDS: "1800",
+    WECHATY_SELF_CANARY_INTERVAL_SECONDS: "1800-2700",
     WECHATY_SELF_CANARY_ACK_TIMEOUT_SECONDS: "120",
     WECHATY_SELF_CANARY_FAILURE_THRESHOLD: "2",
     WECHATY_SELF_CANARY_AUTO_RESET_ENABLED: "true",
@@ -286,7 +286,8 @@ test("getAppConfig parses self canary settings", () => {
 
   assert.equal(config.selfCanary?.enabled, true);
   assert.equal(config.selfCanary?.targetContactName, "文件传输助手");
-  assert.equal(config.selfCanary?.intervalSeconds, 1800);
+  assert.equal(config.selfCanary?.intervalMinSeconds, 1800);
+  assert.equal(config.selfCanary?.intervalMaxSeconds, 2700);
   assert.equal(config.selfCanary?.ackTimeoutSeconds, 120);
   assert.equal(config.selfCanary?.failureThreshold, 2);
   assert.equal(config.selfCanary?.autoResetEnabled, true);
@@ -308,7 +309,7 @@ test("validateAppConfig rejects invalid self canary settings", () => {
     ]),
     WECHATY_SELF_CANARY_ENABLED: "maybe",
     WECHATY_SELF_CANARY_TARGET_CONTACT_NAME: "",
-    WECHATY_SELF_CANARY_INTERVAL_SECONDS: "0",
+    WECHATY_SELF_CANARY_INTERVAL_SECONDS: "2700-1800",
     WECHATY_SELF_CANARY_ACK_TIMEOUT_SECONDS: "-1",
     WECHATY_SELF_CANARY_FAILURE_THRESHOLD: "0",
     WECHATY_SELF_CANARY_AUTO_RESET_ENABLED: "perhaps",
