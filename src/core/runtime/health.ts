@@ -118,6 +118,10 @@ export class HealthReporter {
     });
   }
 
+  markExternalMessage() {
+    this.markMessage();
+  }
+
   markSummary() {
     this.update({
       lastSummaryAt: new Date().toISOString(),

@@ -6,7 +6,11 @@ import { startRawAttachmentRetentionManager } from "../core/runtime/raw-attachme
 import { HealthReporter } from "../core/runtime/health.js";
 import { startManualSummaryRequestPoller } from "../core/runtime/manual-summary-request-poller.js";
 import { assertLogDirWritable, assertStateDirWritable } from "../core/runtime/state-paths.js";
-import { backupAndDisableMemoryCard, startSelfCanaryManager } from "../core/runtime/self-canary.js";
+import {
+  backupAndDisableMemoryCard,
+  extractSelfCanaryToken,
+  startSelfCanaryManager,
+} from "../core/runtime/self-canary.js";
 import { startLossSummaryScheduler } from "../core/runtime/summary-scheduler.js";
 import { createWaitingForScanAlertEmail } from "../core/runtime/watchdog-check.js";
 import {
@@ -284,7 +288,14 @@ async function main() {
         touchWatchdogHeartbeat();
       },
       async onMessage(message) {
-        healthReporter?.markMessage();
+        const text = typeof message?.text === "function" ? String(message.text()) : "";
+        const isSelfCanaryMessage =
+          Boolean(message?.self && typeof message.self === "function" && message.self()) &&
+          Boolean(extractSelfCanaryToken(text));
+
+        if (!isSelfCanaryMessage) {
+          healthReporter?.markExternalMessage();
+        }
         touchWatchdogHeartbeat();
         await observeSelfCanaryMessage(message);
       },

@@ -105,3 +105,14 @@ test("HealthReporter clears degradedSinceAt after recovery", () => {
   assert.equal(recovered.status, "logged_in");
   assert.equal(recovered.degradedSinceAt, null);
 });
+
+test("HealthReporter markExternalMessage updates lastMessageAt", () => {
+  const stateDir = fs.mkdtempSync(path.join(os.tmpdir(), "wechat-claw-health-"));
+  const reporter = new HealthReporter(createConfig(stateDir), logger);
+  reporter.initialize();
+
+  assert.equal(reporter.getSnapshot().lastMessageAt, null);
+
+  reporter.markExternalMessage();
+  assert.ok(reporter.getSnapshot().lastMessageAt);
+});
