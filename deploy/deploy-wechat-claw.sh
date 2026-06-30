@@ -245,6 +245,11 @@ prepare_puppeteer_cache() {
   run_as_app_user "if [[ -d 'node_modules/puppeteer/.local-chromium' ]] && [[ -z \"\$(ls -A '${PUPPETEER_CACHE_DIR}' 2>/dev/null)\" ]]; then cp -R 'node_modules/puppeteer/.local-chromium/.' '${PUPPETEER_CACHE_DIR}/'; fi"
 }
 
+bind_puppeteer_cache_into_runtime() {
+  echo "[deploy] Binding persistent Puppeteer cache into runtime path"
+  run_as_app_user "if [[ -d 'node_modules/puppeteer' ]]; then rm -rf 'node_modules/puppeteer/.local-chromium'; ln -sfn '${PUPPETEER_CACHE_DIR}' 'node_modules/puppeteer/.local-chromium'; fi"
+}
+
 install_dependencies_if_needed() {
   local install_reason tree_validation_output
 
@@ -265,11 +270,13 @@ install_dependencies_if_needed() {
     prepare_puppeteer_cache
     run_as_app_user "PUPPETEER_DOWNLOAD_PATH='${PUPPETEER_CACHE_DIR}' npm ci --include=dev"
     refresh_postinstall_patch
+    bind_puppeteer_cache_into_runtime
     return
   fi
 
   echo "[deploy] Skipping npm ci (installed dependency tree matches package-lock.json)"
   refresh_postinstall_patch
+  bind_puppeteer_cache_into_runtime
 }
 
 echo "[deploy] Pulling latest code from origin/main"
