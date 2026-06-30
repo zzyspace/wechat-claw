@@ -8,7 +8,9 @@
     "doc": "docs"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && node scripts/copy-admin-assets.mjs",
+    "admin:dev": "node --loader ts-node/esm src/admin/server.ts",
+    "admin:start": "node dist/admin/server.js",
     "dev": "node --loader ts-node/esm src/app/bootstrap.ts",
     "doctor": "node --loader ts-node/esm src/app/doctor.ts",
     "inspect:messages": "node --loader ts-node/esm src/app/inspect-recent-messages.ts",
@@ -21,7 +23,7 @@
     "summary:print:weekly": "node --loader ts-node/esm src/app/print-loss-summary.ts --type weekly",
     "summary:send": "node --loader ts-node/esm src/app/send-loss-summary.ts",
     "summary:loss:recent": "node --loader ts-node/esm src/app/render-loss-summary-recent.ts",
-    "test": "npm run build && node --test dist/core/config/env.test.js dist/core/channels/router.test.js dist/core/logging/logger.test.js dist/core/logging/show-logs-command.test.js dist/core/alerts/smtp-client.test.js dist/core/runtime/health.test.js dist/core/runtime/watchdog-heartbeat.test.js dist/core/runtime/watchdog-check.test.js dist/core/runtime/self-canary.test.js dist/bot/cold-start-filter.test.js dist/bot/delivery-contact.test.js dist/bot/wechaty-client.test.js dist/bot/message-handler.test.js dist/scenarios/loss-report/daily-summary.test.js dist/scenarios/loss-report/model-provider.test.js dist/scenarios/reimbursement/extractor.test.js dist/scenarios/reimbursement/repository.test.js dist/core/runtime/manual-summary-request.test.js dist/core/runtime/manual-summary-request-command.test.js dist/core/runtime/manual-summary-request-gate.test.js dist/core/runtime/loss-summary-delivery.test.js dist/core/runtime/log-retention.test.js dist/core/runtime/raw-attachment-retention.test.js dist/core/runtime/reimbursement-print-command.test.js dist/core/runtime/summary-print-command.test.js",
+    "test": "npm run build && node --test dist/core/config/env.test.js dist/core/channels/router.test.js dist/core/logging/logger.test.js dist/core/logging/show-logs-command.test.js dist/core/alerts/smtp-client.test.js dist/core/runtime/health.test.js dist/core/runtime/watchdog-heartbeat.test.js dist/core/runtime/watchdog-check.test.js dist/core/runtime/self-canary.test.js dist/bot/cold-start-filter.test.js dist/bot/delivery-contact.test.js dist/bot/wechaty-client.test.js dist/bot/message-handler.test.js dist/scenarios/loss-report/daily-summary.test.js dist/scenarios/loss-report/model-provider.test.js dist/scenarios/reimbursement/extractor.test.js dist/scenarios/reimbursement/repository.test.js dist/core/runtime/manual-summary-request.test.js dist/core/runtime/manual-summary-request-command.test.js dist/core/runtime/manual-summary-request-gate.test.js dist/core/runtime/loss-summary-delivery.test.js dist/core/runtime/log-retention.test.js dist/core/runtime/raw-attachment-retention.test.js dist/core/runtime/reimbursement-print-command.test.js dist/core/runtime/summary-print-command.test.js dist/admin/app.test.js",
     "postinstall": "node scripts/patch-wechaty-puppet-wechat.mjs",
     "start": "node dist/app/bootstrap.js"
   },
@@ -31,12 +33,14 @@
   "dependencies": {
     "better-sqlite3": "^12.10.0",
     "dotenv": "^16.6.1",
+    "express": "^5.2.1",
     "qrcode-terminal": "^0.12.0",
     "wechaty": "^1.20.2",
     "wechaty-puppet-wechat": "^1.18.4"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
+    "@types/express": "^5.0.6",
     "@types/node": "^24.12.4",
     "ts-node": "^10.9.2",
     "typescript": "^5.9.3"

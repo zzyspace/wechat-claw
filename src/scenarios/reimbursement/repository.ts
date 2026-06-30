@@ -1,10 +1,16 @@
+import fs from "node:fs";
+
 import { getDatabase } from "../../core/storage/database.js";
 import { getZonedDateParts, zonedDateTimeToUtc } from "../../core/runtime/timezone.js";
 import {
   DEFAULT_REIMBURSEMENT_EXPENSE_CATEGORY,
+  getReimbursementExpenseCategoryLabel,
   mergeReimbursementExpenseCategory,
 } from "./categories.js";
 import type {
+  AdminReimbursementDetail,
+  AdminReimbursementListItem,
+  AdminReimbursementReportSourceDetail,
   ReimbursementEvidenceType,
   ReimbursementExpenseCategory,
   ReimbursementReportDetail,
@@ -12,6 +18,7 @@ import type {
   ReimbursementReceiptTargetType,
   ReimbursementReportInput,
   ReimbursementReportRecord,
+  ReimbursementSourceAttachmentRecord,
   ReimbursementReportSourceDetail,
   ReimbursementReportSourceRecord,
   ReimbursementSourceRole,
@@ -202,6 +209,10 @@ function mapReceiptDeliveryRow(row: {
 function normalizeSourceText(text: string) {
   const normalized = text === "(非文本消息)" ? "" : text.trim();
   return normalized;
+}
+
+function escapeLikePattern(value: string) {
+  return value.replaceAll("\\", "\\\\").replaceAll("%", "\\%").replaceAll("_", "\\_");
 }
 
 function selectReportById(id: number): ReimbursementReportRecord {
@@ -1366,6 +1377,127 @@ function listSourcesByReportIds(reportIds: number[]): Map<number, ReimbursementR
   return grouped;
 }
 
+function listAttachmentsByRawMessageIds(
+  rawMessageIds: number[],
+): Map<number, ReimbursementSourceAttachmentRecord[]> {
+  const grouped = new Map<number, ReimbursementSourceAttachmentRecord[]>();
+
+  if (rawMessageIds.length === 0) {
+    return grouped;
+  }
+
+  const db = getDatabase();
+  const placeholders = rawMessageIds.map(() => "?").join(", ");
+  const rows = db
+    .prepare(
+      `
+        SELECT
+          id,
+          raw_message_id as rawMessageId,
+          attachment_type as type,
+          local_path as localPath,
+          sha256,
+          mime_type as mimeType,
+          created_at as createdAt
+        FROM message_attachments
+        WHERE raw_message_id IN (${placeholders})
+        ORDER BY raw_message_id ASC, id ASC
+      `,
+    )
+    .all(...rawMessageIds) as Array<{
+    id: number;
+    rawMessageId: number;
+    type: string;
+    localPath: string;
+    sha256: string;
+    mimeType?: string | null;
+    createdAt: string;
+  }>;
+
+  for (const row of rows) {
+    const attachment: ReimbursementSourceAttachmentRecord = {
+      id: row.id,
+      rawMessageId: row.rawMessageId,
+      type: row.type,
+      localPath: row.localPath,
+      sha256: row.sha256,
+      mimeType: row.mimeType ?? undefined,
+      createdAt: row.createdAt,
+      exists: fs.existsSync(row.localPath),
+    };
+    const list = grouped.get(row.rawMessageId) ?? [];
+    list.push(attachment);
+    grouped.set(row.rawMessageId, list);
+  }
+
+  return grouped;
+}
+
+function listAdminSourcesByReportIds(
+  reportIds: number[],
+): Map<number, AdminReimbursementReportSourceDetail[]> {
+  const sourcesByReportId = listSourcesByReportIds(reportIds);
+  const rawMessageIds = Array.from(sourcesByReportId.values())
+    .flat()
+    .map((source) => source.rawMessageId);
+  const attachmentsByRawMessageId = listAttachmentsByRawMessageIds(rawMessageIds);
+  const grouped = new Map<number, AdminReimbursementReportSourceDetail[]>();
+
+  for (const [reportId, sources] of sourcesByReportId.entries()) {
+    grouped.set(
+      reportId,
+      sources.map((source) => ({
+        ...source,
+        attachments: attachmentsByRawMessageId.get(source.rawMessageId) ?? [],
+      })),
+    );
+  }
+
+  return grouped;
+}
+
+function listReceiptDeliveriesByReportIds(
+  reportIds: number[],
+): Map<number, ReimbursementReceiptDeliveryRecord[]> {
+  const grouped = new Map<number, ReimbursementReceiptDeliveryRecord[]>();
+
+  if (reportIds.length === 0) {
+    return grouped;
+  }
+
+  const db = getDatabase();
+  const placeholders = reportIds.map(() => "?").join(", ");
+  const rows = db
+    .prepare(
+      `
+        SELECT
+          id,
+          reimbursement_report_id as reimbursementReportId,
+          channel_code as channelCode,
+          target_type as targetType,
+          target_value as targetValue,
+          receipt_text as receiptText,
+          sent_at as sentAt,
+          raw_message_id as rawMessageId,
+          created_at as createdAt,
+          updated_at as updatedAt
+        FROM reimbursement_receipt_deliveries
+        WHERE reimbursement_report_id IN (${placeholders})
+        ORDER BY reimbursement_report_id ASC, id ASC
+      `,
+    )
+    .all(...reportIds) as Parameters<typeof mapReceiptDeliveryRow>[0][];
+
+  for (const row of rows) {
+    const delivery = mapReceiptDeliveryRow(row);
+    const list = grouped.get(delivery.reimbursementReportId) ?? [];
+    list.push(delivery);
+    grouped.set(delivery.reimbursementReportId, list);
+  }
+
+  return grouped;
+}
+
 export function listReimbursementReportDetails(options?: {
   channelCode?: string;
   limit?: number;
@@ -1417,6 +1549,196 @@ export function listReimbursementReportDetails(options?: {
     ...report,
     sources: sourcesByReportId.get(report.id) ?? [],
   }));
+}
+
+export function listAdminReimbursementReports(options?: {
+  search?: string;
+  channelCode?: string;
+  reporter?: string;
+  expenseCategory?: ReimbursementExpenseCategory;
+  needsReview?: boolean;
+  voucherDateFrom?: string;
+  voucherDateTo?: string;
+  limit?: number;
+  offset?: number;
+}): {
+  total: number;
+  limit: number;
+  offset: number;
+  items: AdminReimbursementListItem[];
+} {
+  const db = getDatabase();
+  const limit =
+    Number.isFinite(options?.limit) && Number(options?.limit) > 0 ? Math.min(Number(options?.limit), 200) : 50;
+  const offset =
+    Number.isFinite(options?.offset) && Number(options?.offset) >= 0 ? Math.max(Number(options?.offset), 0) : 0;
+  const clauses: string[] = [];
+  const params: Record<string, number | string> = {};
+  const search = options?.search?.trim() ?? "";
+
+  if (options?.channelCode) {
+    clauses.push("channel_code = @channelCode");
+    params.channelCode = options.channelCode;
+  }
+
+  if (options?.reporter) {
+    clauses.push("reporter = @reporter");
+    params.reporter = options.reporter;
+  }
+
+  if (options?.expenseCategory) {
+    clauses.push("expense_category = @expenseCategory");
+    params.expenseCategory = options.expenseCategory;
+  }
+
+  if (typeof options?.needsReview === "boolean") {
+    clauses.push("needs_review = @needsReview");
+    params.needsReview = options.needsReview ? 1 : 0;
+  }
+
+  if (options?.voucherDateFrom) {
+    clauses.push("voucher_date >= @voucherDateFrom");
+    params.voucherDateFrom = options.voucherDateFrom;
+  }
+
+  if (options?.voucherDateTo) {
+    clauses.push("voucher_date <= @voucherDateTo");
+    params.voucherDateTo = options.voucherDateTo;
+  }
+
+  if (search) {
+    if (/^\d+$/.test(search)) {
+      clauses.push("id = @searchId");
+      params.searchId = Number(search);
+    } else {
+      clauses.push(
+        `(
+          channel_name LIKE @search ESCAPE '\\'
+          OR reporter LIKE @search ESCAPE '\\'
+          OR IFNULL(merchant, '') LIKE @search ESCAPE '\\'
+          OR IFNULL(document_no, '') LIKE @search ESCAPE '\\'
+          OR IFNULL(note, '') LIKE @search ESCAPE '\\'
+          OR IFNULL(ocr_text, '') LIKE @search ESCAPE '\\'
+        )`,
+      );
+      params.search = `%${escapeLikePattern(search)}%`;
+    }
+  }
+
+  const whereSql = clauses.length > 0 ? `WHERE ${clauses.join(" AND ")}` : "";
+  const rows = db
+    .prepare(
+      `
+        SELECT
+          id,
+          channel_code as channelCode,
+          channel_name as channelName,
+          reporter,
+          amount,
+          currency,
+          expense_category as expenseCategory,
+          voucher_date as voucherDate,
+          voucher_date_source as voucherDateSource,
+          note,
+          evidence_type as evidenceType,
+          merchant,
+          document_no as documentNo,
+          voucher_type as voucherType,
+          ocr_text as ocrText,
+          confidence,
+          needs_review as needsReview,
+          created_at as createdAt,
+          updated_at as updatedAt
+        FROM reimbursement_reports
+        ${whereSql}
+        ORDER BY id DESC
+        LIMIT @limit OFFSET @offset
+      `,
+    )
+    .all({
+      ...params,
+      limit,
+      offset,
+    }) as Parameters<typeof mapReportRow>[0][];
+  const total = db
+    .prepare(`SELECT COUNT(*) as count FROM reimbursement_reports ${whereSql}`)
+    .get(params) as { count: number };
+
+  return {
+    total: total.count,
+    limit,
+    offset,
+    items: rows.map((row) => {
+      const report = mapReportRow(row);
+      return {
+        ...report,
+        expenseCategoryLabel: getReimbursementExpenseCategoryLabel(report.expenseCategory),
+      };
+    }),
+  };
+}
+
+export function getAdminReimbursementReportDetail(reportId: number): AdminReimbursementDetail | null {
+  const report = findReportById(reportId);
+
+  if (!report) {
+    return null;
+  }
+
+  return {
+    ...report,
+    expenseCategoryLabel: getReimbursementExpenseCategoryLabel(report.expenseCategory),
+    sources: listAdminSourcesByReportIds([reportId]).get(reportId) ?? [],
+    receiptDeliveries: listReceiptDeliveriesByReportIds([reportId]).get(reportId) ?? [],
+  };
+}
+
+export function findAdminReimbursementAttachment(
+  attachmentId: number,
+): ReimbursementSourceAttachmentRecord | null {
+  const db = getDatabase();
+  const row = db
+    .prepare(
+      `
+        SELECT
+          ma.id,
+          ma.raw_message_id as rawMessageId,
+          ma.attachment_type as type,
+          ma.local_path as localPath,
+          ma.sha256,
+          ma.mime_type as mimeType,
+          ma.created_at as createdAt
+        FROM message_attachments ma
+        INNER JOIN reimbursement_report_sources rrs
+          ON rrs.raw_message_id = ma.raw_message_id
+        WHERE ma.id = ?
+        LIMIT 1
+      `,
+    )
+    .get(attachmentId) as {
+    id: number;
+    rawMessageId: number;
+    type: string;
+    localPath: string;
+    sha256: string;
+    mimeType?: string | null;
+    createdAt: string;
+  } | undefined;
+
+  if (!row) {
+    return null;
+  }
+
+  return {
+    id: row.id,
+    rawMessageId: row.rawMessageId,
+    type: row.type,
+    localPath: row.localPath,
+    sha256: row.sha256,
+    mimeType: row.mimeType ?? undefined,
+    createdAt: row.createdAt,
+    exists: fs.existsSync(row.localPath),
+  };
 }
 
 function mergeReportNotes(left: string, right: string) {

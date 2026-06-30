@@ -108,6 +108,21 @@ export interface ReimbursementReportDetail extends ReimbursementReportRecord {
   sources: ReimbursementReportSourceDetail[];
 }
 
+export interface ReimbursementSourceAttachmentRecord {
+  id: number;
+  rawMessageId: number;
+  type: string;
+  localPath: string;
+  sha256: string;
+  mimeType?: string;
+  createdAt: string;
+  exists: boolean;
+}
+
+export interface AdminReimbursementReportSourceDetail extends ReimbursementReportSourceDetail {
+  attachments: ReimbursementSourceAttachmentRecord[];
+}
+
 export interface ReimbursementReceiptDeliveryRecord {
   id: number;
   reimbursementReportId: number;
@@ -119,4 +134,14 @@ export interface ReimbursementReceiptDeliveryRecord {
   rawMessageId?: number;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface AdminReimbursementListItem extends ReimbursementReportRecord {
+  expenseCategoryLabel: string;
+}
+
+export interface AdminReimbursementDetail extends ReimbursementReportRecord {
+  expenseCategoryLabel: string;
+  sources: AdminReimbursementReportSourceDetail[];
+  receiptDeliveries: ReimbursementReceiptDeliveryRecord[];
 }

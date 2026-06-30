@@ -1,0 +1,16 @@
+[Unit]
+Description=wechat-claw reimbursement admin service
+After=network.target
+
+[Service]
+Type=simple
+User=wechatclaw
+WorkingDirectory=/opt/wechat-claw/current
+EnvironmentFile=/etc/wechat-claw.env
+ExecStart=/usr/bin/node dist/admin/server.js
+Restart=always
+RestartSec=5
+TimeoutStopSec=20
+
+[Install]
+WantedBy=multi-user.target

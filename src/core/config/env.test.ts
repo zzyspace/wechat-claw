@@ -44,6 +44,10 @@ const managedEnvKeys = [
   "WECHATY_REIMBURSEMENT_EXTRACTION_MODEL",
   "WECHATY_REIMBURSEMENT_EXTRACTION_API_KEY",
   "WECHATY_REIMBURSEMENT_EXTRACTION_BASE_URL",
+  "WECHATY_ADMIN_HOST",
+  "WECHATY_ADMIN_PORT",
+  "WECHATY_ADMIN_USERNAME",
+  "WECHATY_ADMIN_PASSWORD",
   "WECHATY_ENV_FILE",
 ];
 const originalEnv = new Map(managedEnvKeys.map((key) => [key, process.env[key]]));
@@ -122,6 +126,10 @@ test("getAppConfig parses WECHATY_CHANNELS_JSON with mixed delivery targets", ()
     ]),
     WECHATY_REIMBURSEMENT_EXTRACTION_MODEL: "qwen3.5-flash",
     WECHATY_REIMBURSEMENT_EXTRACTION_API_KEY: "test-key",
+    WECHATY_ADMIN_HOST: "127.0.0.1",
+    WECHATY_ADMIN_PORT: "8788",
+    WECHATY_ADMIN_USERNAME: "admin",
+    WECHATY_ADMIN_PASSWORD: "secret-pass",
   });
 
   const config = getAppConfig();
@@ -152,6 +160,10 @@ test("getAppConfig parses WECHATY_CHANNELS_JSON with mixed delivery targets", ()
   assert.equal(config.reimbursementExtractionProvider, "qwen");
   assert.equal(config.reimbursementExtractionModel, "qwen3.5-flash");
   assert.equal(config.reimbursementExtractionApiKey, "test-key");
+  assert.equal(config.adminHost, "127.0.0.1");
+  assert.equal(config.adminPort, 8788);
+  assert.equal(config.adminUsername, "admin");
+  assert.equal(config.adminPassword, "secret-pass");
   assert.deepEqual(validation.errors, []);
   assert.equal(config.channels[0]?.deliveryTargets.length, 2);
   assert.deepEqual(config.channels[0]?.deliveryTargets[1], {
@@ -258,6 +270,10 @@ test("getAppConfig defaults log settings from state dir", () => {
   assert.equal(config.watchdogMemoryPersistenceSeconds, 300);
   assert.equal(config.selfCanary?.targetContactName, "文件传输助手");
   assert.equal(config.debugReceivedRoomMessageEnabled, false);
+  assert.equal(config.adminHost, "127.0.0.1");
+  assert.equal(config.adminPort, 8788);
+  assert.equal(config.adminUsername, undefined);
+  assert.equal(config.adminPassword, undefined);
 });
 
 test("getAppConfig parses self canary settings", () => {

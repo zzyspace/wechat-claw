@@ -70,6 +70,10 @@ export interface AppConfig {
   reimbursementExtractionModel?: string;
   reimbursementExtractionApiKey?: string;
   reimbursementExtractionBaseUrl: string;
+  adminHost?: string;
+  adminPort?: number;
+  adminUsername?: string;
+  adminPassword?: string;
 }
 
 export interface SelfCanaryConfig {
@@ -465,6 +469,10 @@ export function getAppConfig(): AppConfig {
     reimbursementExtractionBaseUrl:
       process.env.WECHATY_REIMBURSEMENT_EXTRACTION_BASE_URL?.trim() ||
       "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    adminHost: readStringEnv("WECHATY_ADMIN_HOST", "127.0.0.1") || "127.0.0.1",
+    adminPort: readConfiguredPositiveNumberEnv("WECHATY_ADMIN_PORT", 8788),
+    adminUsername: readOptionalEnv("WECHATY_ADMIN_USERNAME"),
+    adminPassword: readOptionalEnv("WECHATY_ADMIN_PASSWORD"),
   };
 }
 
@@ -476,6 +484,7 @@ export function validateAppConfig(config: AppConfig): ConfigValidationResult {
   const rawSelfCanaryEnabled = process.env.WECHATY_SELF_CANARY_ENABLED?.trim();
   const rawSelfCanaryIntervalSeconds = process.env.WECHATY_SELF_CANARY_INTERVAL_SECONDS?.trim();
   const rawSelfCanaryAutoResetEnabled = process.env.WECHATY_SELF_CANARY_AUTO_RESET_ENABLED?.trim();
+  const rawAdminPort = process.env.WECHATY_ADMIN_PORT?.trim();
 
   if (!config.puppet) {
     errors.push("Missing WECHATY_PUPPET");
@@ -560,6 +569,18 @@ export function validateAppConfig(config: AppConfig): ConfigValidationResult {
     errors.push("Missing WECHATY_TIMEZONE");
   } else if (!isValidTimeZone(config.timeZone)) {
     errors.push(`Invalid WECHATY_TIMEZONE: ${config.timeZone}`);
+  }
+
+  if (!(config.adminHost ?? "").trim()) {
+    errors.push("Missing WECHATY_ADMIN_HOST");
+  }
+
+  if (rawAdminPort && (!Number.isFinite(config.adminPort) || Number(config.adminPort) <= 0)) {
+    errors.push(`Invalid WECHATY_ADMIN_PORT: ${config.adminPort}`);
+  }
+
+  if ((config.adminUsername && !config.adminPassword) || (!config.adminUsername && config.adminPassword)) {
+    warnings.push("WECHATY_ADMIN_USERNAME and WECHATY_ADMIN_PASSWORD should be configured together.");
   }
 
   if (config.channelsParseError) {

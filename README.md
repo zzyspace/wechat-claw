@@ -48,6 +48,19 @@
 npm install
 ```
 
+## 常用命令
+
+```bash
+# 启动 bot 主进程
+npm run dev
+
+# 本地启动报账查看后台
+npm run admin:dev
+
+# 查看最近报账记录
+npm run inspect:reimbursements -- --limit 20
+```
+
 ## 配置
 
 复制 `.env.example` 为 `.env`，并填写：
@@ -69,6 +82,12 @@ WECHATY_ALERT_EMAIL_FROM=bot@example.com
 WECHATY_ALERT_EMAIL_TO=ops@example.com
 WECHATY_TIMEZONE=Asia/Shanghai
 WECHATY_DEBUG_CONTACT_NAME=你的主微信昵称
+WECHATY_ADMIN_HOST=127.0.0.1
+WECHATY_ADMIN_PORT=8788
+WECHATY_ADMIN_USERNAME=
+WECHATY_ADMIN_PASSWORD=
+WECHATY_ADMIN_NGINX_SITE_NAME=invoice-submit
+WECHATY_ADMIN_NGINX_HEALTHZ_URL=http://127.0.0.1:8080/reimbursement/healthz
 WECHATY_DEBUG_RECEIVED_ROOM_MESSAGE_ENABLED=false
 WECHATY_SELF_CANARY_ENABLED=false
 WECHATY_SELF_CANARY_TARGET_CONTACT_NAME=文件传输助手
@@ -116,6 +135,11 @@ WECHATY_CHANNELS_JSON=[{"code":"loss_a","enabled":true,"scenario":"loss-report",
 - `WECHATY_SELF_CANARY_AUTO_RESET_ENABLED`: 连续失败达到阈值后，是否自动备份并停用 `memory-card` 后触发 fresh login，默认 `false`
 - `WECHATY_TIMEZONE`: 日期边界和 cron 解释时区，默认 `Asia/Shanghai`
 - `WECHATY_DEBUG_CONTACT_NAME`: `"[wechat-claw]"` 调试信息的接收联系人，不参与业务日报发送；上线通知始终走这里
+- `WECHATY_ADMIN_HOST`: 报账后台监听地址，默认 `127.0.0.1`
+- `WECHATY_ADMIN_PORT`: 报账后台监听端口，默认 `8788`
+- `WECHATY_ADMIN_USERNAME/WECHATY_ADMIN_PASSWORD`: 报账后台 Basic Auth 账号密码；未配置时 `/reimbursement` 会返回 `503`
+- `WECHATY_ADMIN_NGINX_SITE_NAME`: 仅 deploy 脚本使用；表示把 `/reimbursement` 自动挂到哪个现有 Nginx site，默认 `invoice-submit`
+- `WECHATY_ADMIN_NGINX_HEALTHZ_URL`: 仅 deploy 脚本使用；deploy 完成后用于校验 Nginx 外网入口，默认 `http://127.0.0.1:8080/reimbursement/healthz`
 - `WECHATY_DEBUG_RECEIVED_ROOM_MESSAGE_ENABLED`: 是否发送 `"[wechat-claw] 已收到群消息"` 这类调试摘要，默认 `false`
 - `WECHATY_CHANNELS_JSON`: 推荐的多群配置入口，支持 `loss-report` 和 `reimbursement` 场景
 - `WECHATY_ATTACHMENT_RETENTION_DAYS`: 图片附件保留天数，默认 `60` 天；会清理 `raw/` 和 `reimbursement/raw/` 下更早的历史目录，设为 `0` 可关闭
@@ -295,6 +319,31 @@ npm run inspect:reimbursements -- --channel reimbursement_a
 - 每份报账会按一个区块打印，包含金额、类别、票据日期、备注、OCR 文本、是否需要复核
 - 同时会展开来源 raw message 明细，方便排查“图片 + 文字”是否合并正确
 - 没有报账数据时会打印 `status=empty`
+
+启动报账查看后台：
+
+```bash
+npm run admin:dev
+```
+
+访问路径：
+
+- 页面：`/reimbursement`
+- 健康检查：`/reimbursement/healthz`
+- 列表接口：`/reimbursement/api/reports`
+
+说明：
+
+- 后台默认监听 `127.0.0.1:8788`
+- 建议只开放给本机，由 Nginx 反代到外网
+- `/reimbursement` 使用 Basic Auth；未配置 `WECHATY_ADMIN_USERNAME/WECHATY_ADMIN_PASSWORD` 时会返回 `503`
+- `deploy/deploy-wechat-claw.sh` 现在会自动：
+  - 安装 [deploy/wechat-claw-reimbursement-admin.service](/Users/ryan/DataDisk/Work/AI/wechat-claw/deploy/wechat-claw-reimbursement-admin.service)
+  - 把 [deploy/nginx/reimbursement-admin.locations.conf](/Users/ryan/DataDisk/Work/AI/wechat-claw/deploy/nginx/reimbursement-admin.locations.conf) 渲染成服务器上的 Nginx snippet
+  - 默认把这个 snippet 挂进 `invoice-submit` 站点
+  - 执行 `nginx -t`、`systemctl reload nginx`
+  - 校验 `127.0.0.1:8788/reimbursement/healthz` 和 `WECHATY_ADMIN_NGINX_HEALTHZ_URL`
+- 如果 `/reimbursement` 需要挂到别的 Nginx site，把 `WECHATY_ADMIN_NGINX_SITE_NAME` 改成对应 site 名即可
 
 手工执行一次 watchdog 巡检：
 

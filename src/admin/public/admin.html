@@ -1,0 +1,1067 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light" />
+    <title>报账后台</title>
+    <style>
+      :root {
+        --bg: #f2efe8;
+        --bg-accent: #e4dccf;
+        --surface: rgba(255, 255, 255, 0.88);
+        --surface-strong: #ffffff;
+        --line: rgba(64, 48, 27, 0.12);
+        --line-strong: rgba(64, 48, 27, 0.18);
+        --ink: #21180f;
+        --ink-soft: #675d4f;
+        --brand: #1f5d57;
+        --brand-soft: rgba(31, 93, 87, 0.1);
+        --accent: #b76835;
+        --danger: #9d3a24;
+        --warn: #8f5a00;
+        --warn-soft: rgba(143, 90, 0, 0.12);
+        --radius-xl: 28px;
+        --radius-lg: 20px;
+        --radius-md: 14px;
+        --shadow: 0 24px 50px rgba(48, 35, 18, 0.12);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: "SF Pro Text", "PingFang SC", "Noto Sans SC", sans-serif;
+        color: var(--ink);
+        background:
+          radial-gradient(circle at top left, rgba(182, 104, 53, 0.14), transparent 28%),
+          radial-gradient(circle at top right, rgba(31, 93, 87, 0.14), transparent 24%),
+          linear-gradient(180deg, var(--bg) 0%, var(--bg-accent) 100%);
+      }
+
+      .page {
+        width: min(1420px, calc(100vw - 28px));
+        margin: 0 auto;
+        padding: 28px 0 48px;
+      }
+
+      .hero {
+        display: grid;
+        gap: 14px;
+        margin-bottom: 18px;
+      }
+
+      .eyebrow {
+        display: inline-flex;
+        width: fit-content;
+        padding: 8px 12px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.68);
+        border: 1px solid rgba(64, 48, 27, 0.08);
+        color: var(--ink-soft);
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: clamp(30px, 4vw, 46px);
+        line-height: 0.98;
+        letter-spacing: -0.05em;
+      }
+
+      .hero p {
+        margin: 0;
+        max-width: 760px;
+        color: var(--ink-soft);
+        line-height: 1.7;
+      }
+
+      .panel {
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: var(--radius-xl);
+        box-shadow: var(--shadow);
+        backdrop-filter: blur(20px);
+      }
+
+      .controls {
+        padding: 20px;
+        margin-bottom: 18px;
+      }
+
+      .controls-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 12px;
+      }
+
+      .field {
+        display: grid;
+        gap: 8px;
+      }
+
+      .field label {
+        color: var(--ink-soft);
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+
+      .field input,
+      .field select,
+      button {
+        min-height: 46px;
+        border-radius: var(--radius-md);
+        border: 1px solid var(--line);
+        padding: 0 14px;
+        font: inherit;
+      }
+
+      .field input,
+      .field select {
+        width: 100%;
+        background: rgba(255, 255, 255, 0.92);
+        color: var(--ink);
+      }
+
+      .field input:focus,
+      .field select:focus,
+      button:focus {
+        outline: 2px solid rgba(31, 93, 87, 0.22);
+        outline-offset: 2px;
+      }
+
+      .actions {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        margin-top: 14px;
+        flex-wrap: wrap;
+      }
+
+      button {
+        cursor: pointer;
+        background: var(--surface-strong);
+        color: var(--ink);
+        font-weight: 700;
+      }
+
+      button:hover {
+        border-color: var(--line-strong);
+      }
+
+      .button-primary {
+        background: var(--brand);
+        border-color: var(--brand);
+        color: #ffffff;
+      }
+
+      .button-primary:hover {
+        border-color: var(--brand);
+      }
+
+      .summary-row {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        align-items: center;
+        margin-top: 16px;
+        flex-wrap: wrap;
+      }
+
+      .summary {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        min-height: 34px;
+        padding: 0 12px;
+        border-radius: 999px;
+        background: var(--brand-soft);
+        color: var(--brand);
+        font-size: 13px;
+        font-weight: 700;
+      }
+
+      .status {
+        color: var(--ink-soft);
+        font-size: 14px;
+      }
+
+      .status.error {
+        color: var(--danger);
+      }
+
+      .content {
+        display: grid;
+        grid-template-columns: minmax(0, 1.8fr) minmax(360px, 1fr);
+        gap: 18px;
+        align-items: start;
+      }
+
+      .table-panel {
+        overflow: hidden;
+      }
+
+      .table-scroll {
+        overflow: auto;
+      }
+
+      table {
+        width: 100%;
+        min-width: 1080px;
+        border-collapse: collapse;
+      }
+
+      thead {
+        background: rgba(255, 255, 255, 0.72);
+      }
+
+      th,
+      td {
+        padding: 14px 16px;
+        border-bottom: 1px solid var(--line);
+        text-align: left;
+        vertical-align: top;
+      }
+
+      th {
+        color: var(--ink-soft);
+        font-size: 12px;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+
+      td {
+        font-size: 14px;
+        line-height: 1.6;
+      }
+
+      tbody tr:hover {
+        background: rgba(255, 255, 255, 0.56);
+      }
+
+      tbody tr.is-selected {
+        background: rgba(31, 93, 87, 0.08);
+      }
+
+      .note-cell {
+        max-width: 260px;
+        color: var(--ink-soft);
+      }
+
+      .mono {
+        font-family: "SF Mono", "JetBrains Mono", "Consolas", monospace;
+        font-size: 12px;
+      }
+
+      .muted {
+        color: var(--ink-soft);
+      }
+
+      .tag {
+        display: inline-flex;
+        align-items: center;
+        min-height: 28px;
+        padding: 0 10px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.8);
+        border: 1px solid var(--line);
+        color: var(--ink-soft);
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .tag.warn {
+        color: var(--warn);
+        background: var(--warn-soft);
+        border-color: rgba(143, 90, 0, 0.18);
+      }
+
+      .tag.ok {
+        color: var(--brand);
+        background: var(--brand-soft);
+        border-color: rgba(31, 93, 87, 0.16);
+      }
+
+      .detail-panel {
+        padding: 20px;
+        position: sticky;
+        top: 18px;
+        display: grid;
+        gap: 18px;
+      }
+
+      .detail-empty {
+        color: var(--ink-soft);
+        line-height: 1.7;
+      }
+
+      .detail-header {
+        display: grid;
+        gap: 10px;
+      }
+
+      .detail-header h2 {
+        margin: 0;
+        font-size: 24px;
+        line-height: 1.1;
+      }
+
+      .detail-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .detail-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+      }
+
+      .detail-card {
+        padding: 14px;
+        border-radius: var(--radius-lg);
+        background: rgba(255, 255, 255, 0.72);
+        border: 1px solid rgba(64, 48, 27, 0.08);
+      }
+
+      .detail-card strong {
+        display: block;
+        margin-bottom: 6px;
+        font-size: 12px;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--ink-soft);
+      }
+
+      .detail-card span {
+        display: block;
+        line-height: 1.7;
+        word-break: break-word;
+      }
+
+      .detail-section {
+        display: grid;
+        gap: 12px;
+      }
+
+      .detail-section h3 {
+        margin: 0;
+        font-size: 14px;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--ink-soft);
+      }
+
+      .source-list,
+      .receipt-list {
+        display: grid;
+        gap: 12px;
+      }
+
+      .source-item,
+      .receipt-item {
+        padding: 14px;
+        border-radius: var(--radius-lg);
+        background: rgba(255, 255, 255, 0.72);
+        border: 1px solid rgba(64, 48, 27, 0.08);
+      }
+
+      .source-head,
+      .receipt-head {
+        display: flex;
+        justify-content: space-between;
+        gap: 10px;
+        align-items: center;
+        flex-wrap: wrap;
+        margin-bottom: 10px;
+      }
+
+      .source-text,
+      .receipt-text,
+      .source-meta {
+        line-height: 1.7;
+        word-break: break-word;
+      }
+
+      .source-meta,
+      .receipt-meta {
+        color: var(--ink-soft);
+        font-size: 13px;
+      }
+
+      .attachment-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+        gap: 10px;
+        margin-top: 12px;
+      }
+
+      .attachment-card {
+        display: grid;
+        gap: 8px;
+      }
+
+      .attachment-thumb {
+        width: 100%;
+        aspect-ratio: 1 / 1;
+        object-fit: cover;
+        border-radius: 16px;
+        border: 1px solid var(--line);
+        background: rgba(255, 255, 255, 0.9);
+      }
+
+      .attachment-link {
+        color: var(--brand);
+        font-weight: 700;
+        text-decoration: none;
+      }
+
+      .attachment-link:hover {
+        text-decoration: underline;
+      }
+
+      .pagination {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        align-items: center;
+        padding: 16px 20px 20px;
+        flex-wrap: wrap;
+      }
+
+      .pagination-buttons {
+        display: flex;
+        gap: 10px;
+      }
+
+      .empty-state {
+        padding: 30px 20px;
+        color: var(--ink-soft);
+        text-align: center;
+      }
+
+      @media (max-width: 1200px) {
+        .content {
+          grid-template-columns: 1fr;
+        }
+
+        .detail-panel {
+          position: static;
+        }
+      }
+
+      @media (max-width: 900px) {
+        .controls-grid,
+        .detail-grid {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+      }
+
+      @media (max-width: 620px) {
+        .page {
+          width: min(100vw - 18px, 100%);
+          padding-top: 18px;
+        }
+
+        .controls-grid,
+        .detail-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .actions,
+        .pagination {
+          align-items: stretch;
+        }
+
+        .pagination-buttons {
+          width: 100%;
+        }
+
+        .pagination-buttons button {
+          flex: 1 1 0;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <div class="hero">
+        <span class="eyebrow">WECHAT CLAW / REIMBURSEMENT</span>
+        <h1>报账查看后台</h1>
+        <p>查看已入库的报账记录，按群聊、报账人、类别、日期和复核状态筛选，并展开详情查看 OCR、原始消息、附件和回执记录。</p>
+      </div>
+
+      <div class="panel controls">
+        <form id="filters">
+          <div class="controls-grid">
+            <div class="field">
+              <label for="search">关键词 / 报账 ID</label>
+              <input id="search" name="search" placeholder="支持群聊、报账人、商户、单号、备注、OCR 或 ID" />
+            </div>
+            <div class="field">
+              <label for="channelCode">群聊编码</label>
+              <input id="channelCode" name="channelCode" placeholder="如 reimbursement_a" />
+            </div>
+            <div class="field">
+              <label for="reporter">报账人</label>
+              <input id="reporter" name="reporter" placeholder="精确筛选报账人" />
+            </div>
+            <div class="field">
+              <label for="expenseCategory">类别</label>
+              <input id="expenseCategory" name="expenseCategory" placeholder="如 food / 食材 / rent / 房租" />
+            </div>
+            <div class="field">
+              <label for="needsReview">需复核</label>
+              <select id="needsReview" name="needsReview">
+                <option value="all">全部</option>
+                <option value="true">是</option>
+                <option value="false">否</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="voucherDateFrom">票据日期从</label>
+              <input id="voucherDateFrom" name="voucherDateFrom" type="date" />
+            </div>
+            <div class="field">
+              <label for="voucherDateTo">票据日期到</label>
+              <input id="voucherDateTo" name="voucherDateTo" type="date" />
+            </div>
+            <div class="field">
+              <label for="limit">每页条数</label>
+              <select id="limit" name="limit">
+                <option value="20">20</option>
+                <option value="50" selected>50</option>
+                <option value="100">100</option>
+                <option value="200">200</option>
+              </select>
+            </div>
+          </div>
+          <div class="actions">
+            <button class="button-primary" type="submit">查询</button>
+            <button id="resetFilters" type="button">重置</button>
+          </div>
+        </form>
+        <div class="summary-row">
+          <div class="summary">
+            <span class="pill" id="totalPill">总数 0</span>
+            <span class="pill" id="pagePill">第 1 页</span>
+            <span class="pill" id="timeZonePill">时区 Asia/Shanghai</span>
+          </div>
+          <div class="status" id="statusText">等待加载</div>
+        </div>
+      </div>
+
+      <div class="content">
+        <div class="panel table-panel">
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>群聊</th>
+                  <th>创建时间</th>
+                  <th>报账人</th>
+                  <th>金额</th>
+                  <th>备注</th>
+                  <th>类别</th>
+                  <th>需复核</th>
+                  <th>更新时间</th>
+                  <th>报账 ID</th>
+                </tr>
+              </thead>
+              <tbody id="tableBody"></tbody>
+            </table>
+          </div>
+          <div class="empty-state" id="emptyState" hidden>没有匹配的报账记录。</div>
+          <div class="pagination">
+            <div class="status" id="rangeText">0 - 0 / 0</div>
+            <div class="pagination-buttons">
+              <button id="prevPage" type="button">上一页</button>
+              <button id="nextPage" type="button">下一页</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel detail-panel" id="detailPanel">
+          <div class="detail-empty" id="detailEmpty">点击左侧列表中的任意一条记录，在这里查看结构化字段、原始消息、附件和回执。</div>
+          <div id="detailContent" hidden></div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const BASE_PATH = "/reimbursement";
+      const DEFAULT_TIME_ZONE = "Asia/Shanghai";
+      const state = {
+        items: [],
+        limit: 50,
+        offset: 0,
+        total: 0,
+        selectedReportId: null,
+        timeZone: DEFAULT_TIME_ZONE,
+      };
+
+      const elements = {
+        filters: document.getElementById("filters"),
+        resetFilters: document.getElementById("resetFilters"),
+        totalPill: document.getElementById("totalPill"),
+        pagePill: document.getElementById("pagePill"),
+        timeZonePill: document.getElementById("timeZonePill"),
+        statusText: document.getElementById("statusText"),
+        tableBody: document.getElementById("tableBody"),
+        emptyState: document.getElementById("emptyState"),
+        rangeText: document.getElementById("rangeText"),
+        prevPage: document.getElementById("prevPage"),
+        nextPage: document.getElementById("nextPage"),
+        detailEmpty: document.getElementById("detailEmpty"),
+        detailContent: document.getElementById("detailContent"),
+      };
+
+      function escapeHtml(value) {
+        return String(value ?? "")
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;")
+          .replaceAll("'", "&#39;");
+      }
+
+      function formatAmount(item) {
+        if (item.amount === null || item.amount === undefined) {
+          return "待复核";
+        }
+
+        const amount = Number(item.amount);
+        return `${amount.toFixed(2)} ${item.currency || "CNY"}`;
+      }
+
+      function parseDatabaseTimestamp(value) {
+        if (!value || typeof value !== "string") {
+          return null;
+        }
+
+        const normalized = value.trim().replace(" ", "T");
+        const withZone = /(?:Z|[+-]\d{2}:\d{2})$/.test(normalized) ? normalized : `${normalized}Z`;
+        const date = new Date(withZone);
+        return Number.isFinite(date.getTime()) ? date : null;
+      }
+
+      function formatTimestamp(value) {
+        const date = parseDatabaseTimestamp(value);
+
+        if (!date) {
+          return value || "-";
+        }
+
+        return new Intl.DateTimeFormat("zh-CN", {
+          timeZone: state.timeZone || DEFAULT_TIME_ZONE,
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+          hour12: false,
+        }).format(date).replace(/\//g, "-");
+      }
+
+      function formatYesNo(value) {
+        return value ? "是" : "否";
+      }
+
+      function compactText(value) {
+        const normalized = String(value ?? "").replace(/\s+/g, " ").trim();
+        return normalized || "(空)";
+      }
+
+      function setStatus(text, isError = false) {
+        elements.statusText.textContent = text;
+        elements.statusText.classList.toggle("error", isError);
+      }
+
+      function buildAuthFetchUrl(pathname, params) {
+        const url = new URL(`${location.origin}${pathname}`);
+
+        if (params) {
+          for (const [key, value] of params.entries()) {
+            url.searchParams.set(key, value);
+          }
+        }
+
+        return url.toString();
+      }
+
+      function readFilters() {
+        const formData = new FormData(elements.filters);
+        return {
+          search: String(formData.get("search") || "").trim(),
+          channelCode: String(formData.get("channelCode") || "").trim(),
+          reporter: String(formData.get("reporter") || "").trim(),
+          expenseCategory: String(formData.get("expenseCategory") || "").trim(),
+          needsReview: String(formData.get("needsReview") || "all").trim(),
+          voucherDateFrom: String(formData.get("voucherDateFrom") || "").trim(),
+          voucherDateTo: String(formData.get("voucherDateTo") || "").trim(),
+          limit: String(formData.get("limit") || state.limit || 50).trim(),
+        };
+      }
+
+      function writeFiltersFromUrl() {
+        const params = new URLSearchParams(location.search);
+        for (const name of [
+          "search",
+          "channelCode",
+          "reporter",
+          "expenseCategory",
+          "needsReview",
+          "voucherDateFrom",
+          "voucherDateTo",
+          "limit",
+        ]) {
+          const field = elements.filters.elements.namedItem(name);
+          if (!(field instanceof HTMLInputElement || field instanceof HTMLSelectElement)) {
+            continue;
+          }
+
+          const value = params.get(name);
+          if (value !== null) {
+            field.value = value;
+          }
+        }
+
+        const offsetValue = params.get("offset");
+        state.offset = offsetValue ? Math.max(Number.parseInt(offsetValue, 10) || 0, 0) : 0;
+      }
+
+      function updateUrl() {
+        const params = new URLSearchParams();
+        const filters = readFilters();
+
+        for (const [key, value] of Object.entries(filters)) {
+          if (value && value !== "all" && !(key === "limit" && value === "50")) {
+            params.set(key, value);
+          }
+        }
+
+        if (state.offset > 0) {
+          params.set("offset", String(state.offset));
+        }
+
+        const query = params.toString();
+        history.replaceState(null, "", query ? `${BASE_PATH}?${query}` : BASE_PATH);
+      }
+
+      function buildListParams() {
+        const filters = readFilters();
+        const params = new URLSearchParams();
+
+        if (filters.search) params.set("search", filters.search);
+        if (filters.channelCode) params.set("channelCode", filters.channelCode);
+        if (filters.reporter) params.set("reporter", filters.reporter);
+        if (filters.expenseCategory) params.set("expenseCategory", filters.expenseCategory);
+        if (filters.needsReview && filters.needsReview !== "all") params.set("needsReview", filters.needsReview);
+        if (filters.voucherDateFrom) params.set("voucherDateFrom", filters.voucherDateFrom);
+        if (filters.voucherDateTo) params.set("voucherDateTo", filters.voucherDateTo);
+        params.set("limit", filters.limit || "50");
+        params.set("offset", String(state.offset));
+
+        return params;
+      }
+
+      function renderTable() {
+        elements.tableBody.innerHTML = "";
+        elements.emptyState.hidden = state.items.length !== 0;
+
+        if (state.items.length === 0) {
+          return;
+        }
+
+        const fragment = document.createDocumentFragment();
+
+        for (const item of state.items) {
+          const row = document.createElement("tr");
+          row.classList.toggle("is-selected", item.id === state.selectedReportId);
+          row.innerHTML = `
+            <td>${escapeHtml(item.channelName)}${item.channelCode ? `<div class="mono muted">${escapeHtml(item.channelCode)}</div>` : ""}</td>
+            <td>${escapeHtml(formatTimestamp(item.createdAt))}</td>
+            <td>${escapeHtml(item.reporter)}</td>
+            <td>${escapeHtml(formatAmount(item))}</td>
+            <td class="note-cell">${escapeHtml(compactText(item.note))}</td>
+            <td>${escapeHtml(item.expenseCategoryLabel || item.expenseCategory)}</td>
+            <td><span class="tag ${item.needsReview ? "warn" : "ok"}">${item.needsReview ? "需复核" : "已确认"}</span></td>
+            <td>${escapeHtml(formatTimestamp(item.updatedAt))}</td>
+            <td><button type="button" data-report-id="${item.id}">#${item.id}</button></td>
+          `;
+          fragment.appendChild(row);
+        }
+
+        elements.tableBody.appendChild(fragment);
+      }
+
+      function renderSummary() {
+        const pageIndex = Math.floor(state.offset / state.limit) + 1;
+        const rangeStart = state.total === 0 ? 0 : state.offset + 1;
+        const rangeEnd = state.offset + state.items.length;
+
+        elements.totalPill.textContent = `总数 ${state.total}`;
+        elements.pagePill.textContent = `第 ${pageIndex} 页`;
+        elements.timeZonePill.textContent = `时区 ${state.timeZone}`;
+        elements.rangeText.textContent = `${rangeStart} - ${rangeEnd} / ${state.total}`;
+        elements.prevPage.disabled = state.offset <= 0;
+        elements.nextPage.disabled = state.offset + state.items.length >= state.total;
+      }
+
+      function renderDetail(report) {
+        elements.detailEmpty.hidden = true;
+        elements.detailContent.hidden = false;
+
+        const sourceItems = report.sources
+          .map((source) => {
+            const attachments = source.attachments.length
+              ? `<div class="attachment-grid">${source.attachments
+                  .map((attachment) => {
+                    if (!attachment.exists) {
+                      return `
+                        <div class="attachment-card">
+                          <span class="tag warn">附件已清理</span>
+                          <div class="source-meta mono">attachment #${attachment.id}</div>
+                        </div>
+                      `;
+                    }
+
+                    const href = `${BASE_PATH}/api/attachments/${attachment.id}/content`;
+                    if (attachment.mimeType && attachment.mimeType.startsWith("image/")) {
+                      return `
+                        <div class="attachment-card">
+                          <a class="attachment-link" href="${href}" target="_blank" rel="noreferrer">
+                            <img class="attachment-thumb" src="${href}" alt="attachment-${attachment.id}" />
+                          </a>
+                          <a class="attachment-link mono" href="${href}" target="_blank" rel="noreferrer">attachment #${attachment.id}</a>
+                        </div>
+                      `;
+                    }
+
+                    return `
+                      <div class="attachment-card">
+                        <span class="tag">附件</span>
+                        <a class="attachment-link mono" href="${href}" target="_blank" rel="noreferrer">attachment #${attachment.id}</a>
+                      </div>
+                    `;
+                  })
+                  .join("")}</div>`
+              : `<div class="source-meta">无附件</div>`;
+
+            return `
+              <div class="source-item">
+                <div class="source-head">
+                  <span class="tag">${escapeHtml(source.role)}</span>
+                  <span class="source-meta mono">raw_message_id=${source.rawMessageId}</span>
+                </div>
+                <div class="source-meta">${escapeHtml(source.senderName)} · ${escapeHtml(formatTimestamp(source.eventReceivedAt))}</div>
+                <div class="source-meta mono">external_id=${escapeHtml(source.messageExternalId)}</div>
+                <div class="source-text">${escapeHtml(compactText(source.textContent))}</div>
+                ${attachments}
+              </div>
+            `;
+          })
+          .join("");
+
+        const receiptItems = report.receiptDeliveries.length
+          ? report.receiptDeliveries
+              .map(
+                (receipt) => `
+                  <div class="receipt-item">
+                    <div class="receipt-head">
+                      <span class="tag">${escapeHtml(receipt.targetType)}</span>
+                      <span class="receipt-meta">${escapeHtml(formatTimestamp(receipt.sentAt))}</span>
+                    </div>
+                    <div class="receipt-meta">${escapeHtml(receipt.targetValue)}</div>
+                    <div class="receipt-text">${escapeHtml(compactText(receipt.receiptText))}</div>
+                    <div class="receipt-meta mono">delivery_id=${receipt.id}${receipt.rawMessageId ? ` · raw_message_id=${receipt.rawMessageId}` : ""}</div>
+                  </div>
+                `,
+              )
+              .join("")
+          : `<div class="detail-empty">没有回执记录。</div>`;
+
+        elements.detailContent.innerHTML = `
+          <div class="detail-header">
+            <h2>报账 #${report.id}</h2>
+            <div class="detail-meta">
+              <span class="tag">${escapeHtml(report.channelName)}</span>
+              <span class="tag ${report.needsReview ? "warn" : "ok"}">${report.needsReview ? "需复核" : "已确认"}</span>
+              <span class="tag">${escapeHtml(report.expenseCategoryLabel || report.expenseCategory)}</span>
+            </div>
+          </div>
+
+          <div class="detail-grid">
+            <div class="detail-card"><strong>群聊</strong><span>${escapeHtml(report.channelName)}${report.channelCode ? ` (${escapeHtml(report.channelCode)})` : ""}</span></div>
+            <div class="detail-card"><strong>报账人</strong><span>${escapeHtml(report.reporter)}</span></div>
+            <div class="detail-card"><strong>金额</strong><span>${escapeHtml(formatAmount(report))}</span></div>
+            <div class="detail-card"><strong>票据日期</strong><span>${escapeHtml(report.voucherDate)} (${escapeHtml(report.voucherDateSource)})</span></div>
+            <div class="detail-card"><strong>类别</strong><span>${escapeHtml(report.expenseCategoryLabel || report.expenseCategory)}</span></div>
+            <div class="detail-card"><strong>证据类型</strong><span>${escapeHtml(report.evidenceType)}</span></div>
+            <div class="detail-card"><strong>商户</strong><span>${escapeHtml(report.merchant || "(空)")}</span></div>
+            <div class="detail-card"><strong>单号</strong><span>${escapeHtml(report.documentNo || "(空)")}</span></div>
+            <div class="detail-card"><strong>凭证类型</strong><span>${escapeHtml(report.voucherType || "(空)")}</span></div>
+            <div class="detail-card"><strong>置信度</strong><span>${Number(report.confidence).toFixed(2)}</span></div>
+            <div class="detail-card"><strong>创建时间</strong><span>${escapeHtml(formatTimestamp(report.createdAt))}</span></div>
+            <div class="detail-card"><strong>更新时间</strong><span>${escapeHtml(formatTimestamp(report.updatedAt))}</span></div>
+            <div class="detail-card" style="grid-column: 1 / -1;"><strong>备注</strong><span>${escapeHtml(compactText(report.note))}</span></div>
+            <div class="detail-card" style="grid-column: 1 / -1;"><strong>OCR</strong><span>${escapeHtml(compactText(report.ocrText || "(空)"))}</span></div>
+          </div>
+
+          <div class="detail-section">
+            <h3>来源消息</h3>
+            <div class="source-list">${sourceItems || `<div class="detail-empty">没有来源消息。</div>`}</div>
+          </div>
+
+          <div class="detail-section">
+            <h3>回执记录</h3>
+            <div class="receipt-list">${receiptItems}</div>
+          </div>
+        `;
+      }
+
+      async function loadDetail(reportId) {
+        state.selectedReportId = reportId;
+        renderTable();
+        setStatus(`正在加载报账 #${reportId} 详情...`);
+
+        try {
+          const response = await fetch(buildAuthFetchUrl(`${BASE_PATH}/api/reports/${reportId}`), {
+            headers: {
+              Accept: "application/json",
+            },
+          });
+          const payload = await response.json();
+
+          if (!response.ok || !payload.success) {
+            throw new Error(payload?.error?.message || "详情加载失败");
+          }
+
+          state.timeZone = payload.timeZone || state.timeZone || DEFAULT_TIME_ZONE;
+          elements.timeZonePill.textContent = `时区 ${state.timeZone}`;
+          renderDetail(payload.report);
+          setStatus(`已加载报账 #${reportId} 详情`);
+        } catch (error) {
+          elements.detailEmpty.hidden = false;
+          elements.detailContent.hidden = true;
+          elements.detailContent.innerHTML = "";
+          setStatus(error instanceof Error ? error.message : String(error), true);
+        }
+      }
+
+      async function loadReports({ resetOffset = false } = {}) {
+        if (resetOffset) {
+          state.offset = 0;
+        }
+
+        state.limit = Number.parseInt(readFilters().limit || "50", 10) || 50;
+        updateUrl();
+        setStatus("正在加载报账列表...");
+
+        try {
+          const response = await fetch(buildAuthFetchUrl(`${BASE_PATH}/api/reports`, buildListParams()), {
+            headers: {
+              Accept: "application/json",
+            },
+          });
+          const payload = await response.json();
+
+          if (!response.ok || !payload.success) {
+            throw new Error(payload?.error?.message || "列表加载失败");
+          }
+
+          state.items = payload.items || [];
+          state.total = payload.total || 0;
+          state.limit = payload.limit || state.limit;
+          state.offset = payload.offset || 0;
+          state.timeZone = payload.timeZone || state.timeZone || DEFAULT_TIME_ZONE;
+
+          renderTable();
+          renderSummary();
+          setStatus(`已加载 ${state.items.length} 条记录`);
+
+          if (state.selectedReportId && state.items.some((item) => item.id === state.selectedReportId)) {
+            renderTable();
+          } else if (state.selectedReportId) {
+            state.selectedReportId = null;
+            elements.detailEmpty.hidden = false;
+            elements.detailContent.hidden = true;
+            elements.detailContent.innerHTML = "";
+          }
+        } catch (error) {
+          state.items = [];
+          state.total = 0;
+          renderTable();
+          renderSummary();
+          setStatus(error instanceof Error ? error.message : String(error), true);
+        }
+      }
+
+      elements.filters.addEventListener("submit", (event) => {
+        event.preventDefault();
+        void loadReports({ resetOffset: true });
+      });
+
+      elements.resetFilters.addEventListener("click", () => {
+        elements.filters.reset();
+        state.offset = 0;
+        state.selectedReportId = null;
+        elements.detailEmpty.hidden = false;
+        elements.detailContent.hidden = true;
+        elements.detailContent.innerHTML = "";
+        void loadReports({ resetOffset: true });
+      });
+
+      elements.prevPage.addEventListener("click", () => {
+        state.offset = Math.max(0, state.offset - state.limit);
+        void loadReports();
+      });
+
+      elements.nextPage.addEventListener("click", () => {
+        if (state.offset + state.items.length >= state.total) {
+          return;
+        }
+
+        state.offset += state.limit;
+        void loadReports();
+      });
+
+      elements.tableBody.addEventListener("click", (event) => {
+        const target = event.target;
+
+        if (!(target instanceof HTMLElement)) {
+          return;
+        }
+
+        const button = target.closest("button[data-report-id]");
+        if (!button) {
+          return;
+        }
+
+        const reportId = Number.parseInt(button.getAttribute("data-report-id") || "", 10);
+        if (!Number.isFinite(reportId) || reportId <= 0) {
+          return;
+        }
+
+        void loadDetail(reportId);
+      });
+
+      writeFiltersFromUrl();
+      void loadReports();
+    </script>
+  </body>
+</html>
