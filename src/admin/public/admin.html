@@ -203,10 +203,7 @@
       }
 
       .content {
-        display: grid;
-        grid-template-columns: minmax(0, 1.8fr) minmax(360px, 1fr);
-        gap: 18px;
-        align-items: start;
+        display: block;
       }
 
       .table-panel {
@@ -249,6 +246,10 @@
 
       tbody tr:hover {
         background: rgba(255, 255, 255, 0.56);
+      }
+
+      tbody tr {
+        cursor: pointer;
       }
 
       tbody tr.is-selected {
@@ -294,17 +295,68 @@
         border-color: rgba(31, 93, 87, 0.16);
       }
 
-      .detail-panel {
-        padding: 20px;
-        position: sticky;
-        top: 18px;
+      .detail-empty {
+        color: var(--ink-soft);
+        line-height: 1.7;
+      }
+
+      .modal[hidden] {
+        display: none;
+      }
+
+      .modal {
+        position: fixed;
+        inset: 0;
+        z-index: 1000;
+        display: grid;
+        place-items: center;
+        padding: 18px;
+      }
+
+      .modal-backdrop {
+        position: absolute;
+        inset: 0;
+        background: rgba(25, 18, 11, 0.46);
+        backdrop-filter: blur(8px);
+      }
+
+      .modal-dialog {
+        position: relative;
+        z-index: 1;
+        width: min(1120px, calc(100vw - 24px));
+        max-height: calc(100vh - 24px);
+        overflow: auto;
+        padding: 22px;
+        border-radius: 32px;
+      }
+
+      .modal-frame {
         display: grid;
         gap: 18px;
       }
 
-      .detail-empty {
-        color: var(--ink-soft);
-        line-height: 1.7;
+      .modal-topbar {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        align-items: center;
+      }
+
+      .modal-topbar h2 {
+        margin: 0;
+        font-size: 18px;
+        letter-spacing: 0.02em;
+      }
+
+      .modal-close {
+        min-width: 46px;
+        min-height: 46px;
+        padding: 0;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 22px;
+        line-height: 1;
       }
 
       .detail-header {
@@ -453,16 +505,6 @@
         text-align: center;
       }
 
-      @media (max-width: 1200px) {
-        .content {
-          grid-template-columns: 1fr;
-        }
-
-        .detail-panel {
-          position: static;
-        }
-      }
-
       @media (max-width: 900px) {
         .controls-grid,
         .detail-grid {
@@ -492,6 +534,17 @@
 
         .pagination-buttons button {
           flex: 1 1 0;
+        }
+
+        .modal {
+          padding: 8px;
+        }
+
+        .modal-dialog {
+          width: calc(100vw - 16px);
+          max-height: calc(100vh - 16px);
+          padding: 16px;
+          border-radius: 22px;
         }
       }
     </style>
@@ -594,9 +647,19 @@
           </div>
         </div>
 
-        <div class="panel detail-panel" id="detailPanel">
-          <div class="detail-empty" id="detailEmpty">点击左侧列表中的任意一条记录，在这里查看结构化字段、原始消息、附件和回执。</div>
-          <div id="detailContent" hidden></div>
+      </div>
+
+      <div class="modal" id="detailModal" hidden>
+        <div class="modal-backdrop" id="detailModalBackdrop"></div>
+        <div class="panel modal-dialog" role="dialog" aria-modal="true" aria-labelledby="detailModalTitle">
+          <div class="modal-frame">
+            <div class="modal-topbar">
+              <h2 id="detailModalTitle">报账详情</h2>
+              <button class="modal-close" id="detailModalClose" type="button" aria-label="关闭详情弹窗">×</button>
+            </div>
+            <div class="detail-empty" id="detailEmpty">点击左侧列表中的任意一条记录，在这里查看结构化字段、原始消息、附件和回执。</div>
+            <div id="detailContent" hidden></div>
+          </div>
         </div>
       </div>
     </div>
@@ -625,6 +688,9 @@
         rangeText: document.getElementById("rangeText"),
         prevPage: document.getElementById("prevPage"),
         nextPage: document.getElementById("nextPage"),
+        detailModal: document.getElementById("detailModal"),
+        detailModalBackdrop: document.getElementById("detailModalBackdrop"),
+        detailModalClose: document.getElementById("detailModalClose"),
         detailEmpty: document.getElementById("detailEmpty"),
         detailContent: document.getElementById("detailContent"),
       };
@@ -791,6 +857,7 @@
 
         for (const item of state.items) {
           const row = document.createElement("tr");
+          row.setAttribute("data-report-id", String(item.id));
           row.classList.toggle("is-selected", item.id === state.selectedReportId);
           row.innerHTML = `
             <td>${escapeHtml(item.channelName)}${item.channelCode ? `<div class="mono muted">${escapeHtml(item.channelCode)}</div>` : ""}</td>
@@ -822,9 +889,18 @@
         elements.nextPage.disabled = state.offset + state.items.length >= state.total;
       }
 
+      function closeDetailModal() {
+        elements.detailModal.hidden = true;
+      }
+
+      function openDetailModal() {
+        elements.detailModal.hidden = false;
+      }
+
       function renderDetail(report) {
         elements.detailEmpty.hidden = true;
         elements.detailContent.hidden = false;
+        openDetailModal();
 
         const sourceItems = report.sources
           .map((source) => {
@@ -937,6 +1013,11 @@
       async function loadDetail(reportId) {
         state.selectedReportId = reportId;
         renderTable();
+        openDetailModal();
+        elements.detailEmpty.hidden = false;
+        elements.detailContent.hidden = true;
+        elements.detailContent.innerHTML = "";
+        elements.detailEmpty.textContent = `正在加载报账 #${reportId} 详情...`;
         setStatus(`正在加载报账 #${reportId} 详情...`);
 
         try {
@@ -953,12 +1034,14 @@
 
           state.timeZone = payload.timeZone || state.timeZone || DEFAULT_TIME_ZONE;
           elements.timeZonePill.textContent = `时区 ${state.timeZone}`;
+          elements.detailEmpty.textContent = "点击左侧列表中的任意一条记录，在这里查看结构化字段、原始消息、附件和回执。";
           renderDetail(payload.report);
           setStatus(`已加载报账 #${reportId} 详情`);
         } catch (error) {
           elements.detailEmpty.hidden = false;
           elements.detailContent.hidden = true;
           elements.detailContent.innerHTML = "";
+          elements.detailEmpty.textContent = error instanceof Error ? error.message : String(error);
           setStatus(error instanceof Error ? error.message : String(error), true);
         }
       }
@@ -998,9 +1081,7 @@
             renderTable();
           } else if (state.selectedReportId) {
             state.selectedReportId = null;
-            elements.detailEmpty.hidden = false;
-            elements.detailContent.hidden = true;
-            elements.detailContent.innerHTML = "";
+            closeDetailModal();
           }
         } catch (error) {
           state.items = [];
@@ -1020,9 +1101,11 @@
         elements.filters.reset();
         state.offset = 0;
         state.selectedReportId = null;
+        closeDetailModal();
         elements.detailEmpty.hidden = false;
         elements.detailContent.hidden = true;
         elements.detailContent.innerHTML = "";
+        elements.detailEmpty.textContent = "点击左侧列表中的任意一条记录，在这里查看结构化字段、原始消息、附件和回执。";
         void loadReports({ resetOffset: true });
       });
 
@@ -1047,17 +1130,31 @@
           return;
         }
 
-        const button = target.closest("button[data-report-id]");
-        if (!button) {
+        const trigger = target.closest("[data-report-id]");
+        if (!trigger) {
           return;
         }
 
-        const reportId = Number.parseInt(button.getAttribute("data-report-id") || "", 10);
+        const reportId = Number.parseInt(trigger.getAttribute("data-report-id") || "", 10);
         if (!Number.isFinite(reportId) || reportId <= 0) {
           return;
         }
 
         void loadDetail(reportId);
+      });
+
+      elements.detailModalBackdrop.addEventListener("click", () => {
+        closeDetailModal();
+      });
+
+      elements.detailModalClose.addEventListener("click", () => {
+        closeDetailModal();
+      });
+
+      document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape" && !elements.detailModal.hidden) {
+          closeDetailModal();
+        }
       });
 
       writeFiltersFromUrl();
