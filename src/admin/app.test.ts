@@ -183,6 +183,7 @@ function seedReports() {
 
   return {
     reportId: report.id,
+    missingReportId: missingReport.id,
     existingAttachmentId: existingDetail.sources[0]?.attachments[0]?.id,
     missingAttachmentId: missingDetail.sources[0]?.attachments[0]?.id,
   };
@@ -293,6 +294,38 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     );
     assert.equal(missingAttachmentResponse.status, 404);
     assert.equal((await missingAttachmentResponse.json()).success, false);
+
+    const deleteResponse = await fetch(`${server.baseUrl}/reimbursement/api/reports/${seeded.missingReportId}`, {
+      method: "DELETE",
+      headers: {
+        ...createAdminAuthHeaders(),
+        Accept: "application/json",
+      },
+    });
+    assert.equal(deleteResponse.status, 200);
+    const deletePayload = await deleteResponse.json();
+    assert.equal(deletePayload.success, true);
+    assert.equal(deletePayload.id, seeded.missingReportId);
+
+    const deletedDetailResponse = await fetch(
+      `${server.baseUrl}/reimbursement/api/reports/${seeded.missingReportId}`,
+      {
+        headers: {
+          ...createAdminAuthHeaders(),
+          Accept: "application/json",
+        },
+      },
+    );
+    assert.equal(deletedDetailResponse.status, 404);
+
+    const missingDeleteResponse = await fetch(`${server.baseUrl}/reimbursement/api/reports/999999`, {
+      method: "DELETE",
+      headers: {
+        ...createAdminAuthHeaders(),
+        Accept: "application/json",
+      },
+    });
+    assert.equal(missingDeleteResponse.status, 404);
   } finally {
     await server.close();
   }

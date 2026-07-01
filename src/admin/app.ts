@@ -6,6 +6,7 @@ import express from "express";
 import { getAppConfig, type AppConfig } from "../core/config/env.js";
 import { normalizeReimbursementExpenseCategory } from "../scenarios/reimbursement/categories.js";
 import {
+  deleteReimbursementReport,
   findAdminReimbursementAttachment,
   getAdminReimbursementReportDetail,
   listAdminReimbursementReports,
@@ -218,6 +219,30 @@ export function createApp(input?: {
         success: true,
         report,
         timeZone: config.timeZone,
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.delete(`${ADMIN_BASE_PATH}/api/reports/:id`, adminAuth, (request, response, next) => {
+    try {
+      const reportId = parsePositiveInteger(request.params.id, "id");
+      const deleted = deleteReimbursementReport(reportId);
+
+      if (!deleted) {
+        response.status(404).json({
+          success: false,
+          error: {
+            message: "报账记录不存在。",
+          },
+        });
+        return;
+      }
+
+      response.status(200).json({
+        success: true,
+        id: reportId,
       });
     } catch (error) {
       next(error);

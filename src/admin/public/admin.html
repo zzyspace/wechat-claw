@@ -156,6 +156,11 @@
         border-color: var(--line-strong);
       }
 
+      button[disabled] {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
       .button-primary {
         background: var(--brand);
         border-color: var(--brand);
@@ -164,6 +169,21 @@
 
       .button-primary:hover {
         border-color: var(--brand);
+      }
+
+      .button-danger {
+        min-height: 36px;
+        padding: 0 12px;
+        border-radius: 999px;
+        border: 1px solid rgba(255, 59, 48, 0.16);
+        background: rgba(255, 59, 48, 0.08);
+        color: var(--danger);
+        font-size: 13px;
+        font-weight: 700;
+      }
+
+      .button-danger:hover:not([disabled]) {
+        background: rgba(255, 59, 48, 0.14);
       }
 
       .summary-row {
@@ -694,6 +714,7 @@
                   <th>需复核</th>
                   <th>更新时间</th>
                   <th>报账 ID</th>
+                  <th>删除</th>
                 </tr>
               </thead>
               <tbody id="tableBody"></tbody>
@@ -736,6 +757,7 @@
         total: 0,
         selectedReportId: null,
         timeZone: DEFAULT_TIME_ZONE,
+        deletingIds: new Set(),
       };
 
       const elements = {
@@ -944,6 +966,7 @@
           const row = document.createElement("tr");
           row.setAttribute("data-report-id", String(item.id));
           row.classList.toggle("is-selected", item.id === state.selectedReportId);
+          const isDeleting = state.deletingIds.has(item.id);
           row.innerHTML = `
             <td>${escapeHtml(item.channelName)}${item.channelCode ? `<div class="mono muted">${escapeHtml(item.channelCode)}</div>` : ""}</td>
             <td>${escapeHtml(formatTimestamp(item.createdAt))}</td>
@@ -954,6 +977,7 @@
             <td><span class="tag ${item.needsReview ? "warn" : "ok"}">${item.needsReview ? "需复核" : "已确认"}</span></td>
             <td>${escapeHtml(formatTimestamp(item.updatedAt))}</td>
             <td><button type="button" data-report-id="${item.id}">#${item.id}</button></td>
+            <td><button class="button-danger" type="button" data-delete-id="${item.id}" ${isDeleting ? "disabled" : ""}>${isDeleting ? "删除中" : "删除"}</button></td>
           `;
           fragment.appendChild(row);
         }
@@ -1180,6 +1204,47 @@
         }
       }
 
+      async function deleteReport(reportId) {
+        if (!window.confirm(`确认删除报账 #${reportId} 吗？此操作不可恢复。`)) {
+          return;
+        }
+
+        state.deletingIds.add(reportId);
+        renderTable();
+        setStatus(`正在删除报账 #${reportId}...`);
+
+        try {
+          const response = await fetch(buildAuthFetchUrl(`${BASE_PATH}/api/reports/${reportId}`), {
+            method: "DELETE",
+            headers: {
+              Accept: "application/json",
+            },
+          });
+          const payload = await response.json();
+
+          if (!response.ok || !payload.success) {
+            throw new Error(payload?.error?.message || "删除失败");
+          }
+
+          if (state.selectedReportId === reportId) {
+            state.selectedReportId = null;
+            closeDetailModal();
+            elements.detailEmpty.hidden = false;
+            elements.detailContent.hidden = true;
+            elements.detailContent.innerHTML = "";
+            elements.detailEmpty.textContent = "点击左侧列表中的任意一条记录，在这里查看结构化字段、原始消息、附件和回执。";
+          }
+
+          setStatus(`已删除报账 #${reportId}`);
+          await loadReports();
+        } catch (error) {
+          setStatus(error instanceof Error ? error.message : String(error), true);
+        } finally {
+          state.deletingIds.delete(reportId);
+          renderTable();
+        }
+      }
+
       elements.filters.addEventListener("submit", (event) => {
         event.preventDefault();
         void loadReports({ resetOffset: true });
@@ -1215,6 +1280,17 @@
         const target = event.target;
 
         if (!(target instanceof HTMLElement)) {
+          return;
+        }
+
+        const deleteButton = target.closest("button[data-delete-id]");
+        if (deleteButton) {
+          const reportId = Number.parseInt(deleteButton.getAttribute("data-delete-id") || "", 10);
+          if (!Number.isFinite(reportId) || reportId <= 0 || state.deletingIds.has(reportId)) {
+            return;
+          }
+
+          void deleteReport(reportId);
           return;
         }
 
