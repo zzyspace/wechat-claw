@@ -1065,6 +1065,11 @@
             </div>
           </div>
 
+          <div class="detail-section">
+            <h3>来源消息</h3>
+            <div class="source-list">${sourceItems || `<div class="detail-empty">没有来源消息。</div>`}</div>
+          </div>
+
           <div class="detail-grid">
             <div class="detail-card"><strong>群聊</strong><span>${escapeHtml(report.channelName)}${report.channelCode ? ` (${escapeHtml(report.channelCode)})` : ""}</span></div>
             <div class="detail-card"><strong>报账人</strong><span>${escapeHtml(report.reporter)}</span></div>
@@ -1080,11 +1085,6 @@
             <div class="detail-card"><strong>更新时间</strong><span>${escapeHtml(formatTimestamp(report.updatedAt))}</span></div>
             <div class="detail-card" style="grid-column: 1 / -1;"><strong>备注</strong><span>${escapeHtml(compactText(report.note))}</span></div>
             <div class="detail-card" style="grid-column: 1 / -1;"><strong>OCR</strong><span>${escapeHtml(compactText(report.ocrText || "(空)"))}</span></div>
-          </div>
-
-          <div class="detail-section">
-            <h3>来源消息</h3>
-            <div class="source-list">${sourceItems || `<div class="detail-empty">没有来源消息。</div>`}</div>
           </div>
 
           <div class="detail-section">
