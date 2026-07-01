@@ -468,6 +468,7 @@
       .detail-section {
         display: grid;
         gap: 12px;
+        margin-top: 8px;
       }
 
       .detail-section h3 {
@@ -1070,21 +1071,24 @@
             <div class="source-list">${sourceItems || `<div class="detail-empty">没有来源消息。</div>`}</div>
           </div>
 
-          <div class="detail-grid">
-            <div class="detail-card"><strong>群聊</strong><span>${escapeHtml(report.channelName)}${report.channelCode ? ` (${escapeHtml(report.channelCode)})` : ""}</span></div>
-            <div class="detail-card"><strong>报账人</strong><span>${escapeHtml(report.reporter)}</span></div>
-            <div class="detail-card"><strong>金额</strong><span>${escapeHtml(formatAmount(report))}</span></div>
-            <div class="detail-card"><strong>票据日期</strong><span>${escapeHtml(report.voucherDate)} (${escapeHtml(report.voucherDateSource)})</span></div>
-            <div class="detail-card"><strong>类别</strong><span>${escapeHtml(report.expenseCategoryLabel || report.expenseCategory)}</span></div>
-            <div class="detail-card"><strong>证据类型</strong><span>${escapeHtml(report.evidenceType)}</span></div>
-            <div class="detail-card"><strong>商户</strong><span>${escapeHtml(report.merchant || "(空)")}</span></div>
-            <div class="detail-card"><strong>单号</strong><span>${escapeHtml(report.documentNo || "(空)")}</span></div>
-            <div class="detail-card"><strong>凭证类型</strong><span>${escapeHtml(report.voucherType || "(空)")}</span></div>
-            <div class="detail-card"><strong>置信度</strong><span>${Number(report.confidence).toFixed(2)}</span></div>
-            <div class="detail-card"><strong>创建时间</strong><span>${escapeHtml(formatTimestamp(report.createdAt))}</span></div>
-            <div class="detail-card"><strong>更新时间</strong><span>${escapeHtml(formatTimestamp(report.updatedAt))}</span></div>
-            <div class="detail-card" style="grid-column: 1 / -1;"><strong>备注</strong><span>${escapeHtml(compactText(report.note))}</span></div>
-            <div class="detail-card" style="grid-column: 1 / -1;"><strong>OCR</strong><span>${escapeHtml(compactText(report.ocrText || "(空)"))}</span></div>
+          <div class="detail-section">
+            <h3>结构化字段</h3>
+            <div class="detail-grid">
+              <div class="detail-card"><strong>群聊</strong><span>${escapeHtml(report.channelName)}${report.channelCode ? ` (${escapeHtml(report.channelCode)})` : ""}</span></div>
+              <div class="detail-card"><strong>报账人</strong><span>${escapeHtml(report.reporter)}</span></div>
+              <div class="detail-card"><strong>金额</strong><span>${escapeHtml(formatAmount(report))}</span></div>
+              <div class="detail-card"><strong>票据日期</strong><span>${escapeHtml(report.voucherDate)} (${escapeHtml(report.voucherDateSource)})</span></div>
+              <div class="detail-card"><strong>类别</strong><span>${escapeHtml(report.expenseCategoryLabel || report.expenseCategory)}</span></div>
+              <div class="detail-card"><strong>证据类型</strong><span>${escapeHtml(report.evidenceType)}</span></div>
+              <div class="detail-card"><strong>商户</strong><span>${escapeHtml(report.merchant || "(空)")}</span></div>
+              <div class="detail-card"><strong>单号</strong><span>${escapeHtml(report.documentNo || "(空)")}</span></div>
+              <div class="detail-card"><strong>凭证类型</strong><span>${escapeHtml(report.voucherType || "(空)")}</span></div>
+              <div class="detail-card"><strong>置信度</strong><span>${Number(report.confidence).toFixed(2)}</span></div>
+              <div class="detail-card"><strong>创建时间</strong><span>${escapeHtml(formatTimestamp(report.createdAt))}</span></div>
+              <div class="detail-card"><strong>更新时间</strong><span>${escapeHtml(formatTimestamp(report.updatedAt))}</span></div>
+              <div class="detail-card" style="grid-column: 1 / -1;"><strong>备注</strong><span>${escapeHtml(compactText(report.note))}</span></div>
+              <div class="detail-card" style="grid-column: 1 / -1;"><strong>OCR</strong><span>${escapeHtml(compactText(report.ocrText || "(空)"))}</span></div>
+            </div>
           </div>
 
           <div class="detail-section">
