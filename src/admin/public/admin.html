@@ -7,24 +7,24 @@
     <title>报账后台</title>
     <style>
       :root {
-        --bg: #f2efe8;
-        --bg-accent: #e4dccf;
-        --surface: rgba(255, 255, 255, 0.88);
+        --bg: #f2f2f7;
+        --bg-accent: #e9edf7;
+        --surface: rgba(255, 255, 255, 0.84);
         --surface-strong: #ffffff;
-        --line: rgba(64, 48, 27, 0.12);
-        --line-strong: rgba(64, 48, 27, 0.18);
-        --ink: #21180f;
-        --ink-soft: #675d4f;
-        --brand: #1f5d57;
-        --brand-soft: rgba(31, 93, 87, 0.1);
-        --accent: #b76835;
-        --danger: #9d3a24;
-        --warn: #8f5a00;
-        --warn-soft: rgba(143, 90, 0, 0.12);
+        --line: rgba(60, 60, 67, 0.16);
+        --line-strong: rgba(60, 60, 67, 0.24);
+        --ink: #1c1c1e;
+        --ink-soft: #6e6e73;
+        --brand: #007aff;
+        --brand-soft: rgba(0, 122, 255, 0.12);
+        --accent: #007aff;
+        --danger: #ff3b30;
+        --warn: #c96f00;
+        --warn-soft: rgba(255, 149, 0, 0.16);
         --radius-xl: 28px;
         --radius-lg: 20px;
         --radius-md: 14px;
-        --shadow: 0 24px 50px rgba(48, 35, 18, 0.12);
+        --shadow: 0 24px 60px rgba(28, 28, 30, 0.1);
       }
 
       * {
@@ -37,8 +37,8 @@
         font-family: "SF Pro Text", "PingFang SC", "Noto Sans SC", sans-serif;
         color: var(--ink);
         background:
-          radial-gradient(circle at top left, rgba(182, 104, 53, 0.14), transparent 28%),
-          radial-gradient(circle at top right, rgba(31, 93, 87, 0.14), transparent 24%),
+          radial-gradient(circle at top left, rgba(0, 122, 255, 0.16), transparent 28%),
+          radial-gradient(circle at top right, rgba(90, 200, 250, 0.18), transparent 26%),
           linear-gradient(180deg, var(--bg) 0%, var(--bg-accent) 100%);
       }
 
@@ -59,8 +59,8 @@
         width: fit-content;
         padding: 8px 12px;
         border-radius: 999px;
-        background: rgba(255, 255, 255, 0.68);
-        border: 1px solid rgba(64, 48, 27, 0.08);
+        background: rgba(255, 255, 255, 0.72);
+        border: 1px solid rgba(60, 60, 67, 0.12);
         color: var(--ink-soft);
         font-size: 12px;
         font-weight: 700;
@@ -133,7 +133,7 @@
       .field input:focus,
       .field select:focus,
       button:focus {
-        outline: 2px solid rgba(31, 93, 87, 0.22);
+        outline: 2px solid rgba(0, 122, 255, 0.28);
         outline-offset: 2px;
       }
 
@@ -244,6 +244,25 @@
         line-height: 1.6;
       }
 
+      th:nth-child(7),
+      td:nth-child(7) {
+        width: 120px;
+        min-width: 120px;
+      }
+
+      th:nth-child(2),
+      td:nth-child(2),
+      th:nth-child(8),
+      td:nth-child(8) {
+        width: 160px;
+        min-width: 160px;
+      }
+
+      th:nth-child(6),
+      td:nth-child(6) {
+        min-width: 120px;
+      }
+
       tbody tr:hover {
         background: rgba(255, 255, 255, 0.56);
       }
@@ -253,11 +272,11 @@
       }
 
       tbody tr.is-selected {
-        background: rgba(31, 93, 87, 0.08);
+        background: rgba(0, 122, 255, 0.08);
       }
 
       .note-cell {
-        max-width: 260px;
+        max-width: 160px;
         color: var(--ink-soft);
       }
 
@@ -276,9 +295,9 @@
         min-height: 28px;
         padding: 0 10px;
         border-radius: 999px;
-        background: rgba(255, 255, 255, 0.8);
-        border: 1px solid var(--line);
-        color: var(--ink-soft);
+        background: rgba(0, 122, 255, 0.1);
+        border: 1px solid rgba(0, 122, 255, 0.14);
+        color: var(--brand);
         font-size: 12px;
         font-weight: 700;
       }
@@ -286,13 +305,55 @@
       .tag.warn {
         color: var(--warn);
         background: var(--warn-soft);
-        border-color: rgba(143, 90, 0, 0.18);
+        border-color: rgba(255, 149, 0, 0.16);
       }
 
       .tag.ok {
         color: var(--brand);
         background: var(--brand-soft);
-        border-color: rgba(31, 93, 87, 0.16);
+        border-color: rgba(0, 122, 255, 0.16);
+      }
+
+      .tag.category-food {
+        color: #1f8f46;
+        background: rgba(52, 199, 89, 0.14);
+        border-color: rgba(52, 199, 89, 0.18);
+      }
+
+      .tag.category-salary {
+        color: #8e44ad;
+        background: rgba(175, 82, 222, 0.14);
+        border-color: rgba(175, 82, 222, 0.18);
+      }
+
+      .tag.category-rent {
+        color: #c96f00;
+        background: rgba(255, 149, 0, 0.16);
+        border-color: rgba(255, 149, 0, 0.18);
+      }
+
+      .tag.category-utilities {
+        color: #0077a3;
+        background: rgba(90, 200, 250, 0.16);
+        border-color: rgba(90, 200, 250, 0.2);
+      }
+
+      .tag.category-manager_reimbursement {
+        color: #d11a52;
+        background: rgba(255, 45, 85, 0.12);
+        border-color: rgba(255, 45, 85, 0.16);
+      }
+
+      .tag.category-planned_expense {
+        color: #4f46c7;
+        background: rgba(88, 86, 214, 0.14);
+        border-color: rgba(88, 86, 214, 0.18);
+      }
+
+      .tag.category-other {
+        color: var(--ink-soft);
+        background: rgba(120, 120, 128, 0.14);
+        border-color: rgba(120, 120, 128, 0.18);
       }
 
       .detail-empty {
@@ -316,14 +377,14 @@
       .modal-backdrop {
         position: absolute;
         inset: 0;
-        background: rgba(25, 18, 11, 0.46);
+        background: rgba(28, 28, 30, 0.4);
         backdrop-filter: blur(8px);
       }
 
       .modal-dialog {
         position: relative;
         z-index: 1;
-        width: min(1120px, calc(100vw - 24px));
+        width: min(560px, calc(100vw - 24px));
         max-height: calc(100vh - 24px);
         overflow: auto;
         padding: 22px;
@@ -386,7 +447,7 @@
         padding: 14px;
         border-radius: var(--radius-lg);
         background: rgba(255, 255, 255, 0.72);
-        border: 1px solid rgba(64, 48, 27, 0.08);
+        border: 1px solid rgba(60, 60, 67, 0.08);
       }
 
       .detail-card strong {
@@ -428,7 +489,7 @@
         padding: 14px;
         border-radius: var(--radius-lg);
         background: rgba(255, 255, 255, 0.72);
-        border: 1px solid rgba(64, 48, 27, 0.08);
+        border: 1px solid rgba(60, 60, 67, 0.08);
       }
 
       .source-head,
@@ -752,6 +813,29 @@
         return normalized || "(空)";
       }
 
+      function getCategoryTagClass(categoryCode) {
+        switch (String(categoryCode || "").trim()) {
+          case "food":
+            return "category-food";
+          case "salary":
+            return "category-salary";
+          case "rent":
+            return "category-rent";
+          case "utilities":
+            return "category-utilities";
+          case "manager_reimbursement":
+            return "category-manager_reimbursement";
+          case "planned_expense":
+            return "category-planned_expense";
+          default:
+            return "category-other";
+        }
+      }
+
+      function renderCategoryTag(categoryCode, categoryLabel) {
+        return `<span class="tag ${getCategoryTagClass(categoryCode)}">${escapeHtml(categoryLabel || categoryCode || "其他")}</span>`;
+      }
+
       function setStatus(text, isError = false) {
         elements.statusText.textContent = text;
         elements.statusText.classList.toggle("error", isError);
@@ -865,7 +949,7 @@
             <td>${escapeHtml(item.reporter)}</td>
             <td>${escapeHtml(formatAmount(item))}</td>
             <td class="note-cell">${escapeHtml(compactText(item.note))}</td>
-            <td>${escapeHtml(item.expenseCategoryLabel || item.expenseCategory)}</td>
+            <td>${renderCategoryTag(item.expenseCategory, item.expenseCategoryLabel)}</td>
             <td><span class="tag ${item.needsReview ? "warn" : "ok"}">${item.needsReview ? "需复核" : "已确认"}</span></td>
             <td>${escapeHtml(formatTimestamp(item.updatedAt))}</td>
             <td><button type="button" data-report-id="${item.id}">#${item.id}</button></td>
@@ -977,7 +1061,7 @@
             <div class="detail-meta">
               <span class="tag">${escapeHtml(report.channelName)}</span>
               <span class="tag ${report.needsReview ? "warn" : "ok"}">${report.needsReview ? "需复核" : "已确认"}</span>
-              <span class="tag">${escapeHtml(report.expenseCategoryLabel || report.expenseCategory)}</span>
+              ${renderCategoryTag(report.expenseCategory, report.expenseCategoryLabel)}
             </div>
           </div>
 
