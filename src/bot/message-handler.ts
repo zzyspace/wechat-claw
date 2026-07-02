@@ -3,6 +3,10 @@ import { matchChannelByRoomTopic } from "../core/channels/router.js";
 import type { Logger } from "../core/logging/logger.js";
 import { saveImageAttachment } from "../core/attachments/save-image-attachment.js";
 import { normalizeMessage } from "../core/messages/normalize-message.js";
+import {
+  buildManualReimbursementImportMessageFormatText,
+  parseManualReimbursementImportMessageCommand,
+} from "../core/runtime/reimbursement-manual-import-message-command.js";
 import { getReimbursementRawStorageDir } from "../core/runtime/state-paths.js";
 import { saveScenarioExtraction } from "../core/scenarios/scenario-extraction-repository.js";
 import { hasRecentImageMessage, saveRawMessage } from "../core/storage/raw-message-repository.js";
@@ -10,6 +14,7 @@ import type { StoredAttachment } from "../core/storage/types.js";
 import { extractLossReportHeuristically } from "../scenarios/loss-report/heuristic-extractor.js";
 import { extractLossReportByModel } from "../scenarios/loss-report/model-provider.js";
 import { extractReimbursementReport } from "../scenarios/reimbursement/extractor.js";
+import { importManualReimbursementReport } from "../scenarios/reimbursement/manual-import.js";
 import {
   attachRawMessageToRecentReimbursementReceiptDelivery,
   attachRemarkToReimbursementReport,
@@ -47,6 +52,7 @@ const REIMBURSEMENT_AMOUNT_PATTERN = "-?\\d+(?:\\.\\d+)?";
 export interface MessageContext {
   channels: ChannelConfig[];
   debugContactName?: string;
+  manualReimbursementContactName?: string;
   debugReceivedRoomMessageEnabled?: boolean;
   timeZone?: string;
   lossMergeWindowSeconds: number;
@@ -71,6 +77,17 @@ interface ParsedRoomMessage {
   messageType: string;
   normalizedText: string;
   roomTopic: string;
+  senderExternalId?: string;
+  senderName: string;
+  typeValue: unknown;
+}
+
+interface ParsedPrivateMessage {
+  eventReceivedAt: string;
+  messageExternalId: string;
+  messageSentAt?: string;
+  messageType: string;
+  normalizedText: string;
   senderExternalId?: string;
   senderName: string;
   typeValue: unknown;
@@ -124,6 +141,26 @@ export async function handleMessage(message: any, context: MessageContext, logge
         senderName,
         typeValue,
       },
+      logger,
+    );
+    return;
+  }
+
+  if (!room) {
+    await handlePrivateMessage(
+      message,
+      talker,
+      {
+        eventReceivedAt,
+        messageExternalId: String(messageId),
+        messageSentAt,
+        messageType: String(typeValue),
+        normalizedText,
+        senderExternalId,
+        senderName,
+        typeValue,
+      },
+      context,
       logger,
     );
     return;
@@ -214,6 +251,92 @@ export async function handleMessage(message: any, context: MessageContext, logge
   if (channel.scenario === "reimbursement") {
     await handleReimbursementMessage(message, parsed, context, logger);
   }
+}
+
+async function handlePrivateMessage(
+  message: any,
+  talker: any,
+  parsed: ParsedPrivateMessage,
+  context: MessageContext,
+  logger: Logger,
+) {
+  const allowedContactName = context.manualReimbursementContactName?.trim();
+
+  if (!allowedContactName || parsed.senderName !== allowedContactName) {
+    return;
+  }
+
+  if (parsed.normalizedText === "(非文本消息)") {
+    return;
+  }
+
+  let command;
+
+  try {
+    command = parseManualReimbursementImportMessageCommand(parsed.normalizedText);
+  } catch (error) {
+    const messageText = error instanceof Error ? error.message : String(error);
+
+    logger.warn("Rejected malformed private manual reimbursement command", {
+      commandText: parsed.normalizedText,
+      message: messageText,
+      senderName: parsed.senderName,
+    });
+    await sendPrivateMessageResponse(
+      talker,
+      logger,
+      parsed.senderName,
+      `格式错误，请按以下格式发送：\n${buildManualReimbursementImportMessageFormatText()}`,
+    );
+    return;
+  }
+
+  if (!command) {
+    return;
+  }
+
+  const channel = context.channels.find((item) => item.code === command.channelCode);
+
+  if (!channel || channel.scenario !== "reimbursement") {
+    logger.warn("Rejected private manual reimbursement command with unknown channel", {
+      channelCode: command.channelCode,
+      senderName: parsed.senderName,
+    });
+    await sendPrivateMessageResponse(talker, logger, parsed.senderName, REIMBURSEMENT_COMMAND_UNSUPPORTED_TEXT);
+    return;
+  }
+
+  const sentAt = command.sentAt ?? parsed.messageSentAt ?? parsed.eventReceivedAt;
+  const result = importManualReimbursementReport({
+    amount: command.amount,
+    channelCode: channel.code,
+    channelName: channel.match.value,
+    expenseCategory: command.expenseCategory,
+    note: command.note,
+    reporter: command.reporter,
+    sentAt,
+    timeZone: context.timeZone,
+  });
+
+  logger.info("Imported reimbursement report from private manual command", {
+    amount: command.amount,
+    category: command.expenseCategory,
+    channelCode: channel.code,
+    extractionId: result.extraction.id,
+    messageExternalId: parsed.messageExternalId,
+    rawMessageId: result.rawMessageId,
+    reimbursementReportId: result.report.id,
+    reporter: command.reporter,
+    senderName: parsed.senderName,
+    sentAt,
+  });
+
+  await sendPrivateMessageResponse(
+    talker,
+    logger,
+    parsed.senderName,
+    REIMBURSEMENT_COMMAND_PROCESSED_TEXT,
+  );
 }
 
 async function handleSelfMessage(
@@ -1400,6 +1523,37 @@ async function sendReimbursementCommandResponse(
     roomTopic,
     text,
   });
+}
+
+async function sendPrivateMessageResponse(
+  talker: any,
+  logger: Logger,
+  senderName: string,
+  text: string,
+) {
+  if (!talker || typeof talker.say !== "function") {
+    logger.warn("Talker unavailable for private command response", {
+      senderName,
+      text,
+    });
+    return;
+  }
+
+  try {
+    await talker.say(text);
+    logger.info("Sent private command response", {
+      delivered: true,
+      senderName,
+      text,
+    });
+  } catch (error) {
+    logger.error("Failed to send private command response", {
+      message: error instanceof Error ? error.message : String(error),
+      senderName,
+      stack: error instanceof Error ? error.stack : undefined,
+      text,
+    });
+  }
 }
 
 async function extractReimbursementReceiptReply(

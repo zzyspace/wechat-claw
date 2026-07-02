@@ -468,6 +468,7 @@ export async function startBot(
         {
           channels: config.channels,
           debugContactName: config.debugContactName,
+          manualReimbursementContactName: config.manualReimbursementContactName,
           debugReceivedRoomMessageEnabled: config.debugReceivedRoomMessageEnabled,
           timeZone: config.timeZone,
           lossMergeWindowSeconds: config.lossMergeWindowSeconds,

@@ -124,6 +124,38 @@ test("evaluateWatchdogState marks waiting_for_scan timeout as manual action requ
   assert.equal(evaluation.reasonCode, "login_waiting_for_scan_timeout");
 });
 
+test("evaluateWatchdogState immediately flags chromium dependency failures for manual action", () => {
+  const evaluation = evaluateWatchdogState({
+    healthSnapshot: createHealthSnapshot({
+      status: "degraded",
+      degradedSinceAt: "2026-05-21T11:59:30.000Z",
+      lastError: {
+        at: "2026-05-21T11:59:30.000Z",
+        category: "chromium_dependency_missing",
+        message: "Could not find expected browser (chrome) locally.",
+      },
+    }),
+    hostName: "test-host",
+    now: new Date("2026-05-21T12:00:00.000Z"),
+    serviceName: "wechat-claw",
+    serviceStatus: createServiceStatus(),
+    watchdogSnapshot: createWatchdogSnapshot({
+      lastHeartbeatAt: "2026-05-21T11:59:50.000Z",
+      lastHealthStatus: "degraded",
+      degradedSinceAt: "2026-05-21T11:59:30.000Z",
+      lastError: {
+        at: "2026-05-21T11:59:30.000Z",
+        category: "chromium_dependency_missing",
+        message: "Could not find expected browser (chrome) locally.",
+      },
+    }),
+  });
+
+  assert.equal(evaluation.severity, "manual_action_required");
+  assert.equal(evaluation.action, "email_only");
+  assert.equal(evaluation.reasonCode, "chromium_dependency_missing");
+});
+
 test("runWatchdogCheck sends one email for repeated identical faults within the suppression window", async () => {
   const stateDir = fs.mkdtempSync(path.join(os.tmpdir(), "wechat-claw-watchdog-check-"));
   const config = createConfig(stateDir, true);
@@ -326,6 +358,58 @@ test("createWatchdogAlertEmail includes diagnosis details and suggested commands
   assert.match(email.subject, /\[wechat-claw\]\[recoverable\] test-host login_logged_out/);
   assert.match(email.text, /Health lastError\.message: Bot logged out: Claw/);
   assert.match(email.text, /journalctl -u wechat-claw -f -o short-iso/);
+});
+
+test("runWatchdogCheck sends alert email for chromium dependency failures without restart", async () => {
+  const stateDir = fs.mkdtempSync(path.join(os.tmpdir(), "wechat-claw-watchdog-check-"));
+  const config = createConfig(stateDir, true);
+  const sentSubjects: string[] = [];
+  let restartCount = 0;
+
+  const result = await runWatchdogCheck({
+    config,
+    healthSnapshot: createHealthSnapshot({
+      status: "degraded",
+      degradedSinceAt: "2026-05-21T11:59:30.000Z",
+      lastError: {
+        at: "2026-05-21T11:59:30.000Z",
+        category: "chromium_dependency_missing",
+        message: "Could not find expected browser (chrome) locally.",
+      },
+    }),
+    now: new Date("2026-05-21T12:00:00.000Z"),
+    persistentState: {
+      firstObservedAtByFingerprint: {},
+      lastCheckAt: null,
+      recentAlertsByFingerprint: {},
+      recentRestartAts: [],
+    },
+    readServiceStatus: () => createServiceStatus(),
+    restartService: () => {
+      restartCount += 1;
+    },
+    sendAlertEmail: async (message) => {
+      sentSubjects.push(message.subject);
+    },
+    serviceName: "wechat-claw",
+    watchdogSnapshot: createWatchdogSnapshot({
+      lastHeartbeatAt: "2026-05-21T11:59:50.000Z",
+      lastHealthStatus: "degraded",
+      degradedSinceAt: "2026-05-21T11:59:30.000Z",
+      lastError: {
+        at: "2026-05-21T11:59:30.000Z",
+        category: "chromium_dependency_missing",
+        message: "Could not find expected browser (chrome) locally.",
+      },
+    }),
+  });
+
+  assert.equal(result.effectiveEvaluation.reasonCode, "chromium_dependency_missing");
+  assert.equal(result.effectiveEvaluation.action, "email_only");
+  assert.equal(result.emailSent, true);
+  assert.equal(restartCount, 0);
+  assert.equal(sentSubjects.length, 1);
+  assert.match(sentSubjects[0] ?? "", /\[manual-action\].*chromium_dependency_missing/);
 });
 
 test("evaluateWatchdogState uses degradedSinceAt instead of a refreshed lastError timestamp", () => {

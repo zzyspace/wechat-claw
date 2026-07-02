@@ -25,6 +25,7 @@ const FIRST_OBSERVATION_TTL_MS = 24 * 60 * 60 * 1000;
 export type WatchdogReasonCode =
   | "service_not_running"
   | "watchdog_heartbeat_stale"
+  | "chromium_dependency_missing"
   | "health_degraded_persistent"
   | "login_waiting_for_scan_timeout"
   | "login_logged_out"
@@ -392,6 +393,21 @@ export function evaluateWatchdogState(input: {
   }
 
   if (input.healthSnapshot.status === "degraded") {
+    if (input.healthSnapshot.lastError?.category === "chromium_dependency_missing") {
+      return buildEvaluation({
+        action: "email_only",
+        healthSnapshot: input.healthSnapshot,
+        hostName,
+        message:
+          "The bot failed to launch Chromium and needs manual repair before it can log in again.",
+        reasonCode: "chromium_dependency_missing",
+        serviceName: input.serviceName,
+        serviceStatus,
+        severity: "manual_action_required",
+        watchdogSnapshot: input.watchdogSnapshot,
+      });
+    }
+
     const degradedAgeMs = input.healthSnapshot.degradedSinceAt
       ? ageMsFromIso(input.healthSnapshot.degradedSinceAt, now)
       : input.healthSnapshot.lastError?.at

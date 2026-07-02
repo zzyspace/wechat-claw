@@ -135,6 +135,7 @@ WECHATY_CHANNELS_JSON=[{"code":"loss_a","enabled":true,"scenario":"loss-report",
 - `WECHATY_SELF_CANARY_AUTO_RESET_ENABLED`: 连续失败达到阈值后，是否自动备份并停用 `memory-card` 后触发 fresh login，默认 `false`
 - `WECHATY_TIMEZONE`: 日期边界和 cron 解释时区，默认 `Asia/Shanghai`
 - `WECHATY_DEBUG_CONTACT_NAME`: `"[wechat-claw]"` 调试信息的接收联系人，不参与业务日报发送；上线通知始终走这里
+- `WECHATY_MANUAL_REIMBURSEMENT_CONTACT_NAME`: 允许通过私聊发送“补录报账”结构化命令的联系人昵称；未配置时该能力关闭
 - `WECHATY_ADMIN_HOST`: 报账后台监听地址，默认 `127.0.0.1`
 - `WECHATY_ADMIN_PORT`: 报账后台监听端口，默认 `8788`
 - `WECHATY_ADMIN_USERNAME/WECHATY_ADMIN_PASSWORD`: 报账后台 Basic Auth 账号密码；未配置时 `/reimbursement` 会返回 `503`
@@ -209,6 +210,20 @@ WECHATY_CHANNELS_JSON=[{"code":"loss_a","enabled":true,"scenario":"loss-report",
   - 指令执行成功后，bot 会回复 `已处理`
   - 指令格式正确但没找到对应报账时，bot 会回复 `未找到对应报账`
   - 指令不支持时，bot 会回复 `不支持的指令`
+- 如果配置了 `WECHATY_MANUAL_REIMBURSEMENT_CONTACT_NAME`，该联系人还可以通过私聊发送固定结构化命令手工补录报账；成功后 bot 会私聊回复 `已处理`
+  - 固定格式如下：
+    ```text
+    补录报账
+    channel_code: reimbursement_fuzzy
+    reporter: 张三
+    amount: 36.5
+    category: 食材
+    note: 午餐报账
+    sent_at: 2026-07-02T14:32:00+08:00
+    ```
+  - 必填字段：`channel_code`、`reporter`、`amount`、`category`
+  - 可选字段：`note`、`sent_at`
+  - 支持中英文键名和中英文冒号，例如 `群聊代码：reimbursement_fuzzy`、`报账人：张三`、`金额：36.5`、`分类：食材`
 - 也就是说：
   - `summarySchedule` 留空时，不会自动发送日报
   - `weeklySummarySchedule` 留空时，不会自动发送周报
@@ -305,6 +320,24 @@ npm run inspect:messages
 
 ```bash
 npm run inspect:reimbursements
+```
+
+手工补录一条报账：
+
+```bash
+npm run reimbursement:manual-import -- --channel-code reimbursement_fuzzy --reporter 张三 --amount 36.5 --category 食材 --note 午餐报账 --sent-at 2026-07-02T14:32:00+08:00
+```
+
+通过私聊补录一条报账：
+
+```text
+补录报账
+channel_code: reimbursement_fuzzy
+reporter: 张三
+amount: 36.5
+category: 食材
+note: 午餐报账
+sent_at: 2026-07-02T14:32:00+08:00
 ```
 
 常用筛选：

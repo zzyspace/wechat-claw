@@ -53,6 +53,7 @@ export interface AppConfig {
   selfCanary?: SelfCanaryConfig;
   timeZone: string;
   debugContactName?: string;
+  manualReimbursementContactName?: string;
   debugReceivedRoomMessageEnabled?: boolean;
   channels: ChannelConfig[];
   channelsSource: ChannelsSource;
@@ -437,6 +438,7 @@ export function getAppConfig(): AppConfig {
     },
     timeZone: readStringEnv("WECHATY_TIMEZONE", "Asia/Shanghai") || "Asia/Shanghai",
     debugContactName: readOptionalEnv("WECHATY_DEBUG_CONTACT_NAME"),
+    manualReimbursementContactName: readOptionalEnv("WECHATY_MANUAL_REIMBURSEMENT_CONTACT_NAME"),
     debugReceivedRoomMessageEnabled: readBooleanEnv(
       "WECHATY_DEBUG_RECEIVED_ROOM_MESSAGE_ENABLED",
       false,

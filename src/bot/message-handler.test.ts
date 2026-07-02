@@ -2666,3 +2666,101 @@ test("handleMessage rechecks forward reimbursement text after image extraction",
     globalThis.fetch = originalFetch;
   }
 });
+
+test("handleMessage imports reimbursement from configured private command sender and replies processed", { concurrency: false }, async () => {
+  const logs: Array<{ level: string; message: string; context?: Record<string, unknown> }> = [];
+  const replies: string[] = [];
+  const beforeReportCount = listRecentReimbursementReports(1000).length;
+
+  await handleMessage(
+    {
+      id: () => "private-manual-import-success",
+      date: () => new Date("2026-07-02T06:32:00.000Z"),
+      room: async () => null,
+      self: () => false,
+      talker: async () => ({
+        id: () => "private_manual_import_sender",
+        name: () => "补录操作员",
+        say: async (text: string) => {
+          replies.push(text);
+        },
+      }),
+      text: () =>
+        [
+          "补录报账",
+          "channel_code: reimbursement_fuzzy",
+          "reporter: 张三",
+          "amount: 36.5",
+          "category: 食材",
+          "note: 午餐报账",
+          "sent_at: 2026-07-02T14:32:00+08:00",
+        ].join("\n"),
+      type: () => 7,
+    },
+    {
+      ...createMessageContext([
+        {
+          code: "reimbursement_fuzzy",
+          deliveryTargets: [],
+          enabled: true,
+          match: {
+            type: "room_topic",
+            value: "模糊报账群",
+          },
+          scenario: "reimbursement",
+          summarySchedule: "",
+        },
+      ]),
+      manualReimbursementContactName: "补录操作员",
+    },
+    createLogger(logs),
+  );
+
+  const reports = listRecentReimbursementReports(1000).filter((report) => report.reporter === "张三");
+
+  assert.equal(replies.at(-1), "已处理");
+  assert.equal(reports.length, 1);
+  assert.equal(reports[0]?.channelCode, "reimbursement_fuzzy");
+  assert.equal(reports[0]?.channelName, "模糊报账群");
+  assert.equal(reports[0]?.amount, 36.5);
+  assert.equal(reports[0]?.expenseCategory, "food");
+  assert.equal(reports[0]?.note, "午餐报账");
+  assert.equal(reports[0]?.voucherDate, "2026-07-02");
+  assert.equal(listRecentReimbursementReports(1000).length, beforeReportCount + 1);
+  assert(logs.some((entry) => entry.message === "Imported reimbursement report from private manual command"));
+});
+
+test("handleMessage replies with format example for malformed private reimbursement command", { concurrency: false }, async () => {
+  const replies: string[] = [];
+  const beforeReportCount = listRecentReimbursementReports(1000).length;
+
+  await handleMessage(
+    {
+      id: () => "private-manual-import-invalid",
+      room: async () => null,
+      self: () => false,
+      talker: async () => ({
+        id: () => "private_manual_import_sender_invalid",
+        name: () => "补录操作员",
+        say: async (text: string) => {
+          replies.push(text);
+        },
+      }),
+      text: () =>
+        [
+          "补录报账",
+          "channel_code: reimbursement_fuzzy",
+          "amount: abc",
+        ].join("\n"),
+      type: () => 7,
+    },
+    {
+      ...createMessageContext([createReimbursementChannel()]),
+      manualReimbursementContactName: "补录操作员",
+    },
+    createLogger([]),
+  );
+
+  assert.match(replies.at(-1) ?? "", /^格式错误，请按以下格式发送：/);
+  assert.equal(listRecentReimbursementReports(1000).length, beforeReportCount);
+});
