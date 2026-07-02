@@ -340,6 +340,20 @@ note: 午餐报账
 sent_at: 2026-07-02T14:32:00+08:00
 ```
 
+私聊补录说明：
+
+- 需要先配置 `WECHATY_MANUAL_REIMBURSEMENT_CONTACT_NAME=你的微信昵称`
+- 只有这个联系人发来的私聊消息会触发补录；其他私聊消息会被忽略
+- 第一行必须精确写 `补录报账`
+- 必填字段：`channel_code`、`reporter`、`amount`、`category`
+- 可选字段：`note`、`sent_at`
+- `channel_code` 必须是当前 `WECHATY_CHANNELS_JSON` 里已存在且 `scenario=reimbursement` 的 channel code
+- `category` 必须是现有报账类别或别名，例如 `food / salary / rent / utilities / manager_reimbursement / planned_expense / other / 食材 / 工资 / 房租 / 水电 / 店长报账 / 预报账 / 其他`
+- `sent_at` 建议使用带时区的 ISO 时间，例如 `2026-07-02T14:32:00+08:00`；不传时默认使用收到这条私聊命令的时间
+- 补录成功后，bot 会私聊回复 `已处理`
+- 如果字段格式不对，例如金额不是数字、类别不存在、缺少必填字段，bot 会回复格式示例
+- 如果 `channel_code` 不存在，或该 channel 不是报账 channel，bot 会回复 `不支持的指令`
+
 常用筛选：
 
 ```bash

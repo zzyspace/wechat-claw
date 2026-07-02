@@ -261,12 +261,29 @@ async function handlePrivateMessage(
   logger: Logger,
 ) {
   const allowedContactName = context.manualReimbursementContactName?.trim();
+  const firstLine = extractFirstLine(parsed.normalizedText);
 
-  if (!allowedContactName || parsed.senderName !== allowedContactName) {
+  if (!allowedContactName) {
+    return;
+  }
+
+  if (parsed.senderName !== allowedContactName) {
+    if (parsed.normalizedText !== "(非文本消息)" && firstLine.includes("补录")) {
+      logger.info("Ignored private manual reimbursement command due to sender mismatch", {
+        expectedSenderName: allowedContactName,
+        firstLine,
+        senderName: parsed.senderName,
+      });
+    }
     return;
   }
 
   if (parsed.normalizedText === "(非文本消息)") {
+    logger.info("Ignored non-text private message from manual reimbursement contact", {
+      messageExternalId: parsed.messageExternalId,
+      senderName: parsed.senderName,
+      typeValue: parsed.typeValue,
+    });
     return;
   }
 
@@ -292,6 +309,12 @@ async function handlePrivateMessage(
   }
 
   if (!command) {
+    logger.info("Ignored private message from manual reimbursement contact because command header did not match", {
+      expectedHeader: "补录报账",
+      firstLine,
+      messageExternalId: parsed.messageExternalId,
+      senderName: parsed.senderName,
+    });
     return;
   }
 
@@ -1959,6 +1982,10 @@ function readMessageAge(message: any) {
   } catch (error) {
     return `error:${error instanceof Error ? error.message : String(error)}`;
   }
+}
+
+function extractFirstLine(text: string) {
+  return text.split(/\r?\n/, 1)[0]?.trim() ?? "";
 }
 
 function isXmlImagePayload(text: string, typeValue: unknown) {

@@ -2764,3 +2764,79 @@ test("handleMessage replies with format example for malformed private reimbursem
   assert.match(replies.at(-1) ?? "", /^格式错误，请按以下格式发送：/);
   assert.equal(listRecentReimbursementReports(1000).length, beforeReportCount);
 });
+
+test("handleMessage logs sender mismatch for private reimbursement-like command", { concurrency: false }, async () => {
+  const logs: Array<{ level: string; message: string; context?: Record<string, unknown> }> = [];
+
+  await handleMessage(
+    {
+      id: () => "private-manual-import-sender-mismatch",
+      room: async () => null,
+      self: () => false,
+      talker: async () => ({
+        id: () => "private_manual_import_sender_mismatch",
+        name: () => "真实发送人",
+        say: async () => {
+          throw new Error("should not reply");
+        },
+      }),
+      text: () =>
+        [
+          "补录报账",
+          "channel_code: reimbursement_fuzzy",
+          "reporter: 张三",
+          "amount: 36.5",
+          "category: 食材",
+        ].join("\n"),
+      type: () => 7,
+    },
+    {
+      ...createMessageContext([createReimbursementChannel()]),
+      manualReimbursementContactName: "Ryan。",
+    },
+    createLogger(logs),
+  );
+
+  assert(
+    logs.some(
+      (entry) =>
+        entry.message === "Ignored private manual reimbursement command due to sender mismatch" &&
+        entry.context?.senderName === "真实发送人" &&
+        entry.context?.expectedSenderName === "Ryan。",
+    ),
+  );
+});
+
+test("handleMessage logs command header mismatch for configured private reimbursement contact", { concurrency: false }, async () => {
+  const logs: Array<{ level: string; message: string; context?: Record<string, unknown> }> = [];
+
+  await handleMessage(
+    {
+      id: () => "private-manual-import-header-mismatch",
+      room: async () => null,
+      self: () => false,
+      talker: async () => ({
+        id: () => "private_manual_import_header_mismatch",
+        name: () => "补录操作员",
+        say: async () => {
+          throw new Error("should not reply");
+        },
+      }),
+      text: () => "帮我补录一下",
+      type: () => 7,
+    },
+    {
+      ...createMessageContext([createReimbursementChannel()]),
+      manualReimbursementContactName: "补录操作员",
+    },
+    createLogger(logs),
+  );
+
+  assert(
+    logs.some(
+      (entry) =>
+        entry.message === "Ignored private message from manual reimbursement contact because command header did not match" &&
+        entry.context?.firstLine === "帮我补录一下",
+    ),
+  );
+});
