@@ -41,6 +41,10 @@ export function buildManualReimbursementImportMessageFormatText() {
   ].join("\n");
 }
 
+function normalizeMessageLineBreaks(text: string) {
+  return text.replace(/<br\s*\/?>/gi, "\n");
+}
+
 function normalizeKey(value: string) {
   return value.trim().toLowerCase().replace(/\s+/g, "").replace(/-/g, "_");
 }
@@ -78,7 +82,7 @@ function parseCategory(value: string) {
 export function parseManualReimbursementImportMessageCommand(
   text: string,
 ): ManualReimbursementImportMessageCommand | null {
-  const lines = text
+  const lines = normalizeMessageLineBreaks(text)
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter((line) => line.length > 0);

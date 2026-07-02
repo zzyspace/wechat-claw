@@ -47,6 +47,21 @@ test("parseManualReimbursementImportMessageCommand supports Chinese field names"
   });
 });
 
+test("parseManualReimbursementImportMessageCommand supports wechat html line breaks", () => {
+  const command = parseManualReimbursementImportMessageCommand(
+    "补录报账<br/>channel_code: reimbursement_fuzzy<br/>reporter: 振国<br/>amount: 15<br/>category: 其他",
+  );
+
+  assert.deepEqual(command, {
+    amount: 15,
+    channelCode: "reimbursement_fuzzy",
+    expenseCategory: "other",
+    note: "",
+    reporter: "振国",
+    sentAt: undefined,
+  });
+});
+
 test("parseManualReimbursementImportMessageCommand returns null for unrelated text", () => {
   assert.equal(parseManualReimbursementImportMessageCommand("hello"), null);
 });
