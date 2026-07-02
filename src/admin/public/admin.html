@@ -771,12 +771,12 @@
               </select>
             </div>
             <div class="field">
-              <label for="voucherDateFrom">票据日期从</label>
-              <input id="voucherDateFrom" name="voucherDateFrom" type="date" />
+              <label for="createdDateFrom">创建日期从</label>
+              <input id="createdDateFrom" name="createdDateFrom" type="date" />
             </div>
             <div class="field">
-              <label for="voucherDateTo">票据日期到</label>
-              <input id="voucherDateTo" name="voucherDateTo" type="date" />
+              <label for="createdDateTo">创建日期到</label>
+              <input id="createdDateTo" name="createdDateTo" type="date" />
             </div>
             <div class="field">
               <label for="limit">每页条数</label>
@@ -785,6 +785,10 @@
                 <option value="50" selected>50</option>
                 <option value="100">100</option>
                 <option value="200">200</option>
+                <option value="400">400</option>
+                <option value="600">600</option>
+                <option value="800">800</option>
+                <option value="1000">1000</option>
               </select>
             </div>
           </div>
@@ -1042,8 +1046,8 @@
           reporter: String(formData.get("reporter") || "").trim(),
           expenseCategory: String(formData.get("expenseCategory") || "").trim(),
           needsReview: String(formData.get("needsReview") || "all").trim(),
-          voucherDateFrom: String(formData.get("voucherDateFrom") || "").trim(),
-          voucherDateTo: String(formData.get("voucherDateTo") || "").trim(),
+          createdDateFrom: String(formData.get("createdDateFrom") || "").trim(),
+          createdDateTo: String(formData.get("createdDateTo") || "").trim(),
           limit: String(formData.get("limit") || state.limit || 50).trim(),
         };
       }
@@ -1056,8 +1060,8 @@
           "reporter",
           "expenseCategory",
           "needsReview",
-          "voucherDateFrom",
-          "voucherDateTo",
+          "createdDateFrom",
+          "createdDateTo",
           "limit",
         ]) {
           const field = elements.filters.elements.namedItem(name);
@@ -1102,8 +1106,8 @@
         if (filters.reporter) params.set("reporter", filters.reporter);
         if (filters.expenseCategory) params.set("expenseCategory", filters.expenseCategory);
         if (filters.needsReview && filters.needsReview !== "all") params.set("needsReview", filters.needsReview);
-        if (filters.voucherDateFrom) params.set("voucherDateFrom", filters.voucherDateFrom);
-        if (filters.voucherDateTo) params.set("voucherDateTo", filters.voucherDateTo);
+        if (filters.createdDateFrom) params.set("createdDateFrom", filters.createdDateFrom);
+        if (filters.createdDateTo) params.set("createdDateTo", filters.createdDateTo);
         params.set("limit", filters.limit || "50");
         params.set("offset", String(state.offset));
 

@@ -1,7 +1,7 @@
 import fs from "node:fs";
 
 import { getDatabase } from "../../core/storage/database.js";
-import { getZonedDateParts, zonedDateTimeToUtc } from "../../core/runtime/timezone.js";
+import { addDaysToDateString, getUtcRangeForZonedDate, getZonedDateParts, zonedDateTimeToUtc } from "../../core/runtime/timezone.js";
 import {
   DEFAULT_REIMBURSEMENT_EXPENSE_CATEGORY,
   getReimbursementExpenseCategoryLabel,
@@ -213,6 +213,10 @@ function normalizeSourceText(text: string) {
 
 function escapeLikePattern(value: string) {
   return value.replaceAll("\\", "\\\\").replaceAll("%", "\\%").replaceAll("_", "\\_");
+}
+
+function formatUtcDateForDatabase(date: Date) {
+  return date.toISOString().slice(0, 19).replace("T", " ");
 }
 
 function selectReportById(id: number): ReimbursementReportRecord {
@@ -1557,8 +1561,9 @@ export function listAdminReimbursementReports(options?: {
   reporter?: string;
   expenseCategory?: ReimbursementExpenseCategory;
   needsReview?: boolean;
-  voucherDateFrom?: string;
-  voucherDateTo?: string;
+  createdDateFrom?: string;
+  createdDateTo?: string;
+  timeZone?: string;
   limit?: number;
   offset?: number;
 }): {
@@ -1569,7 +1574,7 @@ export function listAdminReimbursementReports(options?: {
 } {
   const db = getDatabase();
   const limit =
-    Number.isFinite(options?.limit) && Number(options?.limit) > 0 ? Math.min(Number(options?.limit), 200) : 50;
+    Number.isFinite(options?.limit) && Number(options?.limit) > 0 ? Math.min(Number(options?.limit), 1000) : 50;
   const offset =
     Number.isFinite(options?.offset) && Number(options?.offset) >= 0 ? Math.max(Number(options?.offset), 0) : 0;
   const clauses: string[] = [];
@@ -1596,14 +1601,17 @@ export function listAdminReimbursementReports(options?: {
     params.needsReview = options.needsReview ? 1 : 0;
   }
 
-  if (options?.voucherDateFrom) {
-    clauses.push("voucher_date >= @voucherDateFrom");
-    params.voucherDateFrom = options.voucherDateFrom;
+  if (options?.createdDateFrom) {
+    const range = getUtcRangeForZonedDate(options.createdDateFrom, options.timeZone ?? DEFAULT_REIMBURSEMENT_TIME_ZONE);
+    clauses.push("created_at >= @createdAtFrom");
+    params.createdAtFrom = formatUtcDateForDatabase(new Date(range.startInclusiveIso));
   }
 
-  if (options?.voucherDateTo) {
-    clauses.push("voucher_date <= @voucherDateTo");
-    params.voucherDateTo = options.voucherDateTo;
+  if (options?.createdDateTo) {
+    const endExclusiveDate = addDaysToDateString(options.createdDateTo, 1);
+    const range = getUtcRangeForZonedDate(endExclusiveDate, options.timeZone ?? DEFAULT_REIMBURSEMENT_TIME_ZONE);
+    clauses.push("created_at < @createdAtToExclusive");
+    params.createdAtToExclusive = formatUtcDateForDatabase(new Date(range.startInclusiveIso));
   }
 
   if (search) {

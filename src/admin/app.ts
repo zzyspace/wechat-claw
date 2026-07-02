@@ -15,7 +15,7 @@ import { createAdminAuthMiddleware } from "./auth.js";
 
 const ADMIN_BASE_PATH = "/reimbursement";
 const DEFAULT_LIMIT = 50;
-const MAX_LIMIT = 200;
+const MAX_LIMIT = 1000;
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
 const defaultStaticDir = path.join(currentDir, "public");
 
@@ -139,11 +139,11 @@ function resolveStaticDir(staticDir?: string) {
 }
 
 function parseReportListQuery(query: Record<string, unknown>) {
-  const voucherDateFrom = parseDateFilter(query.voucherDateFrom, "voucherDateFrom");
-  const voucherDateTo = parseDateFilter(query.voucherDateTo, "voucherDateTo");
+  const createdDateFrom = parseDateFilter(query.createdDateFrom, "createdDateFrom");
+  const createdDateTo = parseDateFilter(query.createdDateTo, "createdDateTo");
 
-  if (voucherDateFrom && voucherDateTo && voucherDateFrom > voucherDateTo) {
-    throw new AdminValidationError("voucherDateFrom 不能晚于 voucherDateTo。", "voucherDateFrom");
+  if (createdDateFrom && createdDateTo && createdDateFrom > createdDateTo) {
+    throw new AdminValidationError("createdDateFrom 不能晚于 createdDateTo。", "createdDateFrom");
   }
 
   return {
@@ -152,8 +152,8 @@ function parseReportListQuery(query: Record<string, unknown>) {
     reporter: trimString(query.reporter) || undefined,
     expenseCategory: parseExpenseCategory(query.expenseCategory),
     needsReview: parseBooleanFilter(query.needsReview),
-    voucherDateFrom: voucherDateFrom || undefined,
-    voucherDateTo: voucherDateTo || undefined,
+    createdDateFrom: createdDateFrom || undefined,
+    createdDateTo: createdDateTo || undefined,
     limit: parseLimit(query.limit),
     offset: parseOffset(query.offset),
   };
@@ -188,7 +188,10 @@ export function createApp(input?: {
   app.get(`${ADMIN_BASE_PATH}/api/reports`, adminAuth, (request, response, next) => {
     try {
       const result = listAdminReimbursementReports(
-        parseReportListQuery(request.query as Record<string, unknown>),
+        {
+          ...parseReportListQuery(request.query as Record<string, unknown>),
+          timeZone: config.timeZone,
+        },
       );
       response.status(200).json({
         success: true,
