@@ -430,6 +430,54 @@
         border-color: rgba(120, 120, 128, 0.18);
       }
 
+      .tag.reporter-8 {
+        color: #0f766e;
+        background: rgba(20, 184, 166, 0.14);
+        border-color: rgba(20, 184, 166, 0.18);
+      }
+
+      .tag.reporter-9 {
+        color: #b45309;
+        background: rgba(245, 158, 11, 0.16);
+        border-color: rgba(245, 158, 11, 0.2);
+      }
+
+      .tag.reporter-10 {
+        color: #7c3aed;
+        background: rgba(139, 92, 246, 0.14);
+        border-color: rgba(139, 92, 246, 0.18);
+      }
+
+      .tag.reporter-11 {
+        color: #be185d;
+        background: rgba(236, 72, 153, 0.14);
+        border-color: rgba(236, 72, 153, 0.18);
+      }
+
+      .tag.reporter-12 {
+        color: #0369a1;
+        background: rgba(14, 165, 233, 0.14);
+        border-color: rgba(14, 165, 233, 0.18);
+      }
+
+      .tag.reporter-13 {
+        color: #15803d;
+        background: rgba(34, 197, 94, 0.14);
+        border-color: rgba(34, 197, 94, 0.18);
+      }
+
+      .tag.reporter-14 {
+        color: #4338ca;
+        background: rgba(99, 102, 241, 0.14);
+        border-color: rgba(99, 102, 241, 0.18);
+      }
+
+      .tag.reporter-15 {
+        color: #c2410c;
+        background: rgba(249, 115, 22, 0.14);
+        border-color: rgba(249, 115, 22, 0.18);
+      }
+
       .detail-empty {
         color: var(--ink-soft);
         line-height: 1.7;
@@ -458,7 +506,7 @@
       .modal-dialog {
         position: relative;
         z-index: 1;
-        width: min(560px, calc(100vw - 24px));
+        width: min(448px, calc(100vw - 24px));
         max-height: calc(100vh - 24px);
         overflow: auto;
         padding: 22px;
@@ -605,7 +653,7 @@
       .attachment-thumb {
         width: 100%;
         height: auto;
-        max-height: 220px;
+        max-height: 440px;
         object-fit: contain;
         display: block;
         border-radius: 16px;
@@ -915,7 +963,9 @@
         return `<span class="tag ${getCategoryTagClass(categoryCode)}">${escapeHtml(categoryLabel || categoryCode || "其他")}</span>`;
       }
 
-      function getReporterTagClass(reporter) {
+      const REPORTER_TAG_CLASS_NAMES = Array.from({ length: 16 }, (_, index) => `reporter-${index}`);
+
+      function hashReporterTagClass(reporter) {
         const normalized = String(reporter || "").trim();
 
         if (!normalized) {
@@ -927,11 +977,44 @@
           hash = (hash * 31 + char.codePointAt(0)) >>> 0;
         }
 
-        return `reporter-${hash % 8}`;
+        return REPORTER_TAG_CLASS_NAMES[hash % REPORTER_TAG_CLASS_NAMES.length] || "reporter-7";
       }
 
-      function renderReporterTag(reporter) {
-        return `<span class="tag ${getReporterTagClass(reporter)}">${escapeHtml(reporter || "未知")}</span>`;
+      function buildReporterColorMap(items) {
+        const normalizedReporters = [];
+        const seen = new Set();
+
+        for (const item of items) {
+          const reporter = String(item.reporter || "").trim();
+          if (!reporter || seen.has(reporter)) {
+            continue;
+          }
+
+          seen.add(reporter);
+          normalizedReporters.push(reporter);
+        }
+
+        const colorMap = new Map();
+
+        if (normalizedReporters.length <= REPORTER_TAG_CLASS_NAMES.length) {
+          normalizedReporters.forEach((reporter, index) => {
+            colorMap.set(reporter, REPORTER_TAG_CLASS_NAMES[index]);
+          });
+          return colorMap;
+        }
+
+        normalizedReporters.forEach((reporter) => {
+          colorMap.set(reporter, hashReporterTagClass(reporter));
+        });
+
+        return colorMap;
+      }
+
+      function renderReporterTag(reporter, reporterColorMap) {
+        const normalized = String(reporter || "").trim();
+        const colorClass =
+          (normalized && reporterColorMap?.get(normalized)) || hashReporterTagClass(normalized);
+        return `<span class="tag ${colorClass}">${escapeHtml(reporter || "未知")}</span>`;
       }
 
       function setStatus(text, isError = false) {
@@ -1036,6 +1119,7 @@
         }
 
         const fragment = document.createDocumentFragment();
+        const reporterColorMap = buildReporterColorMap(state.items);
 
         for (const item of state.items) {
           const row = document.createElement("tr");
@@ -1045,7 +1129,7 @@
           row.innerHTML = `
             <td>${escapeHtml(item.channelName)}${item.channelCode ? `<div class="mono muted">${escapeHtml(item.channelCode)}</div>` : ""}</td>
             <td>${escapeHtml(formatTimestamp(item.createdAt))}</td>
-            <td>${renderReporterTag(item.reporter)}</td>
+            <td>${renderReporterTag(item.reporter, reporterColorMap)}</td>
             <td>${escapeHtml(formatAmount(item))}</td>
             <td class="note-cell">${escapeHtml(compactText(item.note))}</td>
             <td>${renderCategoryTag(item.expenseCategory, item.expenseCategoryLabel)}</td>
@@ -1174,7 +1258,7 @@
             <h3>结构化字段</h3>
             <div class="detail-grid">
               <div class="detail-card"><strong>群聊</strong><span>${escapeHtml(report.channelName)}${report.channelCode ? ` (${escapeHtml(report.channelCode)})` : ""}</span></div>
-              <div class="detail-card"><strong>报账人</strong><span>${renderReporterTag(report.reporter)}</span></div>
+              <div class="detail-card"><strong>报账人</strong><span>${escapeHtml(report.reporter)}</span></div>
               <div class="detail-card"><strong>金额</strong><span>${escapeHtml(formatAmount(report))}</span></div>
               <div class="detail-card"><strong>票据日期</strong><span>${escapeHtml(report.voucherDate)} (${escapeHtml(report.voucherDateSource)})</span></div>
               <div class="detail-card"><strong>类别</strong><span>${escapeHtml(report.expenseCategoryLabel || report.expenseCategory)}</span></div>
