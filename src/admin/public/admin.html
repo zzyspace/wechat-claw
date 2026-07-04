@@ -1060,9 +1060,9 @@
         return value ? "是" : "否";
       }
 
-      function compactText(value) {
+      function compactText(value, fallback = "(空)") {
         const normalized = String(value ?? "").replace(/\s+/g, " ").trim();
-        return normalized || "(空)";
+        return normalized || fallback;
       }
 
       function getCategoryTagClass(categoryCode) {
@@ -1330,7 +1330,7 @@
             <td class="column-created-at">${renderCreatedAtCell(item.createdAt)}</td>
             <td>${renderReporterTag(item.reporter, reporterColorMap)}</td>
             <td>${renderAmountCell(item)}</td>
-            <td class="note-cell">${escapeHtml(compactText(item.note))}</td>
+            <td class="note-cell">${escapeHtml(compactText(item.note, "-"))}</td>
             <td>${renderCategoryTag(item.expenseCategory, item.expenseCategoryLabel)}</td>
             <td class="column-bill">${renderBillAttachment(item)}</td>
             <td><span class="tag ${item.needsReview ? "warn" : "ok"}">${item.needsReview ? "需复核" : "已确认"}</span></td>
