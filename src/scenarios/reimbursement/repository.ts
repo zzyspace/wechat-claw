@@ -8,6 +8,7 @@ import {
   mergeReimbursementExpenseCategory,
 } from "./categories.js";
 import type {
+  AdminReimbursementListAttachmentPreview,
   AdminReimbursementDetail,
   AdminReimbursementListItem,
   AdminReimbursementReportSourceDetail,
@@ -1460,6 +1461,61 @@ function listAdminSourcesByReportIds(
   return grouped;
 }
 
+function listAdminBillAttachmentsByReportIds(
+  reportIds: number[],
+): Map<number, AdminReimbursementListAttachmentPreview> {
+  const grouped = new Map<number, AdminReimbursementListAttachmentPreview>();
+
+  if (reportIds.length === 0) {
+    return grouped;
+  }
+
+  const db = getDatabase();
+  const placeholders = reportIds.map(() => "?").join(", ");
+  const rows = db
+    .prepare(
+      `
+        SELECT
+          rrs.reimbursement_report_id as reimbursementReportId,
+          ma.id,
+          ma.attachment_type as type,
+          ma.local_path as localPath,
+          ma.mime_type as mimeType
+        FROM reimbursement_report_sources rrs
+        INNER JOIN message_attachments ma ON ma.raw_message_id = rrs.raw_message_id
+        WHERE rrs.reimbursement_report_id IN (${placeholders})
+          AND rrs.role = 'primary'
+          AND (
+            ma.attachment_type = 'image'
+            OR IFNULL(ma.mime_type, '') LIKE 'image/%'
+          )
+        ORDER BY rrs.reimbursement_report_id ASC, ma.id ASC
+      `,
+    )
+    .all(...reportIds) as Array<{
+    reimbursementReportId: number;
+    id: number;
+    type: string;
+    localPath: string;
+    mimeType?: string | null;
+  }>;
+
+  for (const row of rows) {
+    if (grouped.has(row.reimbursementReportId)) {
+      continue;
+    }
+
+    grouped.set(row.reimbursementReportId, {
+      id: row.id,
+      type: row.type,
+      mimeType: row.mimeType ?? undefined,
+      exists: fs.existsSync(row.localPath),
+    });
+  }
+
+  return grouped;
+}
+
 function listReceiptDeliveriesByReportIds(
   reportIds: number[],
 ): Map<number, ReimbursementReceiptDeliveryRecord[]> {
@@ -1671,16 +1727,18 @@ export function listAdminReimbursementReports(options?: {
   const total = db
     .prepare(`SELECT COUNT(*) as count FROM reimbursement_reports ${whereSql}`)
     .get(params) as { count: number };
+  const reports = rows.map((row) => mapReportRow(row));
+  const billAttachmentsByReportId = listAdminBillAttachmentsByReportIds(reports.map((report) => report.id));
 
   return {
     total: total.count,
     limit,
     offset,
-    items: rows.map((row) => {
-      const report = mapReportRow(row);
+    items: reports.map((report) => {
       return {
         ...report,
         expenseCategoryLabel: getReimbursementExpenseCategoryLabel(report.expenseCategory),
+        billAttachment: billAttachmentsByReportId.get(report.id),
       };
     }),
   };

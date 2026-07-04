@@ -236,7 +236,7 @@
 
       table {
         width: 100%;
-        min-width: 1080px;
+        min-width: 1220px;
         border-collapse: collapse;
       }
 
@@ -264,16 +264,27 @@
         line-height: 1.6;
       }
 
-      th:nth-child(7),
-      td:nth-child(7) {
+      .column-bill {
+        width: 112px;
+        min-width: 112px;
+        max-width: 112px;
+      }
+
+      th:nth-child(8),
+      td:nth-child(8) {
         width: 120px;
         min-width: 120px;
       }
 
-      th:nth-child(2),
-      td:nth-child(2),
-      th:nth-child(8),
-      td:nth-child(8) {
+      .column-created-at {
+        width: 200px;
+        min-width: 200px;
+        max-width: 200px;
+        white-space: nowrap;
+      }
+
+      th:nth-child(9),
+      td:nth-child(9) {
         width: 160px;
         min-width: 160px;
       }
@@ -284,7 +295,9 @@
       }
 
       th:nth-child(10),
-      td:nth-child(10) {
+      td:nth-child(10),
+      th:nth-child(11),
+      td:nth-child(11) {
         width: 120px;
         min-width: 120px;
       }
@@ -304,6 +317,38 @@
       .note-cell {
         max-width: 160px;
         color: var(--ink-soft);
+      }
+
+      .bill-link,
+      .bill-placeholder {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 72px;
+        height: 72px;
+        border-radius: 14px;
+        overflow: hidden;
+        border: 1px solid var(--line);
+        background: rgba(255, 255, 255, 0.9);
+      }
+
+      .bill-link img {
+        width: 100%;
+        height: 100%;
+        display: block;
+        object-fit: cover;
+      }
+
+      .bill-placeholder {
+        color: var(--ink-soft);
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .bill-placeholder.warn {
+        color: var(--warn);
+        border-color: rgba(255, 149, 0, 0.24);
+        background: var(--warn-soft);
       }
 
       .mono {
@@ -819,11 +864,12 @@
               <thead>
                 <tr>
                   <th>群聊</th>
-                  <th>创建时间</th>
+                  <th class="column-created-at">创建时间</th>
                   <th>报账人</th>
                   <th>金额</th>
                   <th>备注</th>
                   <th>类别</th>
+                  <th class="column-bill">附件</th>
                   <th>需复核</th>
                   <th>更新时间</th>
                   <th>报账 ID</th>
@@ -1026,6 +1072,32 @@
         return `<span class="tag ${colorClass}">${escapeHtml(reporter || "未知")}</span>`;
       }
 
+      function renderBillAttachment(item) {
+        const attachment = item.billAttachment;
+
+        if (!attachment) {
+          return `<span class="bill-placeholder">无</span>`;
+        }
+
+        if (!attachment.exists) {
+          return `<span class="bill-placeholder warn">已清理</span>`;
+        }
+
+        const href = `${BASE_PATH}/api/attachments/${attachment.id}/content`;
+        return `
+          <a
+            class="bill-link"
+            href="${href}"
+            target="_blank"
+            rel="noreferrer"
+            data-attachment-preview
+            aria-label="查看报账图片 ${item.id}"
+          >
+            <img src="${href}" alt="报账图片 ${item.id}" loading="lazy" />
+          </a>
+        `;
+      }
+
       function setStatus(text, isError = false) {
         elements.statusText.textContent = text;
         elements.statusText.classList.toggle("error", isError);
@@ -1137,11 +1209,12 @@
           const isDeleting = state.deletingIds.has(item.id);
           row.innerHTML = `
             <td>${escapeHtml(item.channelName)}${item.channelCode ? `<div class="mono muted">${escapeHtml(item.channelCode)}</div>` : ""}</td>
-            <td>${escapeHtml(formatTimestamp(item.createdAt))}</td>
+            <td class="column-created-at">${escapeHtml(formatTimestamp(item.createdAt))}</td>
             <td>${renderReporterTag(item.reporter, reporterColorMap)}</td>
             <td>${escapeHtml(formatAmount(item))}</td>
             <td class="note-cell">${escapeHtml(compactText(item.note))}</td>
             <td>${renderCategoryTag(item.expenseCategory, item.expenseCategoryLabel)}</td>
+            <td class="column-bill">${renderBillAttachment(item)}</td>
             <td><span class="tag ${item.needsReview ? "warn" : "ok"}">${item.needsReview ? "需复核" : "已确认"}</span></td>
             <td>${escapeHtml(formatTimestamp(item.updatedAt))}</td>
             <td><button type="button" data-report-id="${item.id}">#${item.id}</button></td>
@@ -1448,6 +1521,10 @@
         const target = event.target;
 
         if (!(target instanceof HTMLElement)) {
+          return;
+        }
+
+        if (target.closest("a[data-attachment-preview]")) {
           return;
         }
 

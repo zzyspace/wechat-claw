@@ -136,8 +136,16 @@ export interface ReimbursementReceiptDeliveryRecord {
   updatedAt: string;
 }
 
+export interface AdminReimbursementListAttachmentPreview {
+  id: number;
+  type: string;
+  mimeType?: string;
+  exists: boolean;
+}
+
 export interface AdminReimbursementListItem extends ReimbursementReportRecord {
   expenseCategoryLabel: string;
+  billAttachment?: AdminReimbursementListAttachmentPreview;
 }
 
 export interface AdminReimbursementDetail extends ReimbursementReportRecord {

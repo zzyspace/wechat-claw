@@ -256,6 +256,14 @@ test("mergePrimaryImageIntoTextOnlyReimbursementReport clears text-only needsRev
 });
 
 test("listAdminReimbursementReports filters by search, category, review status, and voucher date range", () => {
+  const currentDateParts = getZonedDateParts(new Date(), "Asia/Shanghai");
+  const currentLocalDate = `${currentDateParts.year}-${String(currentDateParts.month).padStart(2, "0")}-${String(currentDateParts.day).padStart(2, "0")}`;
+  const searchAttachmentPath = path.join(
+    process.env.WECHATY_STATE_DIR || os.tmpdir(),
+    "reimbursement-admin-list-search-primary.jpg",
+  );
+  fs.writeFileSync(searchAttachmentPath, "list-search-image", "utf8");
+
   const searchMessage = saveRawMessage({
     messageExternalId: "reimbursement-admin-list-search-primary",
     channelCode: "reimbursement_admin_list_test",
@@ -265,7 +273,14 @@ test("listAdminReimbursementReports filters by search, category, review status, 
     textContent: "(非文本消息)",
     eventReceivedAt: "2026-07-22T01:00:00.000Z",
     dedupeKey: "reimbursement-admin-list-search-primary",
-    attachments: [],
+    attachments: [
+      {
+        type: "image",
+        localPath: searchAttachmentPath,
+        sha256: "list-search-sha256",
+        mimeType: "image/jpeg",
+      },
+    ],
   });
   const searchReport = saveReimbursementReport({
     channelCode: "reimbursement_admin_list_test",
@@ -327,8 +342,8 @@ test("listAdminReimbursementReports filters by search, category, review status, 
     reporter: "小周",
     expenseCategory: "food",
     needsReview: false,
-    createdDateFrom: "2026-07-20",
-    createdDateTo: "2026-07-22",
+    createdDateFrom: currentLocalDate,
+    createdDateTo: currentLocalDate,
     timeZone: "Asia/Shanghai",
     limit: 20,
     offset: 0,
@@ -337,6 +352,10 @@ test("listAdminReimbursementReports filters by search, category, review status, 
   assert.equal(filtered.total, 1);
   assert.equal(filtered.items[0]?.id, searchReport.id);
   assert.equal(filtered.items[0]?.expenseCategoryLabel, "食材");
+  assert.ok(filtered.items[0]?.billAttachment);
+  assert.equal(filtered.items[0]?.billAttachment?.type, "image");
+  assert.equal(filtered.items[0]?.billAttachment?.mimeType, "image/jpeg");
+  assert.equal(filtered.items[0]?.billAttachment?.exists, true);
 
   const numericSearch = listAdminReimbursementReports({
     search: String(reviewReport.id),
@@ -347,6 +366,7 @@ test("listAdminReimbursementReports filters by search, category, review status, 
   assert.equal(numericSearch.total, 1);
   assert.equal(numericSearch.items[0]?.id, reviewReport.id);
   assert.equal(numericSearch.items[0]?.needsReview, true);
+  assert.equal(numericSearch.items[0]?.billAttachment, undefined);
 });
 
 test("getAdminReimbursementReportDetail includes source attachments and receipt deliveries", () => {
