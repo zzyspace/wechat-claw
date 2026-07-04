@@ -280,6 +280,18 @@
         width: 100px;
         min-width: 100px;
         max-width: 100px;
+        white-space: normal;
+      }
+
+      .column-created-at-value {
+        display: grid;
+        gap: 2px;
+        line-height: 1.35;
+      }
+
+      .column-created-at-date,
+      .column-created-at-time {
+        display: block;
         white-space: nowrap;
       }
 
@@ -1098,6 +1110,23 @@
         `;
       }
 
+      function renderCreatedAtCell(value) {
+        const formatted = formatTimestamp(value);
+        const [datePart, timePart, ...rest] = String(formatted).split(" ");
+
+        if (!timePart) {
+          return escapeHtml(formatted);
+        }
+
+        const normalizedTime = rest.length > 0 ? `${timePart} ${rest.join(" ")}` : timePart;
+        return `
+          <span class="column-created-at-value">
+            <span class="column-created-at-date">${escapeHtml(datePart)}</span>
+            <span class="column-created-at-time">${escapeHtml(normalizedTime)}</span>
+          </span>
+        `;
+      }
+
       function setStatus(text, isError = false) {
         elements.statusText.textContent = text;
         elements.statusText.classList.toggle("error", isError);
@@ -1209,7 +1238,7 @@
           const isDeleting = state.deletingIds.has(item.id);
           row.innerHTML = `
             <td>${escapeHtml(item.channelName)}${item.channelCode ? `<div class="mono muted">${escapeHtml(item.channelCode)}</div>` : ""}</td>
-            <td class="column-created-at">${escapeHtml(formatTimestamp(item.createdAt))}</td>
+            <td class="column-created-at">${renderCreatedAtCell(item.createdAt)}</td>
             <td>${renderReporterTag(item.reporter, reporterColorMap)}</td>
             <td>${escapeHtml(formatAmount(item))}</td>
             <td class="note-cell">${escapeHtml(compactText(item.note))}</td>
