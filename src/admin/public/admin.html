@@ -901,7 +901,7 @@
             <table>
               <thead>
                 <tr>
-                  <th>群聊</th>
+                  <th>门店</th>
                   <th class="column-created-at">创建时间</th>
                   <th>报账人</th>
                   <th>金额</th>
@@ -1130,6 +1130,22 @@
         return `<span class="tag ${colorClass}">${escapeHtml(reporter || "未知")}</span>`;
       }
 
+      const STORE_LABELS_BY_CHANNEL_CODE = new Map([
+        ["reimbursement_fuzzy", "Fuzzy"],
+        ["reimbursement_peanut", "Peanut"],
+        ["reimbursement_fuzzyqz", "Fuzzy泉州店"],
+      ]);
+
+      function renderStoreCell(item) {
+        const label = STORE_LABELS_BY_CHANNEL_CODE.get(String(item.channelCode || "").trim());
+
+        if (label) {
+          return escapeHtml(label);
+        }
+
+        return `${escapeHtml(item.channelName)}${item.channelCode ? `<div class="mono muted">${escapeHtml(item.channelCode)}</div>` : ""}`;
+      }
+
       function renderBillAttachment(item) {
         const attachment = item.billAttachment;
 
@@ -1283,7 +1299,7 @@
           row.classList.toggle("is-selected", item.id === state.selectedReportId);
           const isDeleting = state.deletingIds.has(item.id);
           row.innerHTML = `
-            <td>${escapeHtml(item.channelName)}${item.channelCode ? `<div class="mono muted">${escapeHtml(item.channelCode)}</div>` : ""}</td>
+            <td>${renderStoreCell(item)}</td>
             <td class="column-created-at">${renderCreatedAtCell(item.createdAt)}</td>
             <td>${renderReporterTag(item.reporter, reporterColorMap)}</td>
             <td>${escapeHtml(formatAmount(item))}</td>
