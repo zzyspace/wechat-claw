@@ -248,6 +248,7 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     assert.match(pageHtml, /<option value="reimbursement_peanut">Peanut<\/option>/);
     assert.match(pageHtml, /<option value="reimbursement_fuzzyqz">Fuzzy泉州店<\/option>/);
     assert.match(pageHtml, /<th class="column-bill">附件<\/th>/);
+    assert.match(pageHtml, /id="attachmentPreviewModal"/);
 
     const listResponse = await fetch(
       `${server.baseUrl}/reimbursement/api/reports?search=%E6%B5%8B%E8%AF%95%E8%8F%9C%E5%9C%BA&needsReview=false&limit=20`,

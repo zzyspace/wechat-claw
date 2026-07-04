@@ -338,10 +338,16 @@
         justify-content: center;
         width: 72px;
         height: 72px;
+        min-height: auto;
+        padding: 0;
         border-radius: 14px;
         overflow: hidden;
         border: 1px solid var(--line);
         background: rgba(255, 255, 255, 0.9);
+      }
+
+      .bill-link {
+        cursor: zoom-in;
       }
 
       .bill-link img {
@@ -597,6 +603,25 @@
         justify-content: center;
         font-size: 22px;
         line-height: 1;
+      }
+
+      .attachment-preview-stage {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 12px;
+        border-radius: var(--radius-lg);
+        background: rgba(255, 255, 255, 0.72);
+        border: 1px solid rgba(60, 60, 67, 0.08);
+        min-height: 220px;
+      }
+
+      .attachment-preview-stage img {
+        display: block;
+        width: 100%;
+        height: auto;
+        max-height: calc(100vh - 220px);
+        object-fit: contain;
       }
 
       .detail-header {
@@ -916,6 +941,21 @@
           </div>
         </div>
       </div>
+
+      <div class="modal" id="attachmentPreviewModal" hidden>
+        <div class="modal-backdrop" id="attachmentPreviewModalBackdrop"></div>
+        <div class="panel modal-dialog" role="dialog" aria-modal="true" aria-labelledby="attachmentPreviewTitle">
+          <div class="modal-frame">
+            <div class="modal-topbar">
+              <h2 id="attachmentPreviewTitle">附件预览</h2>
+              <button class="modal-close" id="attachmentPreviewClose" type="button" aria-label="关闭附件预览弹窗">×</button>
+            </div>
+            <div class="attachment-preview-stage">
+              <img id="attachmentPreviewImage" alt="附件预览" />
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <script>
@@ -948,6 +988,11 @@
         detailModalClose: document.getElementById("detailModalClose"),
         detailEmpty: document.getElementById("detailEmpty"),
         detailContent: document.getElementById("detailContent"),
+        attachmentPreviewModal: document.getElementById("attachmentPreviewModal"),
+        attachmentPreviewModalBackdrop: document.getElementById("attachmentPreviewModalBackdrop"),
+        attachmentPreviewClose: document.getElementById("attachmentPreviewClose"),
+        attachmentPreviewImage: document.getElementById("attachmentPreviewImage"),
+        attachmentPreviewTitle: document.getElementById("attachmentPreviewTitle"),
       };
 
       function escapeHtml(value) {
@@ -1097,16 +1142,16 @@
 
         const href = `${BASE_PATH}/api/attachments/${attachment.id}/content`;
         return `
-          <a
+          <button
+            type="button"
             class="bill-link"
-            href="${href}"
-            target="_blank"
-            rel="noreferrer"
             data-attachment-preview
+            data-attachment-preview-src="${escapeHtml(href)}"
+            data-attachment-preview-title="${escapeHtml(`报账 #${item.id} 附件预览`)}"
             aria-label="查看报账图片 ${item.id}"
           >
             <img src="${href}" alt="报账图片 ${item.id}" loading="lazy" />
-          </a>
+          </button>
         `;
       }
 
@@ -1274,6 +1319,24 @@
 
       function openDetailModal() {
         elements.detailModal.hidden = false;
+      }
+
+      function closeAttachmentPreviewModal() {
+        elements.attachmentPreviewModal.hidden = true;
+        elements.attachmentPreviewImage.removeAttribute("src");
+        elements.attachmentPreviewImage.alt = "附件预览";
+        elements.attachmentPreviewTitle.textContent = "附件预览";
+      }
+
+      function openAttachmentPreviewModal(src, title) {
+        if (!src) {
+          return;
+        }
+
+        elements.attachmentPreviewImage.src = src;
+        elements.attachmentPreviewImage.alt = title || "附件预览";
+        elements.attachmentPreviewTitle.textContent = title || "附件预览";
+        elements.attachmentPreviewModal.hidden = false;
       }
 
       function renderDetail(report) {
@@ -1524,6 +1587,7 @@
         elements.filters.reset();
         state.offset = 0;
         state.selectedReportId = null;
+        closeAttachmentPreviewModal();
         closeDetailModal();
         elements.detailEmpty.hidden = false;
         elements.detailContent.hidden = true;
@@ -1553,7 +1617,12 @@
           return;
         }
 
-        if (target.closest("a[data-attachment-preview]")) {
+        const previewButton = target.closest("[data-attachment-preview]");
+        if (previewButton instanceof HTMLElement) {
+          openAttachmentPreviewModal(
+            previewButton.getAttribute("data-attachment-preview-src") || "",
+            previewButton.getAttribute("data-attachment-preview-title") || "附件预览",
+          );
           return;
         }
 
@@ -1589,7 +1658,20 @@
         closeDetailModal();
       });
 
+      elements.attachmentPreviewModalBackdrop.addEventListener("click", () => {
+        closeAttachmentPreviewModal();
+      });
+
+      elements.attachmentPreviewClose.addEventListener("click", () => {
+        closeAttachmentPreviewModal();
+      });
+
       document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape" && !elements.attachmentPreviewModal.hidden) {
+          closeAttachmentPreviewModal();
+          return;
+        }
+
         if (event.key === "Escape" && !elements.detailModal.hidden) {
           closeDetailModal();
         }
