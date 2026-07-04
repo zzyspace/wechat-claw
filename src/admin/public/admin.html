@@ -295,6 +295,18 @@
         white-space: nowrap;
       }
 
+      .column-amount-value {
+        display: grid;
+        gap: 2px;
+        line-height: 1.35;
+      }
+
+      .column-amount-number,
+      .column-amount-currency {
+        display: block;
+        white-space: nowrap;
+      }
+
       th:nth-child(9),
       td:nth-child(9) {
         width: 160px;
@@ -1189,6 +1201,21 @@
         `;
       }
 
+      function renderAmountCell(item) {
+        if (item.amount === null || item.amount === undefined) {
+          return escapeHtml(formatAmount(item));
+        }
+
+        const amount = Number(item.amount);
+        const currency = item.currency || "CNY";
+        return `
+          <span class="column-amount-value">
+            <span class="column-amount-number">${escapeHtml(amount.toFixed(2))}</span>
+            <span class="column-amount-currency">${escapeHtml(currency)}</span>
+          </span>
+        `;
+      }
+
       function setStatus(text, isError = false) {
         elements.statusText.textContent = text;
         elements.statusText.classList.toggle("error", isError);
@@ -1302,7 +1329,7 @@
             <td>${renderStoreCell(item)}</td>
             <td class="column-created-at">${renderCreatedAtCell(item.createdAt)}</td>
             <td>${renderReporterTag(item.reporter, reporterColorMap)}</td>
-            <td>${escapeHtml(formatAmount(item))}</td>
+            <td>${renderAmountCell(item)}</td>
             <td class="note-cell">${escapeHtml(compactText(item.note))}</td>
             <td>${renderCategoryTag(item.expenseCategory, item.expenseCategoryLabel)}</td>
             <td class="column-bill">${renderBillAttachment(item)}</td>
