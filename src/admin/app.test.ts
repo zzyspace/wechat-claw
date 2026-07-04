@@ -240,7 +240,13 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
       headers: createAdminAuthHeaders(),
     });
     assert.equal(pageResponse.status, 200);
-    assert.match(await pageResponse.text(), /报账查看后台/);
+    const pageHtml = await pageResponse.text();
+    assert.match(pageHtml, /报账查看后台/);
+    assert.match(pageHtml, /<label for="channelCode">门店<\/label>/);
+    assert.match(pageHtml, /<option value="">全部<\/option>/);
+    assert.match(pageHtml, /<option value="reimbursement_fuzzy">Fuzzy<\/option>/);
+    assert.match(pageHtml, /<option value="reimbursement_peanut">Peanut<\/option>/);
+    assert.match(pageHtml, /<option value="reimbursement_fuzzyqz">Fuzzy泉州店<\/option>/);
 
     const listResponse = await fetch(
       `${server.baseUrl}/reimbursement/api/reports?search=%E6%B5%8B%E8%AF%95%E8%8F%9C%E5%9C%BA&needsReview=false&limit=20`,

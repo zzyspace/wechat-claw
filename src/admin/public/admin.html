@@ -740,7 +740,7 @@
       <div class="hero">
         <span class="eyebrow">WECHAT CLAW / REIMBURSEMENT</span>
         <h1>报账查看后台</h1>
-        <p>查看已入库的报账记录，按群聊、报账人、类别、日期和复核状态筛选，并展开详情查看 OCR、原始消息、附件和回执记录。</p>
+        <p>查看已入库的报账记录，按门店、报账人、类别、日期和复核状态筛选，并展开详情查看 OCR、原始消息、附件和回执记录。</p>
       </div>
 
       <div class="panel controls">
@@ -751,8 +751,13 @@
               <input id="search" name="search" placeholder="支持群聊、报账人、商户、单号、备注、OCR 或 ID" />
             </div>
             <div class="field">
-              <label for="channelCode">群聊编码</label>
-              <input id="channelCode" name="channelCode" placeholder="如 reimbursement_a" />
+              <label for="channelCode">门店</label>
+              <select id="channelCode" name="channelCode">
+                <option value="">全部</option>
+                <option value="reimbursement_fuzzy">Fuzzy</option>
+                <option value="reimbursement_peanut">Peanut</option>
+                <option value="reimbursement_fuzzyqz">Fuzzy泉州店</option>
+              </select>
             </div>
             <div class="field">
               <label for="reporter">报账人</label>
