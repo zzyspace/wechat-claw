@@ -103,7 +103,7 @@ test("extractReimbursementReport calls qwen3.5-flash and normalizes amount, date
     assert.match(promptText, /微信聊天界面的转账截图如果包含多条转账记录，应把每条转账的金额加起来/);
     assert.match(promptText, /支付宝聊天界面的转账或代付截图如果包含多条记录，应把每条转账或代付的金额加起来/);
     assert.match(promptText, /如果识别结果表示这笔记录是退款、退回、退款成功或退款到账，amount 应返回负数/);
-    assert.match(promptText, /只要明确包含“店长报账”字样一律输出 manager_reimbursement；无论是否满足前面其他条件，只要明确包含“李晨晨”字样且为多条转账、汇款记录的一律输出 planned_expense/);
+    assert.match(promptText, /只要明确包含“店长报账”字样一律输出 manager_reimbursement；无论是否满足前面其他条件，只要明确包含3个及以上“李晨晨”字样且为多条转账、汇款记录的一律输出 planned_expense/);
     assert.match(promptText, /鲜花、花卉、绿植、花材、花束、菊花、百合等花店订单默认不属于 food/);
     assert.equal(result.extractorCode, "model-qwen-qwen3.5-flash");
     assert.equal(result.resultJson.amount, 128.5);
@@ -142,6 +142,77 @@ test("extractReimbursementReport falls back to message date and other category w
   assert.equal(result.resultJson.voucherDate, "2026-05-21");
   assert.equal(result.resultJson.voucherDateSource, "message");
   assert.equal(result.needsReview, false);
+});
+
+test("extractReimbursementReport forces manager_reimbursement when OCR contains 店长报账群", async () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "wechat-claw-reimbursement-extractor-"));
+  const imagePath = path.join(tempDir, "receipt.jpg");
+
+  try {
+    fs.writeFileSync(imagePath, Buffer.from([0xff, 0xd8, 0xff, 0xd9]));
+
+    globalThis.fetch = (async () =>
+      new Response(
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  amount: "526.65",
+                  currency: "CNY",
+                  expense_category: "planned_expense",
+                  voucher_date: "2026-07-15",
+                  merchant: "微信转账",
+                  document_no: null,
+                  voucher_type: "转账截图",
+                  ocr_text: "Fuzzy 泉州-店长报账群(3) 向王晨旭转账¥526.65",
+                  confidence: 0.87,
+                }),
+              },
+            },
+          ],
+        }),
+        {
+          status: 200,
+          headers: {
+            "Content-Type": "application/json",
+          },
+        },
+      )) as typeof fetch;
+
+    const result = await extractReimbursementReport(
+      {
+        rawMessageId: 5,
+        channelCode: "reimbursement_a",
+        channelName: "Fuzzy 泉州-店长报账群(3)",
+        reporter: "Ryan。",
+        textContent: "(非文本消息)",
+        sentAt: "2026-07-05T07:23:00.000Z",
+        timeZone: "Asia/Shanghai",
+        attachments: [
+          {
+            type: "image",
+            localPath: imagePath,
+            sha256: "force-manager-from-ocr",
+            mimeType: "image/jpeg",
+          },
+        ],
+      },
+      {
+        provider: "qwen",
+        model: "qwen3.5-flash",
+        apiKey: "test-key",
+        baseUrl: "https://example.com",
+      },
+    );
+
+    assert.equal(result.resultJson.amount, 526.65);
+    assert.equal(result.resultJson.expenseCategory, "manager_reimbursement");
+    assert.equal(result.resultJson.ocrText, "Fuzzy 泉州-店长报账群(3) 向王晨旭转账¥526.65");
+    assert.equal(result.needsReview, false);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
 });
 
 test("extractReimbursementReport retries once when the model returns an empty structured result", async () => {
