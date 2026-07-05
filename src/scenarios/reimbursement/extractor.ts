@@ -80,6 +80,8 @@ const FOOD_KEYWORDS = [
   "火锅",
 ];
 
+const PLANNED_EXPENSE_OCR_NAME = "李晨晨";
+const PLANNED_EXPENSE_OCR_MIN_OCCURRENCES = 3;
 const MANAGER_REIMBURSEMENT_OCR_MARKERS = ["店长报账群"];
 const EMPTY_STRUCTURED_RESULT_MAX_RETRIES = 1;
 const EMPTY_STRUCTURED_RESULT_RETRY_MODEL = "qwen3.5-plus";
@@ -152,6 +154,32 @@ function shouldForceManagerReimbursementFromOcr(ocrText: string | null | undefin
   return Boolean(
     ocrText && MANAGER_REIMBURSEMENT_OCR_MARKERS.some((marker) => ocrText.includes(marker)),
   );
+}
+
+function countOccurrences(text: string, needle: string): number {
+  if (!text || !needle) {
+    return 0;
+  }
+
+  return text.split(needle).length - 1;
+}
+
+function resolveForcedExpenseCategoryFromOcr(
+  ocrText: string | null | undefined,
+): ReimbursementExpenseCategory | null {
+  if (!ocrText) {
+    return null;
+  }
+
+  if (countOccurrences(ocrText, PLANNED_EXPENSE_OCR_NAME) >= PLANNED_EXPENSE_OCR_MIN_OCCURRENCES) {
+    return "planned_expense";
+  }
+
+  if (shouldForceManagerReimbursementFromOcr(ocrText)) {
+    return "manager_reimbursement";
+  }
+
+  return null;
 }
 
 function normalizeVoucherDate(
@@ -227,7 +255,7 @@ function buildPrompt(input: ReimbursementExtractionInput): string {
     "不要把商品单价、数量、优惠前金额、退款金额、待支付金额、账户余额、积分抵扣、手续费等误当成最终付款总金额。",
     "请只根据图片和文字提取报账字段，不要猜测不可见信息。",
     "支出类别优先输出已知 code。当前常用 code 包括 food、salary、rent、utilities、manager_reimbursement、planned_expense、other。",
-    "无论是否满足其他类别条件，只要明确包含“店长报账”字样一律输出 manager_reimbursement；无论是否满足前面其他条件，只要明确包含3个及以上“李晨晨”字样且为多条转账、汇款记录的一律输出 planned_expense；否则，明确是食品原料、门店食材采购输出 food；明确是工资、薪资输出 salary；明确是房租、租金输出 rent；明确是水费、电费、水电费、水费账单、电费账单、电力缴费输出 utilities；非上述或不确定输出 other。",
+    "无论是否满足其他类别条件，只要明确包含“店长报账”字样一律输出 manager_reimbursement；否则，明确是食品原料、门店食材采购输出 food；明确是工资、薪资输出 salary；明确是房租、租金输出 rent；明确是水费、电费、水电费、水费账单、电费账单、电力缴费输出 utilities；非上述或不确定输出 other。",
     "鲜花、花卉、绿植、花材、花束、菊花、百合等花店订单默认不属于 food，除非图片或文字明确表示这是门店食材采购、厨房原料采购，或出现蔬菜、水果、肉类、米面油、调料等食材采购语义。",
     "如果票据日期清晰可见，voucher_date 输出 YYYY-MM-DD；看不到日期则输出 null。",
     "如果无法可靠判断最终付款总金额，amount 输出 null，不要猜测。",
@@ -528,8 +556,9 @@ export async function extractReimbursementReport(
       messageVoucherDate,
     );
     const normalizedOcrText = normalizeOptionalText(modelResult.ocr_text);
-    const expenseCategory = shouldForceManagerReimbursementFromOcr(normalizedOcrText)
-      ? "manager_reimbursement"
+    const forcedExpenseCategory = resolveForcedExpenseCategoryFromOcr(normalizedOcrText);
+    const expenseCategory = forcedExpenseCategory
+      ? forcedExpenseCategory
       : normalizeExpenseCategory(modelResult.expense_category, `${note}\n${normalizedOcrText ?? ""}`);
     const confidence =
       typeof modelResult.confidence === "number" && Number.isFinite(modelResult.confidence)
