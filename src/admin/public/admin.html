@@ -313,8 +313,8 @@
         min-width: 160px;
       }
 
-      th:nth-child(6),
-      td:nth-child(6) {
+      th:nth-child(5),
+      td:nth-child(5) {
         min-width: 120px;
       }
 
@@ -929,8 +929,8 @@
                   <th class="column-created-at">创建时间</th>
                   <th>报账人</th>
                   <th>金额</th>
-                  <th>备注</th>
                   <th>类别</th>
+                  <th>备注</th>
                   <th class="column-bill">附件</th>
                   <th>需复核</th>
                   <th>更新时间</th>
@@ -1355,8 +1355,8 @@
             <td class="column-created-at">${renderCreatedAtCell(item.createdAt)}</td>
             <td>${renderReporterTag(item.reporter, reporterColorMap)}</td>
             <td>${renderAmountCell(item)}</td>
-            <td class="note-cell"><span class="note-content">${renderRemarkContent(item.note, "-")}</span></td>
             <td>${renderCategoryTag(item.expenseCategory, item.expenseCategoryLabel)}</td>
+            <td class="note-cell"><span class="note-content">${renderRemarkContent(item.note, "-")}</span></td>
             <td class="column-bill">${renderBillAttachment(item)}</td>
             <td><span class="tag ${item.needsReview ? "warn" : "ok"}">${item.needsReview ? "需复核" : "已确认"}</span></td>
             <td>${escapeHtml(formatTimestamp(item.updatedAt))}</td>

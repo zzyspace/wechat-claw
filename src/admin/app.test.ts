@@ -250,6 +250,7 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     assert.match(pageHtml, /<th>门店<\/th>/);
     assert.match(pageHtml, /<th class="column-bill">附件<\/th>/);
     assert.match(pageHtml, /id="attachmentPreviewModal"/);
+    assert.match(pageHtml, /<th>金额<\/th>\s*<th>类别<\/th>\s*<th>备注<\/th>/);
     assert.match(pageHtml, /renderRemarkContent\(item\.note, "-"\)/);
     assert.match(pageHtml, /tag note-pill/);
 
