@@ -105,7 +105,7 @@ function seedReports() {
   const report = saveReimbursementReport({
     channelCode: "reimbursement_admin_test",
     channelName: "报账后台测试群",
-    reporter: "小周",
+    reporter: "Ryan",
     amount: 128.5,
     currency: "CNY",
     expenseCategory: "food",
@@ -251,11 +251,12 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     assert.match(pageHtml, /<th class="column-bill">附件<\/th>/);
     assert.match(pageHtml, /id="attachmentPreviewModal"/);
     assert.match(pageHtml, /<th>金额<\/th>\s*<th>类别<\/th>\s*<th>备注<\/th>/);
+    assert.match(pageHtml, /placeholder="支持部分匹配，如 Ry \/ 张"/);
     assert.match(pageHtml, /renderRemarkContent\(item\.note, "-"\)/);
     assert.match(pageHtml, /tag note-pill/);
 
     const listResponse = await fetch(
-      `${server.baseUrl}/reimbursement/api/reports?search=%E6%B5%8B%E8%AF%95%E8%8F%9C%E5%9C%BA&needsReview=false&limit=20`,
+      `${server.baseUrl}/reimbursement/api/reports?search=%E6%B5%8B%E8%AF%95%E8%8F%9C%E5%9C%BA&reporter=Ry&needsReview=false&limit=20`,
       {
         headers: {
           ...createAdminAuthHeaders(),

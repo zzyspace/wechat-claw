@@ -255,7 +255,7 @@ test("mergePrimaryImageIntoTextOnlyReimbursementReport clears text-only needsRev
   assert.equal(updated.needsReview, false);
 });
 
-test("listAdminReimbursementReports filters by search, category, review status, and voucher date range", () => {
+test("listAdminReimbursementReports filters by search, partial reporter, category, review status, and voucher date range", () => {
   const currentDateParts = getZonedDateParts(new Date(), "Asia/Shanghai");
   const currentLocalDate = `${currentDateParts.year}-${String(currentDateParts.month).padStart(2, "0")}-${String(currentDateParts.day).padStart(2, "0")}`;
   const searchAttachmentPath = path.join(
@@ -285,7 +285,7 @@ test("listAdminReimbursementReports filters by search, category, review status, 
   const searchReport = saveReimbursementReport({
     channelCode: "reimbursement_admin_list_test",
     channelName: "报账后台列表测试群",
-    reporter: "小周",
+    reporter: "Ryan",
     amount: 188.8,
     currency: "CNY",
     expenseCategory: "food",
@@ -339,7 +339,7 @@ test("listAdminReimbursementReports filters by search, category, review status, 
   const filtered = listAdminReimbursementReports({
     search: "测试菜场",
     channelCode: "reimbursement_admin_list_test",
-    reporter: "小周",
+    reporter: "Ry",
     expenseCategory: "food",
     needsReview: false,
     createdDateFrom: currentLocalDate,

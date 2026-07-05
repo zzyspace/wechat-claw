@@ -1643,8 +1643,8 @@ export function listAdminReimbursementReports(options?: {
   }
 
   if (options?.reporter) {
-    clauses.push("reporter = @reporter");
-    params.reporter = options.reporter;
+    clauses.push("reporter LIKE @reporter ESCAPE '\\'");
+    params.reporter = `%${escapeLikePattern(options.reporter)}%`;
   }
 
   if (options?.expenseCategory) {
