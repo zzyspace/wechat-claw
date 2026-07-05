@@ -341,6 +341,18 @@
       .note-cell {
         max-width: 160px;
         color: var(--ink-soft);
+        line-height: 1.7;
+      }
+
+      .note-content {
+        word-break: break-word;
+      }
+
+      .tag.note-pill {
+        margin: 0 2px;
+        color: #9a6700;
+        background: rgba(255, 204, 0, 0.18);
+        border-color: rgba(255, 159, 10, 0.24);
       }
 
       .bill-link,
@@ -1065,6 +1077,19 @@
         return normalized || fallback;
       }
 
+      function renderRemarkContent(value, fallback = "(空)") {
+        const text = compactText(value, fallback);
+
+        if (!text.includes("平")) {
+          return escapeHtml(text);
+        }
+
+        return text
+          .split("平")
+          .map((part) => escapeHtml(part))
+          .join('<span class="tag note-pill">平</span>');
+      }
+
       function getCategoryTagClass(categoryCode) {
         switch (String(categoryCode || "").trim()) {
           case "food":
@@ -1330,7 +1355,7 @@
             <td class="column-created-at">${renderCreatedAtCell(item.createdAt)}</td>
             <td>${renderReporterTag(item.reporter, reporterColorMap)}</td>
             <td>${renderAmountCell(item)}</td>
-            <td class="note-cell">${escapeHtml(compactText(item.note, "-"))}</td>
+            <td class="note-cell"><span class="note-content">${renderRemarkContent(item.note, "-")}</span></td>
             <td>${renderCategoryTag(item.expenseCategory, item.expenseCategoryLabel)}</td>
             <td class="column-bill">${renderBillAttachment(item)}</td>
             <td><span class="tag ${item.needsReview ? "warn" : "ok"}">${item.needsReview ? "需复核" : "已确认"}</span></td>
@@ -1487,7 +1512,7 @@
               <div class="detail-card"><strong>置信度</strong><span>${Number(report.confidence).toFixed(2)}</span></div>
               <div class="detail-card"><strong>创建时间</strong><span>${escapeHtml(formatTimestamp(report.createdAt))}</span></div>
               <div class="detail-card"><strong>更新时间</strong><span>${escapeHtml(formatTimestamp(report.updatedAt))}</span></div>
-              <div class="detail-card" style="grid-column: 1 / -1;"><strong>备注</strong><span>${escapeHtml(compactText(report.note))}</span></div>
+              <div class="detail-card" style="grid-column: 1 / -1;"><strong>备注</strong><span class="note-content">${renderRemarkContent(report.note)}</span></div>
               <div class="detail-card" style="grid-column: 1 / -1;"><strong>OCR</strong><span>${escapeHtml(compactText(report.ocrText || "(空)"))}</span></div>
             </div>
           </div>
