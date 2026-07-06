@@ -43,6 +43,7 @@ const managedEnvKeys = [
   "WECHATY_REIMBURSEMENT_BACKWARD_TEXT_MERGE_WINDOW_SECONDS",
   "WECHATY_REIMBURSEMENT_EXTRACTION_PROVIDER",
   "WECHATY_REIMBURSEMENT_EXTRACTION_MODEL",
+  "WECHATY_REIMBURSEMENT_EXTRACTION_RETRY_MODEL",
   "WECHATY_REIMBURSEMENT_EXTRACTION_API_KEY",
   "WECHATY_REIMBURSEMENT_EXTRACTION_BASE_URL",
   "WECHATY_ADMIN_HOST",
@@ -127,6 +128,7 @@ test("getAppConfig parses WECHATY_CHANNELS_JSON with mixed delivery targets", ()
       },
     ]),
     WECHATY_REIMBURSEMENT_EXTRACTION_MODEL: "qwen3.5-flash",
+    WECHATY_REIMBURSEMENT_EXTRACTION_RETRY_MODEL: "qwen3.5-plus",
     WECHATY_REIMBURSEMENT_EXTRACTION_API_KEY: "test-key",
     WECHATY_ADMIN_HOST: "127.0.0.1",
     WECHATY_ADMIN_PORT: "8788",
@@ -162,6 +164,7 @@ test("getAppConfig parses WECHATY_CHANNELS_JSON with mixed delivery targets", ()
   assert.equal(config.channels[1]?.scenario, "reimbursement");
   assert.equal(config.reimbursementExtractionProvider, "qwen");
   assert.equal(config.reimbursementExtractionModel, "qwen3.5-flash");
+  assert.equal(config.reimbursementExtractionRetryModel, "qwen3.5-plus");
   assert.equal(config.reimbursementExtractionApiKey, "test-key");
   assert.equal(config.adminHost, "127.0.0.1");
   assert.equal(config.adminPort, 8788);

@@ -479,6 +479,7 @@ export async function startBot(
           lossExtractionBaseUrl: config.lossExtractionBaseUrl,
           reimbursementExtractionProvider: config.reimbursementExtractionProvider,
           reimbursementExtractionModel: config.reimbursementExtractionModel,
+          reimbursementExtractionRetryModel: config.reimbursementExtractionRetryModel,
           reimbursementExtractionApiKey: config.reimbursementExtractionApiKey,
           reimbursementExtractionBaseUrl: config.reimbursementExtractionBaseUrl,
         },

@@ -63,6 +63,7 @@ export interface MessageContext {
   lossExtractionBaseUrl: string;
   reimbursementExtractionProvider?: string;
   reimbursementExtractionModel?: string;
+  reimbursementExtractionRetryModel?: string;
   reimbursementExtractionApiKey?: string;
   reimbursementExtractionBaseUrl?: string;
 }
@@ -921,6 +922,7 @@ async function handleReimbursementMessage(
     {
       provider: context.reimbursementExtractionProvider,
       model: context.reimbursementExtractionModel,
+      retryModel: context.reimbursementExtractionRetryModel,
       apiKey: context.reimbursementExtractionApiKey,
       baseUrl:
         context.reimbursementExtractionBaseUrl ??

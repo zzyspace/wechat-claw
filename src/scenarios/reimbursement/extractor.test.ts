@@ -486,3 +486,107 @@ test("extractReimbursementReport falls back after the retry also returns an empt
     fs.rmSync(tempDir, { recursive: true, force: true });
   }
 });
+
+test("extractReimbursementReport uses configured retry model when the first attempt returns an empty structured result", async () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "wechat-claw-reimbursement-extractor-"));
+  const imagePath = path.join(tempDir, "receipt.jpg");
+  const logs: Array<{ level: string; message: string; context?: Record<string, unknown> }> = [];
+  let fetchCallCount = 0;
+  const requestedModels: string[] = [];
+
+  try {
+    fs.writeFileSync(imagePath, Buffer.from([0xff, 0xd8, 0xff, 0xd9]));
+
+    globalThis.fetch = (async (_url, init) => {
+      fetchCallCount += 1;
+      requestedModels.push(JSON.parse(String(init?.body)).model);
+
+      if (fetchCallCount === 1) {
+        return new Response(
+          JSON.stringify({
+            choices: [
+              {
+                finish_reason: "stop",
+                message: {
+                  content: " ",
+                },
+              },
+            ],
+          }),
+          {
+            status: 200,
+            headers: {
+              "Content-Type": "application/json",
+            },
+          },
+        );
+      }
+
+      return new Response(
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  amount: "66.8",
+                  currency: "CNY",
+                  expense_category: "food",
+                  voucher_date: "2026-05-22",
+                  merchant: "测试商户",
+                  document_no: "DOC-668",
+                  voucher_type: "小票",
+                  ocr_text: "实付 66.8",
+                  confidence: 0.9,
+                }),
+              },
+            },
+          ],
+        }),
+        {
+          status: 200,
+          headers: {
+            "Content-Type": "application/json",
+          },
+        },
+      );
+    }) as typeof fetch;
+
+    const result = await extractReimbursementReport(
+      {
+        rawMessageId: 5,
+        channelCode: "reimbursement_a",
+        channelName: "AI报账群",
+        reporter: "小王",
+        textContent: "备注",
+        sentAt: "2026-05-21T02:00:00.000Z",
+        timeZone: "Asia/Shanghai",
+        attachments: [
+          {
+            type: "image",
+            localPath: imagePath,
+            sha256: "custom-retry-model",
+            mimeType: "image/jpeg",
+          },
+        ],
+      },
+      {
+        provider: "qwen",
+        model: "qwen3.5-flash",
+        retryModel: "qwen-plus-latest",
+        apiKey: "test-key",
+        baseUrl: "https://example.com",
+      },
+      createLogger(logs),
+    );
+
+    assert.equal(fetchCallCount, 2);
+    assert.deepEqual(requestedModels, ["qwen3.5-flash", "qwen-plus-latest"]);
+    assert.equal(result.extractorCode, "model-qwen-qwen-plus-latest");
+
+    const retryLog = logs.find((entry) => entry.message === "Reimbursement model returned empty structured result, retrying once");
+    assert(retryLog);
+    assert.equal(retryLog.context?.retryModel, "qwen-plus-latest");
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});

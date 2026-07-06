@@ -69,6 +69,7 @@ export interface AppConfig {
   lossExtractionBaseUrl: string;
   reimbursementExtractionProvider?: string;
   reimbursementExtractionModel?: string;
+  reimbursementExtractionRetryModel?: string;
   reimbursementExtractionApiKey?: string;
   reimbursementExtractionBaseUrl: string;
   adminHost?: string;
@@ -467,6 +468,8 @@ export function getAppConfig(): AppConfig {
       readOptionalEnv("WECHATY_REIMBURSEMENT_EXTRACTION_PROVIDER") ?? "qwen",
     reimbursementExtractionModel:
       readOptionalEnv("WECHATY_REIMBURSEMENT_EXTRACTION_MODEL") ?? "qwen3.5-flash",
+    reimbursementExtractionRetryModel:
+      readOptionalEnv("WECHATY_REIMBURSEMENT_EXTRACTION_RETRY_MODEL") ?? "qwen3.5-plus",
     reimbursementExtractionApiKey: readOptionalEnv("WECHATY_REIMBURSEMENT_EXTRACTION_API_KEY"),
     reimbursementExtractionBaseUrl:
       process.env.WECHATY_REIMBURSEMENT_EXTRACTION_BASE_URL?.trim() ||

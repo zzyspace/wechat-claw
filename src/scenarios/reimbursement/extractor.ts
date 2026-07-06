@@ -18,6 +18,7 @@ import type {
 export interface ReimbursementModelProviderConfig {
   provider?: string;
   model?: string;
+  retryModel?: string;
   apiKey?: string;
   baseUrl?: string;
 }
@@ -84,7 +85,7 @@ const PLANNED_EXPENSE_OCR_NAME = "李晨晨";
 const PLANNED_EXPENSE_OCR_MIN_OCCURRENCES = 3;
 const MANAGER_REIMBURSEMENT_OCR_MARKERS = ["店长报账群"];
 const EMPTY_STRUCTURED_RESULT_MAX_RETRIES = 1;
-const EMPTY_STRUCTURED_RESULT_RETRY_MODEL = "qwen3.5-plus";
+const DEFAULT_EMPTY_STRUCTURED_RESULT_RETRY_MODEL = "qwen3.5-plus";
 const MODEL_RESPONSE_PREVIEW_LIMIT = 240;
 
 function detectEvidenceType(input: ReimbursementExtractionInput): ReimbursementEvidenceType {
@@ -338,8 +339,12 @@ function summarizeQwenPayload(payload: QwenCompletionPayload): Record<string, un
   };
 }
 
-function resolveAttemptModel(baseModel: string, attempt: number): string {
-  return attempt <= 1 ? baseModel : EMPTY_STRUCTURED_RESULT_RETRY_MODEL;
+function resolveRetryModel(configuredRetryModel: string | undefined): string {
+  return configuredRetryModel?.trim() || DEFAULT_EMPTY_STRUCTURED_RESULT_RETRY_MODEL;
+}
+
+function resolveAttemptModel(baseModel: string, retryModel: string, attempt: number): string {
+  return attempt <= 1 ? baseModel : retryModel;
 }
 
 async function callQwenReimbursementExtraction(
@@ -486,6 +491,7 @@ export async function extractReimbursementReport(
 
   const note = normalizeText(input.textContent);
   const messageVoucherDate = getMessageVoucherDate(input);
+  const retryModel = resolveRetryModel(config.retryModel);
 
   try {
     let attempt = 0;
@@ -494,7 +500,7 @@ export async function extractReimbursementReport(
 
     while (attempt <= EMPTY_STRUCTURED_RESULT_MAX_RETRIES) {
       attempt += 1;
-      effectiveModel = resolveAttemptModel(config.model, attempt);
+      effectiveModel = resolveAttemptModel(config.model, retryModel, attempt);
       logger?.info("Calling reimbursement model extraction", {
         attachmentCount: input.attachments.length,
         attempt,
@@ -528,7 +534,7 @@ export async function extractReimbursementReport(
           provider: config.provider,
           rawMessageId: input.rawMessageId,
           reporter: input.reporter,
-          retryModel: EMPTY_STRUCTURED_RESULT_RETRY_MODEL,
+          retryModel,
           ...attemptResult.responseSummary,
         });
         continue;
