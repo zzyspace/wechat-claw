@@ -252,11 +252,14 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     assert.match(pageHtml, /id="attachmentPreviewModal"/);
     assert.match(pageHtml, /<th>金额<\/th>\s*<th>类别<\/th>\s*<th>备注<\/th>/);
     assert.match(pageHtml, /placeholder="支持部分匹配，如 Ry \/ 张"/);
+    assert.match(pageHtml, /<label for="note">备注<\/label>/);
+    assert.match(pageHtml, /placeholder="支持部分匹配，如 补票 \/ 平账"/);
     assert.match(pageHtml, /renderRemarkContent\(item\.note, "-"\)/);
     assert.match(pageHtml, /tag note-pill/);
+    assert.doesNotMatch(pageHtml, /<label for="needsReview">需复核<\/label>/);
 
     const listResponse = await fetch(
-      `${server.baseUrl}/reimbursement/api/reports?search=%E6%B5%8B%E8%AF%95%E8%8F%9C%E5%9C%BA&reporter=Ry&needsReview=false&limit=20`,
+      `${server.baseUrl}/reimbursement/api/reports?search=%E6%B5%8B%E8%AF%95%E8%8F%9C%E5%9C%BA&reporter=Ry&note=%E6%99%9A%E9%A4%90&limit=20`,
       {
         headers: {
           ...createAdminAuthHeaders(),

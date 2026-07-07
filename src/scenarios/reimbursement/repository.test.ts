@@ -255,7 +255,7 @@ test("mergePrimaryImageIntoTextOnlyReimbursementReport clears text-only needsRev
   assert.equal(updated.needsReview, false);
 });
 
-test("listAdminReimbursementReports filters by search, partial reporter, category, review status, and voucher date range", () => {
+test("listAdminReimbursementReports filters by search, partial reporter, category, note, and voucher date range", () => {
   const currentDateParts = getZonedDateParts(new Date(), "Asia/Shanghai");
   const currentLocalDate = `${currentDateParts.year}-${String(currentDateParts.month).padStart(2, "0")}-${String(currentDateParts.day).padStart(2, "0")}`;
   const searchAttachmentPath = path.join(
@@ -340,8 +340,8 @@ test("listAdminReimbursementReports filters by search, partial reporter, categor
     search: "测试菜场",
     channelCode: "reimbursement_admin_list_test",
     reporter: "Ry",
+    note: "采购",
     expenseCategory: "food",
-    needsReview: false,
     createdDateFrom: currentLocalDate,
     createdDateTo: currentLocalDate,
     timeZone: "Asia/Shanghai",
@@ -367,6 +367,23 @@ test("listAdminReimbursementReports filters by search, partial reporter, categor
   assert.equal(numericSearch.items[0]?.id, reviewReport.id);
   assert.equal(numericSearch.items[0]?.needsReview, true);
   assert.equal(numericSearch.items[0]?.billAttachment, undefined);
+
+  const noteOnlySearch = listAdminReimbursementReports({
+    note: "待补",
+    limit: 20,
+    offset: 0,
+  });
+
+  assert.equal(noteOnlySearch.total, 1);
+  assert.equal(noteOnlySearch.items[0]?.id, reviewReport.id);
+
+  const noteShouldNotMatchOcr = listAdminReimbursementReports({
+    note: "待确认",
+    limit: 20,
+    offset: 0,
+  });
+
+  assert.equal(noteShouldNotMatchOcr.total, 0);
 });
 
 test("getAdminReimbursementReportDetail includes source attachments and receipt deliveries", () => {

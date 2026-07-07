@@ -1615,8 +1615,8 @@ export function listAdminReimbursementReports(options?: {
   search?: string;
   channelCode?: string;
   reporter?: string;
+  note?: string;
   expenseCategory?: ReimbursementExpenseCategory;
-  needsReview?: boolean;
   createdDateFrom?: string;
   createdDateTo?: string;
   timeZone?: string;
@@ -1652,9 +1652,9 @@ export function listAdminReimbursementReports(options?: {
     params.expenseCategory = options.expenseCategory;
   }
 
-  if (typeof options?.needsReview === "boolean") {
-    clauses.push("needs_review = @needsReview");
-    params.needsReview = options.needsReview ? 1 : 0;
+  if (options?.note) {
+    clauses.push("IFNULL(note, '') LIKE @note ESCAPE '\\'");
+    params.note = `%${escapeLikePattern(options.note)}%`;
   }
 
   if (options?.createdDateFrom) {

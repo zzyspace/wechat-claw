@@ -49,24 +49,6 @@ function parsePositiveInteger(value: unknown, field: string) {
   return parsed;
 }
 
-function parseBooleanFilter(value: unknown) {
-  const normalized = trimString(value).toLowerCase();
-
-  if (!normalized || normalized === "all") {
-    return undefined;
-  }
-
-  if (["1", "true", "yes"].includes(normalized)) {
-    return true;
-  }
-
-  if (["0", "false", "no"].includes(normalized)) {
-    return false;
-  }
-
-  throw new AdminValidationError("needsReview 参数无效。", "needsReview");
-}
-
 function parseDateFilter(value: unknown, field: string) {
   const normalized = trimString(value);
 
@@ -150,8 +132,8 @@ function parseReportListQuery(query: Record<string, unknown>) {
     search: trimString(query.search) || undefined,
     channelCode: trimString(query.channelCode) || undefined,
     reporter: trimString(query.reporter) || undefined,
+    note: trimString(query.note) || undefined,
     expenseCategory: parseExpenseCategory(query.expenseCategory),
-    needsReview: parseBooleanFilter(query.needsReview),
     createdDateFrom: createdDateFrom || undefined,
     createdDateTo: createdDateTo || undefined,
     limit: parseLimit(query.limit),

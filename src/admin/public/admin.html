@@ -847,7 +847,7 @@
       <div class="hero">
         <span class="eyebrow">WECHAT CLAW / REIMBURSEMENT</span>
         <h1>报账查看后台</h1>
-        <p>查看已入库的报账记录，按门店、报账人、类别、日期和复核状态筛选，并展开详情查看 OCR、原始消息、附件和回执记录。</p>
+        <p>查看已入库的报账记录，按门店、报账人、类别、日期和备注文字筛选，并展开详情查看 OCR、原始消息、附件和回执记录。</p>
       </div>
 
       <div class="panel controls">
@@ -855,7 +855,7 @@
           <div class="controls-grid">
             <div class="field">
               <label for="search">关键词 / 报账 ID</label>
-              <input id="search" name="search" placeholder="支持群聊、报账人、商户、单号、备注、OCR 或 ID" />
+              <input id="search" name="search" placeholder="支持群聊、报账人、商户、单号、OCR 或 ID" />
             </div>
             <div class="field">
               <label for="channelCode">门店</label>
@@ -875,12 +875,8 @@
               <input id="expenseCategory" name="expenseCategory" placeholder="如 food / 食材 / rent / 房租" />
             </div>
             <div class="field">
-              <label for="needsReview">需复核</label>
-              <select id="needsReview" name="needsReview">
-                <option value="all">全部</option>
-                <option value="true">是</option>
-                <option value="false">否</option>
-              </select>
+              <label for="note">备注</label>
+              <input id="note" name="note" placeholder="支持部分匹配，如 补票 / 平账" />
             </div>
             <div class="field">
               <label for="createdDateFrom">创建日期从</label>
@@ -1264,8 +1260,8 @@
           search: String(formData.get("search") || "").trim(),
           channelCode: String(formData.get("channelCode") || "").trim(),
           reporter: String(formData.get("reporter") || "").trim(),
+          note: String(formData.get("note") || "").trim(),
           expenseCategory: String(formData.get("expenseCategory") || "").trim(),
-          needsReview: String(formData.get("needsReview") || "all").trim(),
           createdDateFrom: String(formData.get("createdDateFrom") || "").trim(),
           createdDateTo: String(formData.get("createdDateTo") || "").trim(),
           limit: String(formData.get("limit") || state.limit || 50).trim(),
@@ -1278,8 +1274,8 @@
           "search",
           "channelCode",
           "reporter",
+          "note",
           "expenseCategory",
-          "needsReview",
           "createdDateFrom",
           "createdDateTo",
           "limit",
@@ -1324,8 +1320,8 @@
         if (filters.search) params.set("search", filters.search);
         if (filters.channelCode) params.set("channelCode", filters.channelCode);
         if (filters.reporter) params.set("reporter", filters.reporter);
+        if (filters.note) params.set("note", filters.note);
         if (filters.expenseCategory) params.set("expenseCategory", filters.expenseCategory);
-        if (filters.needsReview && filters.needsReview !== "all") params.set("needsReview", filters.needsReview);
         if (filters.createdDateFrom) params.set("createdDateFrom", filters.createdDateFrom);
         if (filters.createdDateTo) params.set("createdDateTo", filters.createdDateTo);
         params.set("limit", filters.limit || "50");
