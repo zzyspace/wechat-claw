@@ -11,6 +11,7 @@ import {
   extractSelfCanaryToken,
   startSelfCanaryManager,
 } from "../core/runtime/self-canary.js";
+import { extractRoomCanaryToken, startRoomCanaryManager } from "../core/runtime/room-canary.js";
 import { startLossSummaryScheduler } from "../core/runtime/summary-scheduler.js";
 import { createWaitingForScanAlertEmail } from "../core/runtime/watchdog-check.js";
 import {
@@ -63,13 +64,25 @@ async function main() {
   let stopSelfCanaryManager = () => {
     // no-op
   };
+  let stopRoomCanaryManager = () => {
+    // no-op
+  };
   let notifySelfCanaryLogin = () => {
+    // no-op
+  };
+  let notifyRoomCanaryLogin = () => {
     // no-op
   };
   let notifySelfCanaryLogout = () => {
     // no-op
   };
+  let notifyRoomCanaryLogout = () => {
+    // no-op
+  };
   let observeSelfCanaryMessage = async (_message: any) => {
+    // no-op
+  };
+  let observeRoomCanaryMessage = async (_message: any) => {
     // no-op
   };
   let stopWatchdogHeartbeatManager = () => {
@@ -99,6 +112,7 @@ async function main() {
       stopRawAttachmentRetentionManager();
       stopLogRetentionManager();
       stopSelfCanaryManager();
+      stopRoomCanaryManager();
 
       if (bot) {
         try {
@@ -271,9 +285,11 @@ async function main() {
         healthReporter?.markLogin();
         touchWatchdogHeartbeat();
         notifySelfCanaryLogin();
+        notifyRoomCanaryLogin();
       },
       onLogout({ name }) {
         notifySelfCanaryLogout();
+        notifyRoomCanaryLogout();
         healthReporter?.markError(new Error(`Bot logged out: ${name}`), {
           status: "degraded",
           category: "login_state_invalid",
@@ -292,12 +308,25 @@ async function main() {
         const isSelfCanaryMessage =
           Boolean(message?.self && typeof message.self === "function" && message.self()) &&
           Boolean(extractSelfCanaryToken(text));
+        const isRoomCanaryMessage =
+          Boolean(message?.self && typeof message.self === "function" && message.self()) &&
+          Boolean(extractRoomCanaryToken(text));
 
-        if (!isSelfCanaryMessage) {
+        if (!isSelfCanaryMessage && !isRoomCanaryMessage) {
           healthReporter?.markExternalMessage();
         }
         touchWatchdogHeartbeat();
-        await observeSelfCanaryMessage(message);
+        try {
+          await Promise.all([
+            observeSelfCanaryMessage(message),
+            observeRoomCanaryMessage(message),
+          ]);
+        } catch (error) {
+          logger.warn("Failed to observe canary message", {
+            message: error instanceof Error ? error.message : String(error),
+            stack: error instanceof Error ? error.stack : undefined,
+          });
+        }
       },
     });
 
@@ -338,8 +367,27 @@ async function main() {
     notifySelfCanaryLogout = () => selfCanaryManager.notifyLogout();
     observeSelfCanaryMessage = (message: any) => selfCanaryManager.observeMessage(message);
 
+    const roomCanaryManager = startRoomCanaryManager({
+      bot,
+      config,
+      logger,
+      onFailureThresholdReached(payload) {
+        healthReporter?.markError(new Error("Room canary failed and service restart was requested."), {
+          status: "degraded",
+          category: "wechaty_runtime_error",
+        });
+        touchWatchdogHeartbeat();
+        requestSupervisorRestart("ROOM_CANARY_FAILURE", payload);
+      },
+    });
+    stopRoomCanaryManager = () => roomCanaryManager.stop();
+    notifyRoomCanaryLogin = () => roomCanaryManager.notifyLogin();
+    notifyRoomCanaryLogout = () => roomCanaryManager.notifyLogout();
+    observeRoomCanaryMessage = (message: any) => roomCanaryManager.observeMessage(message);
+
     if (bot.isLoggedIn) {
       notifySelfCanaryLogin();
+      notifyRoomCanaryLogin();
     }
 
     const scheduler = startLossSummaryScheduler({

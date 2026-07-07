@@ -305,6 +305,73 @@ test("runWatchdogCheck waits for sustained high memory before restarting", async
   assert.equal(restartCount, 1);
 });
 
+test("runWatchdogCheck restarts when room canary reaches the failure threshold", async () => {
+  const stateDir = fs.mkdtempSync(path.join(os.tmpdir(), "wechat-claw-watchdog-check-"));
+  const config: AppConfig = {
+    ...createConfig(stateDir, true),
+    roomCanary: {
+      enabled: true,
+      targetRoomTopic: "AI报账群",
+      intervalMinSeconds: 600,
+      intervalMaxSeconds: 1200,
+      ackTimeoutSeconds: 120,
+      failureThreshold: 2,
+      autoRestartEnabled: true,
+    },
+  };
+  let restartCount = 0;
+
+  const result = await runWatchdogCheck({
+    config,
+    healthSnapshot: createHealthSnapshot(),
+    now: new Date("2026-05-21T12:10:00.000Z"),
+    persistentState: {
+      firstObservedAtByFingerprint: {},
+      lastCheckAt: null,
+      recentAlertsByFingerprint: {},
+      recentRestartAts: [],
+    },
+    readServiceStatus: () => createServiceStatus(),
+    restartService: () => {
+      restartCount += 1;
+    },
+    roomCanaryState: {
+      status: "restart_requested",
+      targetRoomTopic: "AI报账群",
+      enabled: true,
+      autoRestartEnabled: true,
+      intervalMinSeconds: 600,
+      intervalMaxSeconds: 1200,
+      lastScheduledIntervalSeconds: 600,
+      ackTimeoutSeconds: 120,
+      failureThreshold: 2,
+      lastSentAt: "2026-05-21T12:05:00.000Z",
+      lastSentToken: "abc-123",
+      lastSentText: "[wechat-claw][room-canary] token=abc-123",
+      pendingSinceAt: null,
+      lastAckAt: "2026-05-21T11:50:00.000Z",
+      lastAckToken: "previous-token",
+      consecutiveFailureCount: 2,
+      lastFailureAt: "2026-05-21T12:07:00.000Z",
+      lastFailureReason: "ack_timeout",
+      lastDeliveryError: null,
+      lastRestartRequestedAt: "2026-05-21T12:07:00.000Z",
+    },
+    sendAlertEmail: async () => {
+      // no-op
+    },
+    serviceName: "wechat-claw",
+    watchdogSnapshot: createWatchdogSnapshot({
+      lastHeartbeatAt: "2026-05-21T12:09:00.000Z",
+    }),
+  });
+
+  assert.equal(result.effectiveEvaluation.reasonCode, "room_canary_failed");
+  assert.equal(result.effectiveEvaluation.action, "email_and_restart");
+  assert.equal(result.restartPerformed, true);
+  assert.equal(restartCount, 1);
+});
+
 test("watchdog persistent state can be written and read back", () => {
   const stateDir = fs.mkdtempSync(path.join(os.tmpdir(), "wechat-claw-watchdog-check-"));
   const config = createConfig(stateDir, false);

@@ -51,6 +51,7 @@ export interface AppConfig {
   watchdogMemoryLimitMb: number;
   watchdogMemoryPersistenceSeconds: number;
   selfCanary?: SelfCanaryConfig;
+  roomCanary?: RoomCanaryConfig;
   timeZone: string;
   debugContactName?: string;
   manualReimbursementContactName?: string;
@@ -86,6 +87,16 @@ export interface SelfCanaryConfig {
   ackTimeoutSeconds: number;
   failureThreshold: number;
   autoResetEnabled: boolean;
+}
+
+export interface RoomCanaryConfig {
+  enabled: boolean;
+  targetRoomTopic: string;
+  intervalMinSeconds: number;
+  intervalMaxSeconds: number;
+  ackTimeoutSeconds: number;
+  failureThreshold: number;
+  autoRestartEnabled: boolean;
 }
 
 export type LogLevelName = "debug" | "info" | "warn" | "error";
@@ -403,6 +414,10 @@ export function getAppConfig(): AppConfig {
     "WECHATY_SELF_CANARY_INTERVAL_SECONDS",
     1800,
   );
+  const roomCanaryIntervalRange = readConfiguredPositiveNumberRangeEnv(
+    "WECHATY_ROOM_CANARY_INTERVAL_SECONDS",
+    1800,
+  );
 
   return {
     puppet: readOptionalEnv("WECHATY_PUPPET"),
@@ -436,6 +451,15 @@ export function getAppConfig(): AppConfig {
       ackTimeoutSeconds: readConfiguredPositiveNumberEnv("WECHATY_SELF_CANARY_ACK_TIMEOUT_SECONDS", 120),
       failureThreshold: readConfiguredPositiveNumberEnv("WECHATY_SELF_CANARY_FAILURE_THRESHOLD", 2),
       autoResetEnabled: readBooleanEnv("WECHATY_SELF_CANARY_AUTO_RESET_ENABLED", false),
+    },
+    roomCanary: {
+      enabled: readBooleanEnv("WECHATY_ROOM_CANARY_ENABLED", false),
+      targetRoomTopic: readStringEnv("WECHATY_ROOM_CANARY_TARGET_ROOM_TOPIC", ""),
+      intervalMinSeconds: roomCanaryIntervalRange.min,
+      intervalMaxSeconds: roomCanaryIntervalRange.max,
+      ackTimeoutSeconds: readConfiguredPositiveNumberEnv("WECHATY_ROOM_CANARY_ACK_TIMEOUT_SECONDS", 120),
+      failureThreshold: readConfiguredPositiveNumberEnv("WECHATY_ROOM_CANARY_FAILURE_THRESHOLD", 2),
+      autoRestartEnabled: readBooleanEnv("WECHATY_ROOM_CANARY_AUTO_RESTART_ENABLED", false),
     },
     timeZone: readStringEnv("WECHATY_TIMEZONE", "Asia/Shanghai") || "Asia/Shanghai",
     debugContactName: readOptionalEnv("WECHATY_DEBUG_CONTACT_NAME"),
@@ -489,6 +513,9 @@ export function validateAppConfig(config: AppConfig): ConfigValidationResult {
   const rawSelfCanaryEnabled = process.env.WECHATY_SELF_CANARY_ENABLED?.trim();
   const rawSelfCanaryIntervalSeconds = process.env.WECHATY_SELF_CANARY_INTERVAL_SECONDS?.trim();
   const rawSelfCanaryAutoResetEnabled = process.env.WECHATY_SELF_CANARY_AUTO_RESET_ENABLED?.trim();
+  const rawRoomCanaryEnabled = process.env.WECHATY_ROOM_CANARY_ENABLED?.trim();
+  const rawRoomCanaryIntervalSeconds = process.env.WECHATY_ROOM_CANARY_INTERVAL_SECONDS?.trim();
+  const rawRoomCanaryAutoRestartEnabled = process.env.WECHATY_ROOM_CANARY_AUTO_RESTART_ENABLED?.trim();
   const rawAdminPort = process.env.WECHATY_ADMIN_PORT?.trim();
 
   if (!config.puppet) {
@@ -540,6 +567,14 @@ export function validateAppConfig(config: AppConfig): ConfigValidationResult {
     errors.push(`Invalid WECHATY_SELF_CANARY_AUTO_RESET_ENABLED: ${rawSelfCanaryAutoResetEnabled}`);
   }
 
+  if (rawRoomCanaryEnabled && !isBooleanLiteral(rawRoomCanaryEnabled)) {
+    errors.push(`Invalid WECHATY_ROOM_CANARY_ENABLED: ${rawRoomCanaryEnabled}`);
+  }
+
+  if (rawRoomCanaryAutoRestartEnabled && !isBooleanLiteral(rawRoomCanaryAutoRestartEnabled)) {
+    errors.push(`Invalid WECHATY_ROOM_CANARY_AUTO_RESTART_ENABLED: ${rawRoomCanaryAutoRestartEnabled}`);
+  }
+
   if (config.selfCanary) {
     if (rawSelfCanaryIntervalSeconds && !parsePositiveNumberRangeLiteral(rawSelfCanaryIntervalSeconds)) {
       errors.push(`Invalid WECHATY_SELF_CANARY_INTERVAL_SECONDS: ${rawSelfCanaryIntervalSeconds}`);
@@ -567,6 +602,36 @@ export function validateAppConfig(config: AppConfig): ConfigValidationResult {
 
     if (config.selfCanary.enabled && !config.selfCanary.targetContactName.trim()) {
       errors.push("Missing WECHATY_SELF_CANARY_TARGET_CONTACT_NAME");
+    }
+  }
+
+  if (config.roomCanary) {
+    if (rawRoomCanaryIntervalSeconds && !parsePositiveNumberRangeLiteral(rawRoomCanaryIntervalSeconds)) {
+      errors.push(`Invalid WECHATY_ROOM_CANARY_INTERVAL_SECONDS: ${rawRoomCanaryIntervalSeconds}`);
+    }
+
+    if (
+      !Number.isFinite(config.roomCanary.intervalMinSeconds) ||
+      config.roomCanary.intervalMinSeconds <= 0 ||
+      !Number.isFinite(config.roomCanary.intervalMaxSeconds) ||
+      config.roomCanary.intervalMaxSeconds <= 0 ||
+      config.roomCanary.intervalMinSeconds > config.roomCanary.intervalMaxSeconds
+    ) {
+      errors.push(
+        `Invalid WECHATY_ROOM_CANARY_INTERVAL_SECONDS range: ${config.roomCanary.intervalMinSeconds}-${config.roomCanary.intervalMaxSeconds}`,
+      );
+    }
+
+    if (!Number.isFinite(config.roomCanary.ackTimeoutSeconds) || config.roomCanary.ackTimeoutSeconds <= 0) {
+      errors.push(`Invalid WECHATY_ROOM_CANARY_ACK_TIMEOUT_SECONDS: ${config.roomCanary.ackTimeoutSeconds}`);
+    }
+
+    if (!Number.isFinite(config.roomCanary.failureThreshold) || config.roomCanary.failureThreshold <= 0) {
+      errors.push(`Invalid WECHATY_ROOM_CANARY_FAILURE_THRESHOLD: ${config.roomCanary.failureThreshold}`);
+    }
+
+    if (config.roomCanary.enabled && !config.roomCanary.targetRoomTopic.trim()) {
+      errors.push("Missing WECHATY_ROOM_CANARY_TARGET_ROOM_TOPIC");
     }
   }
 

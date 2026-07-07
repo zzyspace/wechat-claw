@@ -84,6 +84,10 @@ export function getSelfCanaryStatePath(config?: AppConfig): string {
   return path.join(getStateDirPath(config), "self-canary.json");
 }
 
+export function getRoomCanaryStatePath(config?: AppConfig): string {
+  return path.join(getStateDirPath(config), "room-canary.json");
+}
+
 export function getMemoryCardFilePath(config?: AppConfig): string {
   const resolved = resolveConfig(config);
   return path.join(getStateDirPath(resolved), `${resolved.botName}.memory-card.json`);

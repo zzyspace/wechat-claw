@@ -5,9 +5,11 @@ import path from "node:path";
 import type { AppConfig } from "../config/env.js";
 import type { SmtpAttachment } from "../alerts/smtp-client.js";
 import { getManagedLogFilePath } from "../logging/log-files.js";
+import type { RoomCanaryState } from "./room-canary.js";
 import type { RuntimeHealthSnapshot, RuntimeHealthStatus } from "./health.js";
 import {
   getHealthArtifactPath,
+  getRoomCanaryStatePath,
   getWatchdogArtifactPath,
   getWatchdogStatePath,
 } from "./state-paths.js";
@@ -29,6 +31,9 @@ export type WatchdogReasonCode =
   | "health_degraded_persistent"
   | "login_waiting_for_scan_timeout"
   | "login_logged_out"
+  | "room_canary_failed"
+  | "room_canary_state_invalid"
+  | "room_canary_state_missing"
   | "service_memory_high"
   | "startup_failed"
   | "restart_throttled"
@@ -65,6 +70,7 @@ export interface WatchdogEvaluation {
   hostName: string;
   message: string;
   reasonCode?: WatchdogReasonCode;
+  roomCanaryState?: RoomCanaryState;
   serviceName: string;
   serviceStatus: ServiceStatusSnapshot;
   severity: WatchdogSeverity;
@@ -152,6 +158,7 @@ function ageMsFromIso(iso: string | null | undefined, now: Date) {
 function createFingerprint(input: {
   healthSnapshot?: RuntimeHealthSnapshot;
   reasonCode: WatchdogReasonCode;
+  roomCanaryState?: RoomCanaryState;
   serviceStatus: ServiceStatusSnapshot;
   watchdogSnapshot?: RuntimeWatchdogSnapshot;
 }) {
@@ -160,6 +167,8 @@ function createFingerprint(input: {
     input.healthSnapshot?.status ?? "(missing)",
     input.healthSnapshot?.lastError?.category ?? "(none)",
     input.healthSnapshot?.lastError?.message ?? "(none)",
+    input.roomCanaryState?.status ?? "(none)",
+    input.roomCanaryState?.targetRoomTopic ?? "(none)",
     String(input.watchdogSnapshot?.pid ?? input.serviceStatus.mainPid ?? 0),
     input.watchdogSnapshot?.startedAt ?? input.healthSnapshot?.startedAt ?? "(unknown)",
   ].join("|");
@@ -171,6 +180,7 @@ function buildEvaluation(input: {
   hostName: string;
   message: string;
   reasonCode?: WatchdogReasonCode;
+  roomCanaryState?: RoomCanaryState;
   serviceName: string;
   serviceStatus: ServiceStatusSnapshot;
   severity: WatchdogSeverity;
@@ -183,6 +193,7 @@ function buildEvaluation(input: {
       ? createFingerprint({
           healthSnapshot: input.healthSnapshot,
           reasonCode: input.reasonCode,
+          roomCanaryState: input.roomCanaryState,
           serviceStatus: input.serviceStatus,
           watchdogSnapshot: input.watchdogSnapshot,
         })
@@ -191,6 +202,7 @@ function buildEvaluation(input: {
     hostName: input.hostName,
     message: input.message,
     reasonCode: input.reasonCode,
+    roomCanaryState: input.roomCanaryState,
     serviceName: input.serviceName,
     serviceStatus: input.serviceStatus,
     severity: input.severity,
@@ -217,10 +229,13 @@ function buildQrcodeArtifactAttachment(artifactPath: string): SmtpAttachment | u
 }
 
 export function evaluateWatchdogState(input: {
+  config?: AppConfig;
   healthSnapshot?: RuntimeHealthSnapshot;
   healthSnapshotError?: "invalid" | "missing";
   hostName?: string;
   now?: Date;
+  roomCanaryState?: RoomCanaryState;
+  roomCanaryStateError?: "invalid" | "missing";
   serviceName: string;
   serviceStatus: ServiceStatusSnapshot;
   watchdogSnapshot?: RuntimeWatchdogSnapshot;
@@ -359,6 +374,70 @@ export function evaluateWatchdogState(input: {
       severity: "recoverable_error",
       watchdogSnapshot: input.watchdogSnapshot,
     });
+  }
+
+  const roomCanary = input.config?.roomCanary;
+
+  if (roomCanary?.enabled && input.healthSnapshot.status === "logged_in") {
+    if (
+      input.roomCanaryStateError === "missing" &&
+      ageMsFromIso(input.watchdogSnapshot.startedAt, now) >= 2 * 60 * 1000
+    ) {
+      return buildEvaluation({
+        action: "email_only",
+        healthSnapshot: input.healthSnapshot,
+        hostName,
+        message: "Room canary is enabled but room-canary.json is missing.",
+        reasonCode: "room_canary_state_missing",
+        serviceName: input.serviceName,
+        serviceStatus,
+        severity: "manual_action_required",
+        watchdogSnapshot: input.watchdogSnapshot,
+      });
+    }
+
+    if (input.roomCanaryStateError === "invalid") {
+      return buildEvaluation({
+        action: "email_only",
+        healthSnapshot: input.healthSnapshot,
+        hostName,
+        message: "Room canary is enabled but room-canary.json is unreadable.",
+        reasonCode: "room_canary_state_invalid",
+        serviceName: input.serviceName,
+        serviceStatus,
+        severity: "manual_action_required",
+        watchdogSnapshot: input.watchdogSnapshot,
+      });
+    }
+
+    if (input.roomCanaryState) {
+      const pendingStale =
+        input.roomCanaryState.status === "pending" &&
+        ageMsFromIso(input.roomCanaryState.pendingSinceAt, now) >=
+          (roomCanary.ackTimeoutSeconds + 60) * 1000;
+      const failureThresholdReached =
+        input.roomCanaryState.consecutiveFailureCount >= roomCanary.failureThreshold;
+
+      if (
+        input.roomCanaryState.status === "restart_requested" ||
+        failureThresholdReached ||
+        pendingStale
+      ) {
+        return buildEvaluation({
+          action: roomCanary.autoRestartEnabled ? "email_and_restart" : "email_only",
+          healthSnapshot: input.healthSnapshot,
+          hostName,
+          message:
+            "Room canary failed to receive its own room message acknowledgement; group message listening is likely stuck.",
+          reasonCode: "room_canary_failed",
+          roomCanaryState: input.roomCanaryState,
+          serviceName: input.serviceName,
+          serviceStatus,
+          severity: roomCanary.autoRestartEnabled ? "recoverable_error" : "manual_action_required",
+          watchdogSnapshot: input.watchdogSnapshot,
+        });
+      }
+    }
   }
 
   if (input.healthSnapshot.status === "waiting_for_scan") {
@@ -569,6 +648,14 @@ export function createWatchdogAlertEmail(input: {
       `Health lastError.category: ${input.evaluation.healthSnapshot?.lastError?.category ?? "(none)"}`,
       `Health lastError.message: ${input.evaluation.healthSnapshot?.lastError?.message ?? "(none)"}`,
       "",
+      `Room canary status: ${input.evaluation.roomCanaryState?.status ?? "(missing)"}`,
+      `Room canary targetRoomTopic: ${input.evaluation.roomCanaryState?.targetRoomTopic ?? "(missing)"}`,
+      `Room canary consecutiveFailureCount: ${input.evaluation.roomCanaryState?.consecutiveFailureCount ?? 0}`,
+      `Room canary pendingSinceAt: ${input.evaluation.roomCanaryState?.pendingSinceAt ?? "(missing)"}`,
+      `Room canary lastSentAt: ${input.evaluation.roomCanaryState?.lastSentAt ?? "(missing)"}`,
+      `Room canary lastAckAt: ${input.evaluation.roomCanaryState?.lastAckAt ?? "(missing)"}`,
+      `Room canary lastFailureReason: ${input.evaluation.roomCanaryState?.lastFailureReason ?? "(none)"}`,
+      "",
       `Watchdog runId: ${input.evaluation.watchdogSnapshot?.runId ?? "(missing)"}`,
       `Watchdog pid: ${input.evaluation.watchdogSnapshot?.pid ?? 0}`,
       `Watchdog startedAt: ${input.evaluation.watchdogSnapshot?.startedAt ?? "(missing)"}`,
@@ -577,6 +664,7 @@ export function createWatchdogAlertEmail(input: {
       "",
       `Health file: ${getHealthArtifactPath(input.config)}`,
       `Watchdog file: ${getWatchdogArtifactPath(input.config)}`,
+      `Room canary file: ${getRoomCanaryStatePath(input.config)}`,
       `App log: ${getManagedLogFilePath(input.config, "app", today)}`,
       `Error log: ${getManagedLogFilePath(input.config, "error", today)}`,
       "",
@@ -586,6 +674,7 @@ export function createWatchdogAlertEmail(input: {
       `  tail -f ${getManagedLogFilePath(input.config, "error", today)}`,
       `  cat ${getHealthArtifactPath(input.config)}`,
       `  cat ${getWatchdogArtifactPath(input.config)}`,
+      `  cat ${getRoomCanaryStatePath(input.config)}`,
     ].join("\n"),
   };
 }
@@ -696,6 +785,8 @@ export async function runWatchdogCheck(input: {
   persistentState?: WatchdogPersistentState;
   readServiceStatus: () => Promise<ServiceStatusSnapshot> | ServiceStatusSnapshot;
   restartService: () => Promise<void> | void;
+  roomCanaryState?: RoomCanaryState;
+  roomCanaryStateError?: "invalid" | "missing";
   sendAlertEmail?: (message: WatchdogAlertEmail) => Promise<void> | void;
   serviceName: string;
   watchdogSnapshot?: RuntimeWatchdogSnapshot;
@@ -704,10 +795,13 @@ export async function runWatchdogCheck(input: {
   const now = input.now ?? new Date();
   const serviceStatus = await input.readServiceStatus();
   let rawEvaluation = evaluateWatchdogState({
+    config: input.config,
     healthSnapshot: input.healthSnapshot,
     healthSnapshotError: input.healthSnapshotError,
     hostName: input.hostName,
     now,
+    roomCanaryState: input.roomCanaryState,
+    roomCanaryStateError: input.roomCanaryStateError,
     serviceName: input.serviceName,
     serviceStatus,
     watchdogSnapshot: input.watchdogSnapshot,

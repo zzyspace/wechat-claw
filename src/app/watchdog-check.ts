@@ -13,6 +13,7 @@ import {
   writeWatchdogPersistentState,
   type ServiceStatusSnapshot,
 } from "../core/runtime/watchdog-check.js";
+import { readRoomCanaryState } from "../core/runtime/room-canary.js";
 import { assertLogDirWritable, assertStateDirWritable } from "../core/runtime/state-paths.js";
 
 const SERVICE_NAME = "wechat-claw";
@@ -127,6 +128,7 @@ async function main() {
 
   const healthResult = readRuntimeHealthSnapshot(config);
   const watchdogResult = readRuntimeWatchdogSnapshot(config);
+  const roomCanaryResult = readRoomCanaryState(config);
 
   try {
     const result = await runWatchdogCheck({
@@ -136,6 +138,8 @@ async function main() {
       persistentState: readWatchdogPersistentState(config),
       readServiceStatus: () => readServiceStatus(SERVICE_NAME),
       restartService: () => restartService(SERVICE_NAME),
+      roomCanaryState: roomCanaryResult.state,
+      roomCanaryStateError: roomCanaryResult.error,
       sendAlertEmail: config.alertEmailEnabled
         ? (message) =>
             sendSmtpMail({

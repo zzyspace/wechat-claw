@@ -134,6 +134,12 @@ WECHATY_CHANNELS_JSON=[{"code":"loss_a","enabled":true,"scenario":"loss-report",
 - `WECHATY_SELF_CANARY_ACK_TIMEOUT_SECONDS`: 发送后等待 self message 回流的超时时间，单位秒，默认 `120`
 - `WECHATY_SELF_CANARY_FAILURE_THRESHOLD`: 连续失败多少次才算 canary 故障，默认 `2`
 - `WECHATY_SELF_CANARY_AUTO_RESET_ENABLED`: 连续失败达到阈值后，是否自动备份并停用 `memory-card` 后触发 fresh login，默认 `false`
+- `WECHATY_ROOM_CANARY_ENABLED`: 是否启用群消息链路自检 canary，默认 `false`
+- `WECHATY_ROOM_CANARY_TARGET_ROOM_TOPIC`: 群自检发送目标群名，建议使用低打扰测试群
+- `WECHATY_ROOM_CANARY_INTERVAL_SECONDS`: 群自检发送间隔，单位秒；支持单值 `600` 或范围 `600-1200`，默认 `1800`
+- `WECHATY_ROOM_CANARY_ACK_TIMEOUT_SECONDS`: 发送后等待自身群消息回流的超时时间，单位秒，默认 `120`
+- `WECHATY_ROOM_CANARY_FAILURE_THRESHOLD`: 连续失败多少次才判断群消息监听卡住，默认 `2`
+- `WECHATY_ROOM_CANARY_AUTO_RESTART_ENABLED`: 连续失败达到阈值后是否自动重启 `wechat-claw`，默认 `false`
 - `WECHATY_TIMEZONE`: 日期边界和 cron 解释时区，默认 `Asia/Shanghai`
 - `WECHATY_DEBUG_CONTACT_NAME`: `"[wechat-claw]"` 调试信息的接收联系人，不参与业务日报发送；上线通知始终走这里
 - `WECHATY_MANUAL_REIMBURSEMENT_CONTACT_NAME`: 允许通过私聊发送“补录报账”结构化命令的联系人昵称；未配置时该能力关闭
@@ -584,6 +590,16 @@ npm start
 用途：
 
 - 记录最近一次 canary 发送时间、token、回流确认时间
+
+## Room Canary 状态文件
+
+如果启用了群消息链路自检 canary，程序还会维护：
+
+- `WECHATY_STATE_DIR/room-canary.json`
+
+用途：
+
+- 记录最近一次群 canary 发送时间、token、回流确认时间和连续失败次数
 - 记录连续失败次数、最近失败原因
 - 如果启用了自动恢复，还会记录最近一次请求 fresh login reset 的时间
 
@@ -623,12 +639,14 @@ npm run logs:recent -- --date 2026-05-21 --grep login
 - watchdog 会读取 `health.json` 和 `watchdog.json`
 - 对持续异常或心跳停滞执行自动重启
 - 对需要人工处理的情况发送邮件但不重启
+- 如果启用 room canary，watchdog 还会读取 `room-canary.json`
 
 默认会处理的情况：
 
 - 主服务不在 `active` 状态
 - `health.status=degraded` 持续超过阈值
 - bot 已登出
+- room canary 连续失败或 ack 超时，说明群消息监听可能卡住
 - `watchdog.json` 心跳长时间不更新
 - `waiting_for_scan` 持续过久
 
@@ -644,6 +662,7 @@ journalctl -u wechat-claw-daily-restart.service -f -o short-iso
 cat /var/lib/wechat-claw/health.json
 cat /var/lib/wechat-claw/watchdog.json
 cat /var/lib/wechat-claw/watchdog-state.json
+cat /var/lib/wechat-claw/room-canary.json
 tail -f /var/lib/wechat-claw/logs/app-$(date +%F).log
 tail -f /var/lib/wechat-claw/logs/error-$(date +%F).log
 ```
@@ -901,6 +920,7 @@ WECHATY_CHANNELS_JSON=[{"code":"loss_prod","enabled":true,"scenario":"loss-repor
 - `/var/lib/wechat-claw/watchdog.json`
 - `/var/lib/wechat-claw/watchdog-state.json`
 - `/var/lib/wechat-claw/self-canary.json`
+- `/var/lib/wechat-claw/room-canary.json`
 - `tail -f /var/lib/wechat-claw/logs/app-$(date +%F).log`
 - `tail -f /var/lib/wechat-claw/logs/error-$(date +%F).log`
 - `cd /opt/wechat-claw/current && npm run watchdog:check`

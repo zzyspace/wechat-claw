@@ -30,6 +30,12 @@ const managedEnvKeys = [
   "WECHATY_SELF_CANARY_ACK_TIMEOUT_SECONDS",
   "WECHATY_SELF_CANARY_FAILURE_THRESHOLD",
   "WECHATY_SELF_CANARY_AUTO_RESET_ENABLED",
+  "WECHATY_ROOM_CANARY_ENABLED",
+  "WECHATY_ROOM_CANARY_TARGET_ROOM_TOPIC",
+  "WECHATY_ROOM_CANARY_INTERVAL_SECONDS",
+  "WECHATY_ROOM_CANARY_ACK_TIMEOUT_SECONDS",
+  "WECHATY_ROOM_CANARY_FAILURE_THRESHOLD",
+  "WECHATY_ROOM_CANARY_AUTO_RESTART_ENABLED",
   "WECHATY_TIMEZONE",
   "WECHATY_SUMMARY_CRON",
   "WECHATY_CHANNELS_JSON",
@@ -160,6 +166,7 @@ test("getAppConfig parses WECHATY_CHANNELS_JSON with mixed delivery targets", ()
   assert.equal(config.watchdogMemoryLimitMb, 512);
   assert.equal(config.watchdogMemoryPersistenceSeconds, 420);
   assert.equal(config.selfCanary?.enabled, false);
+  assert.equal(config.roomCanary?.enabled, false);
   assert.equal(config.channels.length, 2);
   assert.equal(config.channels[1]?.scenario, "reimbursement");
   assert.equal(config.reimbursementExtractionProvider, "qwen");
@@ -275,6 +282,7 @@ test("getAppConfig defaults log settings from state dir", () => {
   assert.equal(config.watchdogMemoryLimitMb, 0);
   assert.equal(config.watchdogMemoryPersistenceSeconds, 300);
   assert.equal(config.selfCanary?.targetContactName, "文件传输助手");
+  assert.equal(config.roomCanary?.targetRoomTopic, "");
   assert.equal(config.debugReceivedRoomMessageEnabled, false);
   assert.equal(config.adminHost, "127.0.0.1");
   assert.equal(config.adminPort, 8788);
@@ -314,6 +322,70 @@ test("getAppConfig parses self canary settings", () => {
   assert.equal(config.selfCanary?.failureThreshold, 2);
   assert.equal(config.selfCanary?.autoResetEnabled, true);
   assert.deepEqual(validation.errors, []);
+});
+
+test("getAppConfig parses room canary settings", () => {
+  applyEnv({
+    WECHATY_PUPPET: "wechaty-puppet-wechat",
+    WECHATY_CHANNELS_JSON: JSON.stringify([
+      {
+        code: "reimbursement_a",
+        enabled: true,
+        scenario: "reimbursement",
+        match: { type: "room_topic", value: "AI报账群" },
+        deliveryTargets: [],
+        summarySchedule: "",
+      },
+    ]),
+    WECHATY_ROOM_CANARY_ENABLED: "true",
+    WECHATY_ROOM_CANARY_TARGET_ROOM_TOPIC: "AI报账群",
+    WECHATY_ROOM_CANARY_INTERVAL_SECONDS: "600-1200",
+    WECHATY_ROOM_CANARY_ACK_TIMEOUT_SECONDS: "90",
+    WECHATY_ROOM_CANARY_FAILURE_THRESHOLD: "2",
+    WECHATY_ROOM_CANARY_AUTO_RESTART_ENABLED: "true",
+  });
+
+  const config = getAppConfig();
+  const validation = validateAppConfig(config);
+
+  assert.equal(config.roomCanary?.enabled, true);
+  assert.equal(config.roomCanary?.targetRoomTopic, "AI报账群");
+  assert.equal(config.roomCanary?.intervalMinSeconds, 600);
+  assert.equal(config.roomCanary?.intervalMaxSeconds, 1200);
+  assert.equal(config.roomCanary?.ackTimeoutSeconds, 90);
+  assert.equal(config.roomCanary?.failureThreshold, 2);
+  assert.equal(config.roomCanary?.autoRestartEnabled, true);
+  assert.deepEqual(validation.errors, []);
+});
+
+test("validateAppConfig rejects invalid room canary settings", () => {
+  applyEnv({
+    WECHATY_PUPPET: "wechaty-puppet-wechat",
+    WECHATY_CHANNELS_JSON: JSON.stringify([
+      {
+        code: "reimbursement_a",
+        enabled: true,
+        scenario: "reimbursement",
+        match: { type: "room_topic", value: "AI报账群" },
+        deliveryTargets: [],
+        summarySchedule: "",
+      },
+    ]),
+    WECHATY_ROOM_CANARY_ENABLED: "maybe",
+    WECHATY_ROOM_CANARY_TARGET_ROOM_TOPIC: "",
+    WECHATY_ROOM_CANARY_INTERVAL_SECONDS: "1200-600",
+    WECHATY_ROOM_CANARY_ACK_TIMEOUT_SECONDS: "-1",
+    WECHATY_ROOM_CANARY_FAILURE_THRESHOLD: "0",
+    WECHATY_ROOM_CANARY_AUTO_RESTART_ENABLED: "perhaps",
+  });
+
+  const validation = validateAppConfig(getAppConfig());
+
+  assert(validation.errors.some((error) => error.includes("Invalid WECHATY_ROOM_CANARY_ENABLED")));
+  assert(validation.errors.some((error) => error.includes("Invalid WECHATY_ROOM_CANARY_INTERVAL_SECONDS")));
+  assert(validation.errors.some((error) => error.includes("Invalid WECHATY_ROOM_CANARY_ACK_TIMEOUT_SECONDS")));
+  assert(validation.errors.some((error) => error.includes("Invalid WECHATY_ROOM_CANARY_FAILURE_THRESHOLD")));
+  assert(validation.errors.some((error) => error.includes("Invalid WECHATY_ROOM_CANARY_AUTO_RESTART_ENABLED")));
 });
 
 test("validateAppConfig rejects invalid self canary settings", () => {
