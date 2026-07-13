@@ -34,6 +34,7 @@ export type WatchdogReasonCode =
   | "room_canary_failed"
   | "room_canary_state_invalid"
   | "room_canary_state_missing"
+  | "host_cpu_step_increase"
   | "service_memory_high"
   | "startup_failed"
   | "restart_throttled"
@@ -48,6 +49,11 @@ export type WatchdogAction = "none" | "email_only" | "email_and_restart";
 
 export interface ServiceStatusSnapshot {
   activeState: string;
+  cpuBaselinePercent?: number;
+  cpuIncreasePercentagePoints?: number;
+  cpuUtilizationPercent?: number;
+  hostCpuIdleTicks?: number;
+  hostCpuTotalTicks?: number;
   execMainStatus?: number;
   mainPid?: number;
   memoryCurrentBytes?: number;
@@ -57,6 +63,19 @@ export interface ServiceStatusSnapshot {
 }
 
 export interface WatchdogPersistentState {
+  cpuBaselinePercent?: number;
+  cpuSample?: {
+    at: string;
+    idleTicks: number;
+    totalTicks: number;
+  };
+  cpuStepCandidate?: {
+    alertSentAt?: string;
+    baselinePercent: number;
+    detectedAt: string;
+    latestPercent: number;
+    peakPercent: number;
+  };
   firstObservedAtByFingerprint: Record<string, string>;
   lastCheckAt: string | null;
   recentAlertsByFingerprint: Record<string, string>;
@@ -117,7 +136,7 @@ function readJsonFile<T>(pathValue: string): T {
 }
 
 function normalizePersistentState(value: Partial<WatchdogPersistentState> | undefined): WatchdogPersistentState {
-  return {
+  const state: WatchdogPersistentState = {
     firstObservedAtByFingerprint:
       value?.firstObservedAtByFingerprint && typeof value.firstObservedAtByFingerprint === "object"
         ? Object.fromEntries(
@@ -139,6 +158,40 @@ function normalizePersistentState(value: Partial<WatchdogPersistentState> | unde
       ? value.recentRestartAts.filter((item): item is string => typeof item === "string")
       : [],
   };
+
+  if (Number.isFinite(value?.cpuBaselinePercent) && (value?.cpuBaselinePercent ?? -1) >= 0) {
+    state.cpuBaselinePercent = value?.cpuBaselinePercent;
+  }
+
+  if (
+    typeof value?.cpuSample?.at === "string" &&
+    Number.isFinite(value.cpuSample.idleTicks) &&
+    value.cpuSample.idleTicks >= 0 &&
+    Number.isFinite(value.cpuSample.totalTicks) &&
+    value.cpuSample.totalTicks >= 0
+  ) {
+    state.cpuSample = value.cpuSample;
+  }
+
+  if (
+    typeof value?.cpuStepCandidate?.detectedAt === "string" &&
+    Number.isFinite(value.cpuStepCandidate.baselinePercent) &&
+    Number.isFinite(value.cpuStepCandidate.latestPercent) &&
+    Number.isFinite(value.cpuStepCandidate.peakPercent)
+  ) {
+    state.cpuStepCandidate = {
+      alertSentAt:
+        typeof value.cpuStepCandidate.alertSentAt === "string"
+          ? value.cpuStepCandidate.alertSentAt
+          : undefined,
+      baselinePercent: value.cpuStepCandidate.baselinePercent,
+      detectedAt: value.cpuStepCandidate.detectedAt,
+      latestPercent: value.cpuStepCandidate.latestPercent,
+      peakPercent: value.cpuStepCandidate.peakPercent,
+    };
+  }
+
+  return state;
 }
 
 function ageMsFromIso(iso: string | null | undefined, now: Date) {
@@ -542,6 +595,9 @@ function prunePersistentState(state: WatchdogPersistentState, now: Date): Watchd
   const nowMs = now.getTime();
 
   return {
+    cpuBaselinePercent: state.cpuBaselinePercent,
+    cpuSample: state.cpuSample,
+    cpuStepCandidate: state.cpuStepCandidate,
     firstObservedAtByFingerprint: Object.fromEntries(
       Object.entries(state.firstObservedAtByFingerprint).filter(([, value]) => {
         const age = nowMs - Date.parse(value);
@@ -560,6 +616,126 @@ function prunePersistentState(state: WatchdogPersistentState, now: Date): Watchd
       return !Number.isNaN(age) && age < RESTART_THROTTLE_WINDOW_MS;
     }),
   };
+}
+
+function updateCpuStepMonitoring(input: {
+  config: AppConfig;
+  healthSnapshot?: RuntimeHealthSnapshot;
+  hostName: string;
+  now: Date;
+  serviceName: string;
+  serviceStatus: ServiceStatusSnapshot;
+  state: WatchdogPersistentState;
+  watchdogSnapshot?: RuntimeWatchdogSnapshot;
+}): WatchdogEvaluation | undefined {
+  const { config, now, serviceStatus, state } = input;
+  const idleTicks = serviceStatus.hostCpuIdleTicks;
+  const totalTicks = serviceStatus.hostCpuTotalTicks;
+  const threshold = config.watchdogCpuStepThresholdPercentagePoints ?? 10;
+  const minimumPercent = config.watchdogCpuStepMinimumPercent ?? 10;
+  const persistenceSeconds = config.watchdogCpuStepPersistenceSeconds ?? 60;
+
+  if (
+    threshold <= 0 ||
+    serviceStatus.activeState !== "active" ||
+    !Number.isFinite(idleTicks) ||
+    !Number.isFinite(totalTicks)
+  ) {
+    return undefined;
+  }
+
+  const previousSample = state.cpuSample;
+  state.cpuSample = {
+    at: now.toISOString(),
+    idleTicks: idleTicks ?? 0,
+    totalTicks: totalTicks ?? 0,
+  };
+
+  if (!previousSample) {
+    return undefined;
+  }
+
+  const elapsedMs = now.getTime() - Date.parse(previousSample.at);
+  const totalDelta = (totalTicks ?? 0) - previousSample.totalTicks;
+  const idleDelta = (idleTicks ?? 0) - previousSample.idleTicks;
+
+  if (
+    !Number.isFinite(elapsedMs) ||
+    elapsedMs <= 0 ||
+    totalDelta <= 0 ||
+    idleDelta < 0 ||
+    idleDelta > totalDelta
+  ) {
+    delete state.cpuBaselinePercent;
+    delete state.cpuStepCandidate;
+    return undefined;
+  }
+
+  const currentPercent = ((totalDelta - idleDelta) / totalDelta) * 100;
+  if (!Number.isFinite(currentPercent) || currentPercent < 0) {
+    return undefined;
+  }
+
+  serviceStatus.cpuUtilizationPercent = currentPercent;
+
+  if (state.cpuBaselinePercent === undefined) {
+    state.cpuBaselinePercent = currentPercent;
+    return undefined;
+  }
+
+  const candidate = state.cpuStepCandidate;
+
+  if (!candidate) {
+    if (
+      currentPercent >= minimumPercent &&
+      currentPercent - state.cpuBaselinePercent >= threshold
+    ) {
+      state.cpuStepCandidate = {
+        baselinePercent: state.cpuBaselinePercent,
+        detectedAt: now.toISOString(),
+        latestPercent: currentPercent,
+        peakPercent: currentPercent,
+      };
+    } else {
+      state.cpuBaselinePercent = state.cpuBaselinePercent * 0.8 + currentPercent * 0.2;
+    }
+    return undefined;
+  }
+
+  const increase = currentPercent - candidate.baselinePercent;
+  if (
+    currentPercent < minimumPercent ||
+    increase < threshold * 0.5
+  ) {
+    state.cpuBaselinePercent = currentPercent;
+    delete state.cpuStepCandidate;
+    return undefined;
+  }
+
+  candidate.latestPercent = currentPercent;
+  candidate.peakPercent = Math.max(candidate.peakPercent, currentPercent);
+  serviceStatus.cpuBaselinePercent = candidate.baselinePercent;
+  serviceStatus.cpuIncreasePercentagePoints = increase;
+
+  if (candidate.alertSentAt) {
+    return undefined;
+  }
+
+  if (ageMsFromIso(candidate.detectedAt, now) < persistenceSeconds * 1000) {
+    return undefined;
+  }
+
+  return buildEvaluation({
+    action: "email_only",
+    healthSnapshot: input.healthSnapshot,
+    hostName: input.hostName,
+    message: `Host CPU increased from a ${candidate.baselinePercent.toFixed(1)}% baseline to ${currentPercent.toFixed(1)}% (+${increase.toFixed(1)} percentage points) and remained elevated for at least ${persistenceSeconds} seconds.`,
+    reasonCode: "host_cpu_step_increase",
+    serviceName: input.serviceName,
+    serviceStatus,
+    severity: "manual_action_required",
+    watchdogSnapshot: input.watchdogSnapshot,
+  });
 }
 
 function applyRestartThrottle(
@@ -635,6 +811,9 @@ export function createWatchdogAlertEmail(input: {
       `Service subState: ${input.evaluation.serviceStatus.subState ?? "(unknown)"}`,
       `Service result: ${input.evaluation.serviceStatus.result ?? "(unknown)"}`,
       `Service mainPid: ${input.evaluation.serviceStatus.mainPid ?? 0}`,
+      `Host CPU utilization: ${input.evaluation.serviceStatus.cpuUtilizationPercent?.toFixed(1) ?? "(unknown)"}%`,
+      `Host CPU baseline: ${input.evaluation.serviceStatus.cpuBaselinePercent?.toFixed(1) ?? "(unknown)"}%`,
+      `Host CPU increase: ${input.evaluation.serviceStatus.cpuIncreasePercentagePoints?.toFixed(1) ?? "(unknown)"} percentage points`,
       `Service memoryCurrent: ${formatBytesAsMiB(input.evaluation.serviceStatus.memoryCurrentBytes)}`,
       `Service memoryPeak: ${formatBytesAsMiB(input.evaluation.serviceStatus.memoryPeakBytes)}`,
       "",
@@ -811,6 +990,20 @@ export async function runWatchdogCheck(input: {
     normalizePersistentState(input.persistentState),
     now,
   );
+  const cpuEvaluation = updateCpuStepMonitoring({
+    config: input.config,
+    healthSnapshot: input.healthSnapshot,
+    hostName: input.hostName ?? getHostname(),
+    now,
+    serviceName: input.serviceName,
+    serviceStatus,
+    state: baseState,
+    watchdogSnapshot: input.watchdogSnapshot,
+  });
+
+  if (cpuEvaluation && rawEvaluation.action === "none") {
+    rawEvaluation = cpuEvaluation;
+  }
   const memoryLimitBytes =
     input.config.watchdogMemoryLimitMb > 0
       ? Math.round(input.config.watchdogMemoryLimitMb * 1024 * 1024)
@@ -907,6 +1100,12 @@ export async function runWatchdogCheck(input: {
 
       if (persistenceGatedEvaluation.fingerprint) {
         persistentState.recentAlertsByFingerprint[persistenceGatedEvaluation.fingerprint] = now.toISOString();
+      }
+      if (
+        persistenceGatedEvaluation.reasonCode === "host_cpu_step_increase" &&
+        persistentState.cpuStepCandidate
+      ) {
+        persistentState.cpuStepCandidate.alertSentAt = now.toISOString();
       }
     } catch (error) {
       emailError = error instanceof Error ? error.message : String(error);

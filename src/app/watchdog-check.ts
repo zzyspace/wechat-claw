@@ -69,11 +69,36 @@ function readServiceStatus(serviceName: string): ServiceStatusSnapshot {
     { encoding: "utf8" },
   );
 
+  const hostCpu = readHostCpuTicks();
+
   return {
     ...parseSystemctlShowOutput(output),
+    hostCpuIdleTicks: hostCpu?.idleTicks,
+    hostCpuTotalTicks: hostCpu?.totalTicks,
     memoryCurrentBytes: readServiceCgroupMemoryValue(serviceName, "memory.current"),
     memoryPeakBytes: readServiceCgroupMemoryValue(serviceName, "memory.peak"),
   };
+}
+
+function readHostCpuTicks() {
+  try {
+    const cpuLine = fs
+      .readFileSync("/proc/stat", "utf8")
+      .split(/\r?\n/)
+      .find((line) => line.startsWith("cpu "));
+    const ticks = cpuLine?.trim().split(/\s+/).slice(1).map(Number);
+
+    if (!ticks || ticks.length < 5 || ticks.some((value) => !Number.isFinite(value))) {
+      return undefined;
+    }
+
+    return {
+      idleTicks: (ticks[3] ?? 0) + (ticks[4] ?? 0),
+      totalTicks: ticks.reduce((sum, value) => sum + value, 0),
+    };
+  } catch {
+    return undefined;
+  }
 }
 
 function readServiceCgroupMemoryValue(serviceName: string, fileName: string) {

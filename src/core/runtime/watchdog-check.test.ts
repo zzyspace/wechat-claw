@@ -54,6 +54,9 @@ function createConfig(stateDir: string, alertEmailEnabled = true): AppConfig {
     timeZone: "Asia/Shanghai",
     watchdogMemoryLimitMb: 0,
     watchdogMemoryPersistenceSeconds: 300,
+    watchdogCpuStepThresholdPercentagePoints: 10,
+    watchdogCpuStepMinimumPercent: 10,
+    watchdogCpuStepPersistenceSeconds: 60,
   };
 }
 
@@ -303,6 +306,126 @@ test("runWatchdogCheck waits for sustained high memory before restarting", async
   assert.equal(later.effectiveEvaluation.action, "email_and_restart");
   assert.equal(later.effectiveEvaluation.reasonCode, "service_memory_high");
   assert.equal(restartCount, 1);
+});
+
+test("runWatchdogCheck emails after a sustained CPU step increase without restarting", async () => {
+  const stateDir = fs.mkdtempSync(path.join(os.tmpdir(), "wechat-claw-watchdog-check-"));
+  const config = createConfig(stateDir, true);
+  const sentMessages: Array<{ subject: string; text: string }> = [];
+  let restartCount = 0;
+  let persistentState: WatchdogPersistentState | undefined;
+
+  const samples = [
+    { at: "2026-05-21T12:00:00.000Z", idleTicks: 0, totalTicks: 0 },
+    { at: "2026-05-21T12:01:00.000Z", idleTicks: 980, totalTicks: 1_000 },
+    { at: "2026-05-21T12:02:00.000Z", idleTicks: 1_960, totalTicks: 2_000 },
+    { at: "2026-05-21T12:03:00.000Z", idleTicks: 2_760, totalTicks: 3_000 },
+    { at: "2026-05-21T12:04:00.000Z", idleTicks: 3_560, totalTicks: 4_000 },
+  ];
+
+  for (const sample of samples) {
+    const now = new Date(sample.at);
+    const result = await runWatchdogCheck({
+      config,
+      healthSnapshot: createHealthSnapshot(),
+      now,
+      persistentState,
+      readServiceStatus: () =>
+        createServiceStatus({
+          hostCpuIdleTicks: sample.idleTicks,
+          hostCpuTotalTicks: sample.totalTicks,
+        }),
+      restartService: () => {
+        restartCount += 1;
+      },
+      sendAlertEmail: async (message) => {
+        sentMessages.push({ subject: message.subject, text: message.text });
+      },
+      serviceName: "wechat-claw",
+      watchdogSnapshot: createWatchdogSnapshot({
+        lastHeartbeatAt: new Date(now.getTime() - 30_000).toISOString(),
+      }),
+    });
+    persistentState = result.persistentState;
+
+    if (sample === samples.at(-1)) {
+      assert.equal(result.effectiveEvaluation.reasonCode, "host_cpu_step_increase");
+      assert.equal(result.effectiveEvaluation.action, "email_only");
+      assert.equal(result.emailSent, true);
+    }
+  }
+
+  const repeated = await runWatchdogCheck({
+    config,
+    healthSnapshot: createHealthSnapshot(),
+    now: new Date("2026-05-21T12:20:00.000Z"),
+    persistentState,
+    readServiceStatus: () =>
+      createServiceStatus({
+        hostCpuIdleTicks: 16_360,
+        hostCpuTotalTicks: 20_000,
+      }),
+    restartService: () => {
+      restartCount += 1;
+    },
+    sendAlertEmail: async (message) => {
+      sentMessages.push({ subject: message.subject, text: message.text });
+    },
+    serviceName: "wechat-claw",
+    watchdogSnapshot: createWatchdogSnapshot({
+      lastHeartbeatAt: "2026-05-21T12:19:30.000Z",
+    }),
+  });
+
+  assert.equal(restartCount, 0);
+  assert.equal(repeated.effectiveEvaluation.action, "none");
+  assert.equal(sentMessages.length, 1);
+  assert.match(sentMessages[0]?.subject ?? "", /host_cpu_step_increase/);
+  assert.match(sentMessages[0]?.text ?? "", /Host CPU baseline: 2\.0%/);
+  assert.match(sentMessages[0]?.text ?? "", /Host CPU increase: 18\.0 percentage points/);
+});
+
+test("runWatchdogCheck does not email for a one-sample CPU spike", async () => {
+  const stateDir = fs.mkdtempSync(path.join(os.tmpdir(), "wechat-claw-watchdog-check-"));
+  const config = createConfig(stateDir, true);
+  let emailCount = 0;
+  let persistentState: WatchdogPersistentState | undefined;
+  const samples = [
+    { idleTicks: 0, totalTicks: 0 },
+    { idleTicks: 980, totalTicks: 1_000 },
+    { idleTicks: 1_960, totalTicks: 2_000 },
+    { idleTicks: 2_760, totalTicks: 3_000 },
+    { idleTicks: 3_740, totalTicks: 4_000 },
+  ];
+
+  for (const [index, sample] of samples.entries()) {
+    const now = new Date(Date.parse("2026-05-21T12:00:00.000Z") + index * 60_000);
+    const result = await runWatchdogCheck({
+      config,
+      healthSnapshot: createHealthSnapshot(),
+      now,
+      persistentState,
+      readServiceStatus: () =>
+        createServiceStatus({
+          hostCpuIdleTicks: sample.idleTicks,
+          hostCpuTotalTicks: sample.totalTicks,
+        }),
+      restartService: () => {
+        // no-op
+      },
+      sendAlertEmail: async () => {
+        emailCount += 1;
+      },
+      serviceName: "wechat-claw",
+      watchdogSnapshot: createWatchdogSnapshot({
+        lastHeartbeatAt: new Date(now.getTime() - 30_000).toISOString(),
+      }),
+    });
+    persistentState = result.persistentState;
+  }
+
+  assert.equal(emailCount, 0);
+  assert.equal(persistentState?.cpuStepCandidate, undefined);
 });
 
 test("runWatchdogCheck restarts when room canary reaches the failure threshold", async () => {

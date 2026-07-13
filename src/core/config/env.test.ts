@@ -24,6 +24,9 @@ const managedEnvKeys = [
   "WECHATY_ALERT_EMAIL_TO",
   "WECHATY_WATCHDOG_MEMORY_LIMIT_MB",
   "WECHATY_WATCHDOG_MEMORY_PERSISTENCE_SECONDS",
+  "WECHATY_WATCHDOG_CPU_STEP_THRESHOLD_PERCENTAGE_POINTS",
+  "WECHATY_WATCHDOG_CPU_STEP_MINIMUM_PERCENT",
+  "WECHATY_WATCHDOG_CPU_STEP_PERSISTENCE_SECONDS",
   "WECHATY_SELF_CANARY_ENABLED",
   "WECHATY_SELF_CANARY_TARGET_CONTACT_NAME",
   "WECHATY_SELF_CANARY_INTERVAL_SECONDS",
@@ -103,6 +106,9 @@ test("getAppConfig parses WECHATY_CHANNELS_JSON with mixed delivery targets", ()
     WECHATY_DEBUG_MESSAGE_SNAPSHOT_ENABLED: "true",
     WECHATY_WATCHDOG_MEMORY_LIMIT_MB: "512",
     WECHATY_WATCHDOG_MEMORY_PERSISTENCE_SECONDS: "420",
+    WECHATY_WATCHDOG_CPU_STEP_THRESHOLD_PERCENTAGE_POINTS: "12",
+    WECHATY_WATCHDOG_CPU_STEP_MINIMUM_PERCENT: "15",
+    WECHATY_WATCHDOG_CPU_STEP_PERSISTENCE_SECONDS: "120",
     WECHATY_LOG_RETENTION_DAYS: "14",
     WECHATY_PUPPET: "wechaty-puppet-wechat",
     WECHATY_COLD_START_IGNORE_WINDOW_SECONDS: "45",
@@ -165,6 +171,9 @@ test("getAppConfig parses WECHATY_CHANNELS_JSON with mixed delivery targets", ()
   assert.deepEqual(config.alertEmailTo, ["ops@example.com", "dev@example.com"]);
   assert.equal(config.watchdogMemoryLimitMb, 512);
   assert.equal(config.watchdogMemoryPersistenceSeconds, 420);
+  assert.equal(config.watchdogCpuStepThresholdPercentagePoints, 12);
+  assert.equal(config.watchdogCpuStepMinimumPercent, 15);
+  assert.equal(config.watchdogCpuStepPersistenceSeconds, 120);
   assert.equal(config.selfCanary?.enabled, false);
   assert.equal(config.roomCanary?.enabled, false);
   assert.equal(config.channels.length, 2);
@@ -269,6 +278,9 @@ test("getAppConfig defaults log settings from state dir", () => {
     WECHATY_ALERT_EMAIL_TO: undefined,
     WECHATY_WATCHDOG_MEMORY_LIMIT_MB: undefined,
     WECHATY_WATCHDOG_MEMORY_PERSISTENCE_SECONDS: undefined,
+    WECHATY_WATCHDOG_CPU_STEP_THRESHOLD_PERCENTAGE_POINTS: undefined,
+    WECHATY_WATCHDOG_CPU_STEP_MINIMUM_PERCENT: undefined,
+    WECHATY_WATCHDOG_CPU_STEP_PERSISTENCE_SECONDS: undefined,
   });
 
   const config = getAppConfig();
@@ -281,6 +293,9 @@ test("getAppConfig defaults log settings from state dir", () => {
   assert.deepEqual(config.alertEmailTo, []);
   assert.equal(config.watchdogMemoryLimitMb, 0);
   assert.equal(config.watchdogMemoryPersistenceSeconds, 300);
+  assert.equal(config.watchdogCpuStepThresholdPercentagePoints, 10);
+  assert.equal(config.watchdogCpuStepMinimumPercent, 10);
+  assert.equal(config.watchdogCpuStepPersistenceSeconds, 60);
   assert.equal(config.selfCanary?.targetContactName, "文件传输助手");
   assert.equal(config.roomCanary?.targetRoomTopic, "");
   assert.equal(config.debugReceivedRoomMessageEnabled, false);

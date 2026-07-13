@@ -50,6 +50,9 @@ export interface AppConfig {
   alertEmailTo: string[];
   watchdogMemoryLimitMb: number;
   watchdogMemoryPersistenceSeconds: number;
+  watchdogCpuStepThresholdPercentagePoints?: number;
+  watchdogCpuStepMinimumPercent?: number;
+  watchdogCpuStepPersistenceSeconds?: number;
   selfCanary?: SelfCanaryConfig;
   roomCanary?: RoomCanaryConfig;
   timeZone: string;
@@ -443,6 +446,18 @@ export function getAppConfig(): AppConfig {
       "WECHATY_WATCHDOG_MEMORY_PERSISTENCE_SECONDS",
       300,
     ),
+    watchdogCpuStepThresholdPercentagePoints: readConfiguredNonNegativeNumberEnv(
+      "WECHATY_WATCHDOG_CPU_STEP_THRESHOLD_PERCENTAGE_POINTS",
+      10,
+    ),
+    watchdogCpuStepMinimumPercent: readConfiguredNonNegativeNumberEnv(
+      "WECHATY_WATCHDOG_CPU_STEP_MINIMUM_PERCENT",
+      10,
+    ),
+    watchdogCpuStepPersistenceSeconds: readConfiguredPositiveNumberEnv(
+      "WECHATY_WATCHDOG_CPU_STEP_PERSISTENCE_SECONDS",
+      60,
+    ),
     selfCanary: {
       enabled: readBooleanEnv("WECHATY_SELF_CANARY_ENABLED", false),
       targetContactName: readStringEnv("WECHATY_SELF_CANARY_TARGET_CONTACT_NAME", "文件传输助手"),
@@ -548,6 +563,36 @@ export function validateAppConfig(config: AppConfig): ConfigValidationResult {
   ) {
     errors.push(
       `Invalid WECHATY_WATCHDOG_MEMORY_PERSISTENCE_SECONDS: ${config.watchdogMemoryPersistenceSeconds}`,
+    );
+  }
+
+  if (
+    config.watchdogCpuStepThresholdPercentagePoints !== undefined &&
+    (!Number.isFinite(config.watchdogCpuStepThresholdPercentagePoints) ||
+      config.watchdogCpuStepThresholdPercentagePoints < 0)
+  ) {
+    errors.push(
+      `Invalid WECHATY_WATCHDOG_CPU_STEP_THRESHOLD_PERCENTAGE_POINTS: ${config.watchdogCpuStepThresholdPercentagePoints}`,
+    );
+  }
+
+  if (
+    config.watchdogCpuStepMinimumPercent !== undefined &&
+    (!Number.isFinite(config.watchdogCpuStepMinimumPercent) ||
+      config.watchdogCpuStepMinimumPercent < 0)
+  ) {
+    errors.push(
+      `Invalid WECHATY_WATCHDOG_CPU_STEP_MINIMUM_PERCENT: ${config.watchdogCpuStepMinimumPercent}`,
+    );
+  }
+
+  if (
+    config.watchdogCpuStepPersistenceSeconds !== undefined &&
+    (!Number.isFinite(config.watchdogCpuStepPersistenceSeconds) ||
+      config.watchdogCpuStepPersistenceSeconds <= 0)
+  ) {
+    errors.push(
+      `Invalid WECHATY_WATCHDOG_CPU_STEP_PERSISTENCE_SECONDS: ${config.watchdogCpuStepPersistenceSeconds}`,
     );
   }
 
