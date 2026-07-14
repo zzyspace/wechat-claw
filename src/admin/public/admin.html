@@ -863,6 +863,7 @@
                 <option value="">全部</option>
                 <option value="reimbursement_fuzzy">Fuzzy</option>
                 <option value="reimbursement_peanut">Peanut</option>
+                <option value="reimbursement_peanut_manager">Peanut店长报账群</option>
                 <option value="reimbursement_fuzzyqz">Fuzzy泉州店</option>
               </select>
             </div>
@@ -1034,6 +1035,17 @@
         return `${amount.toFixed(2)} ${item.currency || "CNY"}`;
       }
 
+      function sumLoadedAmounts(items) {
+        return items.reduce((total, item) => {
+          if (item.amount === null || item.amount === undefined) {
+            return total;
+          }
+
+          const amount = Number(item.amount);
+          return Number.isFinite(amount) ? total + amount : total;
+        }, 0);
+      }
+
       function parseDatabaseTimestamp(value) {
         if (!value || typeof value !== "string") {
           return null;
@@ -1166,17 +1178,13 @@
       const STORE_LABELS_BY_CHANNEL_CODE = new Map([
         ["reimbursement_fuzzy", "Fuzzy"],
         ["reimbursement_peanut", "Peanut"],
+        ["reimbursement_peanut_manager", "Peanut店长报账群"],
         ["reimbursement_fuzzyqz", "Fuzzy泉州店"],
       ]);
 
       function renderStoreCell(item) {
         const label = STORE_LABELS_BY_CHANNEL_CODE.get(String(item.channelCode || "").trim());
-
-        if (label) {
-          return escapeHtml(label);
-        }
-
-        return `${escapeHtml(item.channelName)}${item.channelCode ? `<div class="mono muted">${escapeHtml(item.channelCode)}</div>` : ""}`;
+        return escapeHtml(label || item.channelName);
       }
 
       function renderBillAttachment(item) {
@@ -1585,7 +1593,7 @@
 
           renderTable();
           renderSummary();
-          setStatus(`已加载 ${state.items.length} 条记录`);
+          setStatus(`已加载 ${state.items.length} 条记录，总计金额 ${sumLoadedAmounts(state.items).toFixed(2)} 元`);
 
           if (state.selectedReportId && state.items.some((item) => item.id === state.selectedReportId)) {
             renderTable();

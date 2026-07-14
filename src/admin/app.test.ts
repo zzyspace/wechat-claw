@@ -246,8 +246,11 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     assert.match(pageHtml, /<option value="">全部<\/option>/);
     assert.match(pageHtml, /<option value="reimbursement_fuzzy">Fuzzy<\/option>/);
     assert.match(pageHtml, /<option value="reimbursement_peanut">Peanut<\/option>/);
+    assert.match(pageHtml, /<option value="reimbursement_peanut_manager">Peanut店长报账群<\/option>/);
     assert.match(pageHtml, /<option value="reimbursement_fuzzyqz">Fuzzy泉州店<\/option>/);
     assert.match(pageHtml, /<th>门店<\/th>/);
+    assert.doesNotMatch(pageHtml, /item\.channelCode \? `<div class="mono muted">/);
+    assert.match(pageHtml, /已加载 \$\{state\.items\.length\} 条记录，总计金额 \$\{sumLoadedAmounts\(state\.items\)\.toFixed\(2\)\} 元/);
     assert.match(pageHtml, /<th class="column-bill">附件<\/th>/);
     assert.match(pageHtml, /id="attachmentPreviewModal"/);
     assert.match(pageHtml, /<th>金额<\/th>\s*<th>类别<\/th>\s*<th>备注<\/th>/);
