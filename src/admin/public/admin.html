@@ -1447,7 +1447,7 @@
 
         const item = previewableItems[previewIndex];
         const src = `${BASE_PATH}/api/attachments/${item.billAttachment.id}/content`;
-        const previewAmount = item.amount === null || item.amount === undefined ? "待复核" : Number(item.amount).toFixed(2);
+        const previewAmount = item.amount === null || item.amount === undefined ? "待复核" : `${Number(item.amount).toFixed(2)} 元`;
         const title = `报账 #${item.id} 附件预览 (${previewAmount})`;
         state.attachmentPreviewReportId = item.id;
         elements.attachmentPreviewImage.src = src;
