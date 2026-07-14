@@ -631,14 +631,41 @@
       }
 
       .attachment-preview-stage {
+        position: relative;
         display: flex;
         align-items: center;
         justify-content: center;
-        padding: 12px;
+        padding: 12px 66px;
         border-radius: var(--radius-lg);
         background: rgba(255, 255, 255, 0.72);
         border: 1px solid rgba(60, 60, 67, 0.08);
         min-height: 220px;
+      }
+
+      .attachment-preview-dialog {
+        width: min(920px, calc(100vw - 24px));
+      }
+
+      .attachment-preview-nav {
+        position: absolute;
+        top: 50%;
+        z-index: 1;
+        width: 46px;
+        min-width: 46px;
+        padding: 0;
+        border-radius: 50%;
+        font-size: 30px;
+        line-height: 1;
+        transform: translateY(-50%);
+        box-shadow: var(--shadow-soft);
+      }
+
+      .attachment-preview-nav.previous {
+        left: 10px;
+      }
+
+      .attachment-preview-nav.next {
+        right: 10px;
       }
 
       .attachment-preview-stage img {
@@ -966,14 +993,16 @@
 
       <div class="modal" id="attachmentPreviewModal" hidden>
         <div class="modal-backdrop" id="attachmentPreviewModalBackdrop"></div>
-        <div class="panel modal-dialog" role="dialog" aria-modal="true" aria-labelledby="attachmentPreviewTitle">
+        <div class="panel modal-dialog attachment-preview-dialog" role="dialog" aria-modal="true" aria-labelledby="attachmentPreviewTitle">
           <div class="modal-frame">
             <div class="modal-topbar">
               <h2 id="attachmentPreviewTitle">附件预览</h2>
               <button class="modal-close" id="attachmentPreviewClose" type="button" aria-label="关闭附件预览弹窗">×</button>
             </div>
             <div class="attachment-preview-stage">
+              <button class="attachment-preview-nav previous" id="attachmentPreviewPrevious" type="button" aria-label="上一个报账的附件">‹</button>
               <img id="attachmentPreviewImage" alt="附件预览" />
+              <button class="attachment-preview-nav next" id="attachmentPreviewNext" type="button" aria-label="下一个报账的附件">›</button>
             </div>
           </div>
         </div>
@@ -989,6 +1018,7 @@
         offset: 0,
         total: 0,
         selectedReportId: null,
+        attachmentPreviewReportId: null,
         timeZone: DEFAULT_TIME_ZONE,
         deletingIds: new Set(),
       };
@@ -1015,6 +1045,8 @@
         attachmentPreviewClose: document.getElementById("attachmentPreviewClose"),
         attachmentPreviewImage: document.getElementById("attachmentPreviewImage"),
         attachmentPreviewTitle: document.getElementById("attachmentPreviewTitle"),
+        attachmentPreviewPrevious: document.getElementById("attachmentPreviewPrevious"),
+        attachmentPreviewNext: document.getElementById("attachmentPreviewNext"),
       };
 
       function escapeHtml(value) {
@@ -1204,8 +1236,7 @@
             type="button"
             class="bill-link"
             data-attachment-preview
-            data-attachment-preview-src="${escapeHtml(href)}"
-            data-attachment-preview-title="${escapeHtml(`报账 #${item.id} 附件预览`)}"
+            data-attachment-preview-report-id="${item.id}"
             aria-label="查看报账图片 ${item.id}"
           >
             <img src="${href}" alt="报账图片 ${item.id}" loading="lazy" />
@@ -1399,17 +1430,44 @@
         elements.attachmentPreviewImage.removeAttribute("src");
         elements.attachmentPreviewImage.alt = "附件预览";
         elements.attachmentPreviewTitle.textContent = "附件预览";
+        state.attachmentPreviewReportId = null;
       }
 
-      function openAttachmentPreviewModal(src, title) {
-        if (!src) {
+      function getPreviewableReportItems() {
+        return state.items.filter((item) => item.billAttachment?.exists);
+      }
+
+      function openAttachmentPreviewModal(reportId) {
+        const previewableItems = getPreviewableReportItems();
+        const previewIndex = previewableItems.findIndex((item) => item.id === reportId);
+
+        if (previewIndex < 0) {
           return;
         }
 
+        const item = previewableItems[previewIndex];
+        const src = `${BASE_PATH}/api/attachments/${item.billAttachment.id}/content`;
+        const previewAmount = item.amount === null || item.amount === undefined ? "待复核" : Number(item.amount).toFixed(2);
+        const title = `报账 #${item.id} 附件预览 (${previewAmount})`;
+        state.attachmentPreviewReportId = item.id;
         elements.attachmentPreviewImage.src = src;
-        elements.attachmentPreviewImage.alt = title || "附件预览";
-        elements.attachmentPreviewTitle.textContent = title || "附件预览";
+        elements.attachmentPreviewImage.alt = title;
+        elements.attachmentPreviewTitle.textContent = title;
+        elements.attachmentPreviewPrevious.disabled = previewIndex <= 0;
+        elements.attachmentPreviewNext.disabled = previewIndex >= previewableItems.length - 1;
         elements.attachmentPreviewModal.hidden = false;
+      }
+
+      function navigateAttachmentPreview(direction) {
+        const previewableItems = getPreviewableReportItems();
+        const currentIndex = previewableItems.findIndex((item) => item.id === state.attachmentPreviewReportId);
+        const nextIndex = currentIndex + direction;
+
+        if (currentIndex < 0 || nextIndex < 0 || nextIndex >= previewableItems.length) {
+          return;
+        }
+
+        openAttachmentPreviewModal(previewableItems[nextIndex].id);
       }
 
       function renderDetail(report) {
@@ -1692,10 +1750,10 @@
 
         const previewButton = target.closest("[data-attachment-preview]");
         if (previewButton instanceof HTMLElement) {
-          openAttachmentPreviewModal(
-            previewButton.getAttribute("data-attachment-preview-src") || "",
-            previewButton.getAttribute("data-attachment-preview-title") || "附件预览",
-          );
+          const reportId = Number.parseInt(previewButton.getAttribute("data-attachment-preview-report-id") || "", 10);
+          if (Number.isFinite(reportId) && reportId > 0) {
+            openAttachmentPreviewModal(reportId);
+          }
           return;
         }
 
@@ -1739,7 +1797,25 @@
         closeAttachmentPreviewModal();
       });
 
+      elements.attachmentPreviewPrevious.addEventListener("click", () => {
+        navigateAttachmentPreview(-1);
+      });
+
+      elements.attachmentPreviewNext.addEventListener("click", () => {
+        navigateAttachmentPreview(1);
+      });
+
       document.addEventListener("keydown", (event) => {
+        if (!elements.attachmentPreviewModal.hidden && event.key === "ArrowLeft") {
+          navigateAttachmentPreview(-1);
+          return;
+        }
+
+        if (!elements.attachmentPreviewModal.hidden && event.key === "ArrowRight") {
+          navigateAttachmentPreview(1);
+          return;
+        }
+
         if (event.key === "Escape" && !elements.attachmentPreviewModal.hidden) {
           closeAttachmentPreviewModal();
           return;

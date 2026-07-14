@@ -253,6 +253,10 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     assert.match(pageHtml, /已加载 \$\{state\.items\.length\} 条记录，总计金额 \$\{sumLoadedAmounts\(state\.items\)\.toFixed\(2\)\} 元/);
     assert.match(pageHtml, /<th class="column-bill">附件<\/th>/);
     assert.match(pageHtml, /id="attachmentPreviewModal"/);
+    assert.match(pageHtml, /id="attachmentPreviewPrevious"[^>]+aria-label="上一个报账的附件"/);
+    assert.match(pageHtml, /id="attachmentPreviewNext"[^>]+aria-label="下一个报账的附件"/);
+    assert.match(pageHtml, /function navigateAttachmentPreview\(direction\)/);
+    assert.match(pageHtml, /报账 #\$\{item\.id\} 附件预览 \(\$\{previewAmount\}\)/);
     assert.match(pageHtml, /<th>金额<\/th>\s*<th>类别<\/th>\s*<th>备注<\/th>/);
     assert.match(pageHtml, /placeholder="支持部分匹配，如 Ry \/ 张"/);
     assert.match(pageHtml, /<label for="note">备注<\/label>/);
