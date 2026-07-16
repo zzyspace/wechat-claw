@@ -81,6 +81,8 @@ const FOOD_KEYWORDS = [
   "火锅",
 ];
 
+const FLOWER_KEYWORDS = ["鲜花", "花卉", "绿植", "花材", "花束", "菊花", "百合"];
+
 const PLANNED_EXPENSE_OCR_NAME = "李晨晨";
 const PLANNED_EXPENSE_OCR_MIN_OCCURRENCES = 3;
 const MANAGER_REIMBURSEMENT_OCR_MARKERS = ["店长报账群"];
@@ -206,9 +208,15 @@ function normalizeVoucherDate(
 }
 
 export function detectExpenseCategoryFromText(text: string): ReimbursementExpenseCategory {
-  return FOOD_KEYWORDS.some((keyword) => text.includes(keyword))
-    ? "food"
-    : DEFAULT_REIMBURSEMENT_EXPENSE_CATEGORY;
+  if (FLOWER_KEYWORDS.some((keyword) => text.includes(keyword))) {
+    return "flower";
+  }
+
+  if (FOOD_KEYWORDS.some((keyword) => text.includes(keyword))) {
+    return "food";
+  }
+
+  return DEFAULT_REIMBURSEMENT_EXPENSE_CATEGORY;
 }
 
 export function extractAmountFromText(text: string): number | null {
@@ -255,9 +263,8 @@ function buildPrompt(input: ReimbursementExtractionInput): string {
     "如果识别结果表示这笔记录是退款、退回、退款成功或退款到账，amount 应返回负数。",
     "不要把商品单价、数量、优惠前金额、退款金额、待支付金额、账户余额、积分抵扣、手续费等误当成最终付款总金额。",
     "请只根据图片和文字提取报账字段，不要猜测不可见信息。",
-    "支出类别优先输出已知 code。当前常用 code 包括 food、salary、rent、utilities、manager_reimbursement、planned_expense、other。",
-    "无论是否满足其他类别条件，只要明确包含“店长报账”字样一律输出 manager_reimbursement；否则，如果报账图片中出现“金辉”字样，一律输出 food；明确是食品原料、门店食材采购也输出 food；明确是工资、薪资输出 salary；明确是房租、租金输出 rent；明确是水费、电费、水电费、水费账单、电费账单、电力缴费输出 utilities；非上述或不确定输出 other。",
-    "鲜花、花卉、绿植、花材、花束、菊花、百合等花店订单默认不属于 food，除非图片或文字明确表示这是门店食材采购、厨房原料采购，或出现蔬菜、水果、肉类、米面油、调料等食材采购语义。",
+    "支出类别优先输出已知 code。当前常用 code 包括 food、flower、salary、rent、utilities、manager_reimbursement、planned_expense、other。",
+    "无论是否满足其他类别条件，只要明确包含“店长报账”字样一律输出 manager_reimbursement；否则，如果报账图片中的商品是鲜花、花卉、绿植、花材、花束、菊花、百合等花卉类型，一律输出 flower；如果报账图片中出现“金辉”字样，一律输出 food；明确是食品原料、门店食材采购也输出 food；明确是工资、薪资输出 salary；明确是房租、租金输出 rent；明确是水费、电费、水电费、水费账单、电费账单、电力缴费输出 utilities；非上述或不确定输出 other。",
     "如果票据日期清晰可见，voucher_date 输出 YYYY-MM-DD；看不到日期则输出 null。",
     "如果无法可靠判断最终付款总金额，amount 输出 null，不要猜测。",
     "必须返回 JSON，不要输出额外解释。",

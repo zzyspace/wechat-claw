@@ -5,7 +5,8 @@ import path from "node:path";
 import { afterEach, test } from "node:test";
 
 import type { Logger } from "../../core/logging/logger.js";
-import { extractReimbursementReport } from "./extractor.js";
+import { normalizeReimbursementExpenseCategory } from "./categories.js";
+import { detectExpenseCategoryFromText, extractReimbursementReport } from "./extractor.js";
 
 const originalFetch = globalThis.fetch;
 
@@ -104,8 +105,9 @@ test("extractReimbursementReport calls qwen3.5-flash and normalizes amount, date
     assert.match(promptText, /支付宝聊天界面的转账或代付截图如果包含多条记录，应把每条转账或代付的金额加起来/);
     assert.match(promptText, /如果识别结果表示这笔记录是退款、退回、退款成功或退款到账，amount 应返回负数/);
     assert.match(promptText, /只要明确包含“店长报账”字样一律输出 manager_reimbursement/);
+    assert.match(promptText, /当前常用 code 包括 food、flower、salary/);
+    assert.match(promptText, /报账图片中的商品是鲜花、花卉、绿植、花材、花束、菊花、百合等花卉类型，一律输出 flower/);
     assert.match(promptText, /如果报账图片中出现“金辉”字样，一律输出 food/);
-    assert.match(promptText, /鲜花、花卉、绿植、花材、花束、菊花、百合等花店订单默认不属于 food/);
     assert.equal(result.extractorCode, "model-qwen-qwen3.5-flash");
     assert.equal(result.resultJson.amount, 128.5);
     assert.equal(result.resultJson.currency, "CNY");
@@ -116,6 +118,14 @@ test("extractReimbursementReport calls qwen3.5-flash and normalizes amount, date
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });
   }
+});
+
+test("detectExpenseCategoryFromText classifies flower purchases as flower", () => {
+  assert.equal(normalizeReimbursementExpenseCategory("flower"), "flower");
+  assert.equal(normalizeReimbursementExpenseCategory("花"), "flower");
+  assert.equal(normalizeReimbursementExpenseCategory("花卉"), "flower");
+  assert.equal(detectExpenseCategoryFromText("鲜花花束采购 88元"), "flower");
+  assert.equal(detectExpenseCategoryFromText("百合花材报账"), "flower");
 });
 
 test("extractReimbursementReport falls back to message date and other category when model is unavailable", async () => {

@@ -13,6 +13,11 @@ export const REIMBURSEMENT_EXPENSE_CATEGORY_DEFINITIONS: ReimbursementExpenseCat
     label: "食材",
   },
   {
+    aliases: ["flower", "花", "花卉"],
+    code: "flower",
+    label: "花卉",
+  },
+  {
     aliases: ["salary", "工资", "薪资"],
     code: "salary",
     label: "工资",

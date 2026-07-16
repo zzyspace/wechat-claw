@@ -217,7 +217,7 @@ WECHATY_CHANNELS_JSON=[{"code":"loss_a","enabled":true,"scenario":"loss-report",
   - 回复 `delete`：删除对应报账记录
   - 回复纯数字（支持负数）：将对应报账金额改为该数字，并把 `needs_review` 更新为 `false`
   - 回复 `分类: x` 或 `category: x`：将对应报账的 `expense_category` 改为 `x`
-  - 当前 `x` 支持 `food / salary / rent / utilities / manager_reimbursement / planned_expense / other / 食材 / 工资 / 薪资 / 房租 / 租金 / 水电 / 水电费 / 电费 / 水费 / 店长报账 / 店长 / 预报账 / 其他 / 其它`；回执展示会统一使用中文 label
+  - 当前 `x` 支持 `food / flower / salary / rent / utilities / manager_reimbursement / planned_expense / other / 食材 / 花 / 花卉 / 工资 / 薪资 / 房租 / 租金 / 水电 / 水电费 / 电费 / 水费 / 店长报账 / 店长 / 预报账 / 其他 / 其它`；回执展示会统一使用中文 label
   - 后续新增类目时，只需要扩展 `src/scenarios/reimbursement/categories.ts`
   - 回复 `note: xxx` 或 `note：xxx`：将 `xxx` 追加到对应报账备注
   - 回复精确的 `x月账`：把这条回复作为备注挂到对应报账，并按现有“月账回填创建时间”逻辑把 `created_at` 回填到对应月份月底 `00:00:00`
@@ -362,7 +362,7 @@ sent_at: 2026-07-02T14:32:00+08:00
 - 必填字段：`channel_code`、`reporter`、`amount`、`category`
 - 可选字段：`note`、`sent_at`
 - `channel_code` 必须是当前 `WECHATY_CHANNELS_JSON` 里已存在且 `scenario=reimbursement` 的 channel code
-- `category` 必须是现有报账类别或别名，例如 `food / salary / rent / utilities / manager_reimbursement / planned_expense / other / 食材 / 工资 / 房租 / 水电 / 店长报账 / 预报账 / 其他`
+- `category` 必须是现有报账类别或别名，例如 `food / flower / salary / rent / utilities / manager_reimbursement / planned_expense / other / 食材 / 花 / 花卉 / 工资 / 房租 / 水电 / 店长报账 / 预报账 / 其他`
 - `sent_at` 建议使用带时区的 ISO 时间，例如 `2026-07-02T14:32:00+08:00`；不传时默认使用收到这条私聊命令的时间
 - 补录成功后，bot 会私聊回复 `已处理`
 - 如果字段格式不对，例如金额不是数字、类别不存在、缺少必填字段，bot 会回复格式示例

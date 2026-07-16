@@ -434,6 +434,12 @@
         border-color: rgba(52, 199, 89, 0.18);
       }
 
+      .tag.category-flower {
+        color: #b42372;
+        background: rgba(255, 45, 133, 0.12);
+        border-color: rgba(255, 45, 133, 0.18);
+      }
+
       .tag.category-salary {
         color: #8e44ad;
         background: rgba(175, 82, 222, 0.14);
@@ -1134,6 +1140,8 @@
         switch (String(categoryCode || "").trim()) {
           case "food":
             return "category-food";
+          case "flower":
+            return "category-flower";
           case "salary":
             return "category-salary";
           case "rent":
