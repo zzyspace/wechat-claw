@@ -104,6 +104,7 @@ test("extractReimbursementReport calls qwen3.5-flash and normalizes amount, date
     assert.match(promptText, /支付宝聊天界面的转账或代付截图如果包含多条记录，应把每条转账或代付的金额加起来/);
     assert.match(promptText, /如果识别结果表示这笔记录是退款、退回、退款成功或退款到账，amount 应返回负数/);
     assert.match(promptText, /只要明确包含“店长报账”字样一律输出 manager_reimbursement/);
+    assert.match(promptText, /如果报账图片中出现“金辉”字样，一律输出 food/);
     assert.match(promptText, /鲜花、花卉、绿植、花材、花束、菊花、百合等花店订单默认不属于 food/);
     assert.equal(result.extractorCode, "model-qwen-qwen3.5-flash");
     assert.equal(result.resultJson.amount, 128.5);
