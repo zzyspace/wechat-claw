@@ -139,9 +139,11 @@ test("getAppConfig parses WECHATY_CHANNELS_JSON with mixed delivery targets", ()
         summarySchedule: "",
       },
     ]),
+    WECHATY_REIMBURSEMENT_EXTRACTION_PROVIDER: "qwen",
     WECHATY_REIMBURSEMENT_EXTRACTION_MODEL: "qwen3.5-flash",
     WECHATY_REIMBURSEMENT_EXTRACTION_RETRY_MODEL: "qwen3.5-plus",
     WECHATY_REIMBURSEMENT_EXTRACTION_API_KEY: "test-key",
+    WECHATY_REIMBURSEMENT_EXTRACTION_BASE_URL: "https://dashscope.aliyuncs.com/compatible-mode/v1",
     WECHATY_ADMIN_HOST: "127.0.0.1",
     WECHATY_ADMIN_PORT: "8788",
     WECHATY_ADMIN_USERNAME: "admin",
@@ -182,6 +184,7 @@ test("getAppConfig parses WECHATY_CHANNELS_JSON with mixed delivery targets", ()
   assert.equal(config.reimbursementExtractionModel, "qwen3.5-flash");
   assert.equal(config.reimbursementExtractionRetryModel, "qwen3.5-plus");
   assert.equal(config.reimbursementExtractionApiKey, "test-key");
+  assert.equal(config.reimbursementExtractionBaseUrl, "https://dashscope.aliyuncs.com/compatible-mode/v1");
   assert.equal(config.adminHost, "127.0.0.1");
   assert.equal(config.adminPort, 8788);
   assert.equal(config.adminUsername, "admin");
@@ -193,6 +196,52 @@ test("getAppConfig parses WECHATY_CHANNELS_JSON with mixed delivery targets", ()
     value: "门店A日报群",
   });
   assert.equal(config.channels[0]?.weeklySummarySchedule, "10 22 * * 0");
+});
+
+test("getAppConfig defaults reimbursement extraction to OpenAI Luna", () => {
+  applyEnv({
+    WECHATY_PUPPET: "wechaty-puppet-wechat",
+    WECHATY_REIMBURSEMENT_EXTRACTION_PROVIDER: undefined,
+    WECHATY_REIMBURSEMENT_EXTRACTION_MODEL: undefined,
+    WECHATY_REIMBURSEMENT_EXTRACTION_RETRY_MODEL: undefined,
+    WECHATY_REIMBURSEMENT_EXTRACTION_BASE_URL: undefined,
+  });
+
+  const config = getAppConfig();
+
+  assert.equal(config.reimbursementExtractionProvider, "openai");
+  assert.equal(config.reimbursementExtractionModel, "gpt-5.6-luna");
+  assert.equal(config.reimbursementExtractionRetryModel, "gpt-5.6-luna");
+  assert.equal(config.reimbursementExtractionBaseUrl, "https://api.openai.com/v1");
+});
+
+test("getAppConfig restores Qwen defaults when the provider switches back", () => {
+  applyEnv({
+    WECHATY_PUPPET: "wechaty-puppet-wechat",
+    WECHATY_REIMBURSEMENT_EXTRACTION_PROVIDER: "qwen",
+  });
+
+  const config = getAppConfig();
+
+  assert.equal(config.reimbursementExtractionProvider, "qwen");
+  assert.equal(config.reimbursementExtractionModel, "qwen3.5-flash");
+  assert.equal(config.reimbursementExtractionRetryModel, "qwen3.5-plus");
+  assert.equal(config.reimbursementExtractionBaseUrl, "https://dashscope.aliyuncs.com/compatible-mode/v1");
+});
+
+test("validateAppConfig rejects an unsupported reimbursement extraction provider", () => {
+  applyEnv({
+    WECHATY_PUPPET: "wechaty-puppet-wechat",
+    WECHATY_REIMBURSEMENT_EXTRACTION_PROVIDER: "unknown-provider",
+  });
+
+  const validation = validateAppConfig(getAppConfig());
+
+  assert(
+    validation.errors.includes(
+      "Unsupported WECHATY_REIMBURSEMENT_EXTRACTION_PROVIDER: unknown-provider",
+    ),
+  );
 });
 
 test("validateAppConfig rejects duplicate channel code and invalid target type", () => {

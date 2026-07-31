@@ -421,6 +421,19 @@ export function getAppConfig(): AppConfig {
     "WECHATY_ROOM_CANARY_INTERVAL_SECONDS",
     1800,
   );
+  const reimbursementExtractionProvider =
+    readOptionalEnv("WECHATY_REIMBURSEMENT_EXTRACTION_PROVIDER")?.toLowerCase() ?? "openai";
+  const reimbursementExtractionModel =
+    readOptionalEnv("WECHATY_REIMBURSEMENT_EXTRACTION_MODEL") ??
+    (reimbursementExtractionProvider === "qwen" ? "qwen3.5-flash" : "gpt-5.6-luna");
+  const reimbursementExtractionRetryModel =
+    readOptionalEnv("WECHATY_REIMBURSEMENT_EXTRACTION_RETRY_MODEL") ??
+    (reimbursementExtractionProvider === "qwen" ? "qwen3.5-plus" : reimbursementExtractionModel);
+  const reimbursementExtractionBaseUrl =
+    process.env.WECHATY_REIMBURSEMENT_EXTRACTION_BASE_URL?.trim() ||
+    (reimbursementExtractionProvider === "qwen"
+      ? "https://dashscope.aliyuncs.com/compatible-mode/v1"
+      : "https://api.openai.com/v1");
 
   return {
     puppet: readOptionalEnv("WECHATY_PUPPET"),
@@ -503,16 +516,11 @@ export function getAppConfig(): AppConfig {
     lossExtractionBaseUrl:
       process.env.WECHATY_LOSS_EXTRACTION_BASE_URL?.trim() ||
       "https://dashscope.aliyuncs.com/compatible-mode/v1",
-    reimbursementExtractionProvider:
-      readOptionalEnv("WECHATY_REIMBURSEMENT_EXTRACTION_PROVIDER") ?? "qwen",
-    reimbursementExtractionModel:
-      readOptionalEnv("WECHATY_REIMBURSEMENT_EXTRACTION_MODEL") ?? "qwen3.5-flash",
-    reimbursementExtractionRetryModel:
-      readOptionalEnv("WECHATY_REIMBURSEMENT_EXTRACTION_RETRY_MODEL") ?? "qwen3.5-plus",
+    reimbursementExtractionProvider,
+    reimbursementExtractionModel,
+    reimbursementExtractionRetryModel,
     reimbursementExtractionApiKey: readOptionalEnv("WECHATY_REIMBURSEMENT_EXTRACTION_API_KEY"),
-    reimbursementExtractionBaseUrl:
-      process.env.WECHATY_REIMBURSEMENT_EXTRACTION_BASE_URL?.trim() ||
-      "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    reimbursementExtractionBaseUrl,
     adminHost: readStringEnv("WECHATY_ADMIN_HOST", "127.0.0.1") || "127.0.0.1",
     adminPort: readConfiguredPositiveNumberEnv("WECHATY_ADMIN_PORT", 8788),
     adminUsername: readOptionalEnv("WECHATY_ADMIN_USERNAME"),
@@ -777,6 +785,15 @@ export function validateAppConfig(config: AppConfig): ConfigValidationResult {
 
   if (isServicePuppet(config.puppet) && !config.puppetServiceToken) {
     errors.push("Missing WECHATY_PUPPET_SERVICE_TOKEN for wechaty-puppet-service");
+  }
+
+  if (
+    config.reimbursementExtractionProvider !== "openai" &&
+    config.reimbursementExtractionProvider !== "qwen"
+  ) {
+    errors.push(
+      `Unsupported WECHATY_REIMBURSEMENT_EXTRACTION_PROVIDER: ${config.reimbursementExtractionProvider}`,
+    );
   }
 
   if (config.alertEmailEnabled) {

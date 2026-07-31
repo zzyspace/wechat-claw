@@ -35,11 +35,13 @@ test("extractReimbursementReport calls qwen3.5-flash and normalizes amount, date
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "wechat-claw-reimbursement-extractor-"));
   const imagePath = path.join(tempDir, "receipt.jpg");
   let requestedBody: any;
+  let requestedUrl = "";
 
   try {
     fs.writeFileSync(imagePath, Buffer.from([0xff, 0xd8, 0xff, 0xd9]));
 
-    globalThis.fetch = (async (_url, init) => {
+    globalThis.fetch = (async (url, init) => {
+      requestedUrl = String(url);
       requestedBody = JSON.parse(String(init?.body));
 
       return new Response(
@@ -97,7 +99,10 @@ test("extractReimbursementReport calls qwen3.5-flash and normalizes amount, date
       },
     );
 
+    assert.equal(requestedUrl, "https://example.com/chat/completions");
     assert.equal(requestedBody.model, "qwen3.5-flash");
+    assert.equal(requestedBody.temperature, 0.1);
+    assert.equal(requestedBody.reasoning_effort, undefined);
     const promptText = requestedBody.messages?.[0]?.content?.[0]?.text ?? "";
     assert.match(promptText, /外卖或商城订单页如果有多个商品、套餐或明细金额，但页面没有明确总金额，应把每个商品或明细的实际价格加总/);
     assert.match(promptText, /对于订单截图里的“总预算”金额，如果图中没有比它更明确的最终付款金额，也应把它作为最终付款总金额候选值/);
@@ -114,6 +119,95 @@ test("extractReimbursementReport calls qwen3.5-flash and normalizes amount, date
     assert.equal(result.resultJson.expenseCategory, "food");
     assert.equal(result.resultJson.voucherDate, "2026-05-20");
     assert.equal(result.resultJson.voucherDateSource, "model");
+    assert.equal(result.needsReview, false);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test("extractReimbursementReport calls OpenAI Luna with non-reasoning image extraction settings", async () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "wechat-claw-reimbursement-extractor-"));
+  const imagePath = path.join(tempDir, "receipt.jpg");
+  let requestedBody: any;
+  let requestedHeaders: Headers | undefined;
+  let requestedUrl = "";
+
+  try {
+    fs.writeFileSync(imagePath, Buffer.from([0xff, 0xd8, 0xff, 0xd9]));
+
+    globalThis.fetch = (async (url, init) => {
+      requestedUrl = String(url);
+      requestedHeaders = new Headers(init?.headers);
+      requestedBody = JSON.parse(String(init?.body));
+
+      return new Response(
+        JSON.stringify({
+          choices: [
+            {
+              finish_reason: "stop",
+              message: {
+                content: JSON.stringify({
+                  amount: "35.60",
+                  currency: "CNY",
+                  expense_category: "flower",
+                  voucher_date: "2026-07-31",
+                  merchant: "测试花店",
+                  document_no: null,
+                  voucher_type: "付款截图",
+                  ocr_text: "测试花店 实付 35.60",
+                  confidence: 0.93,
+                }),
+              },
+            },
+          ],
+          id: "openai-luna-test",
+        }),
+        {
+          status: 200,
+          headers: {
+            "Content-Type": "application/json",
+          },
+        },
+      );
+    }) as typeof fetch;
+
+    const result = await extractReimbursementReport(
+      {
+        rawMessageId: 6,
+        channelCode: "reimbursement_a",
+        channelName: "AI报账群",
+        reporter: "小王",
+        textContent: "鲜花采购",
+        sentAt: "2026-07-31T02:00:00.000Z",
+        timeZone: "Asia/Shanghai",
+        attachments: [
+          {
+            type: "image",
+            localPath: imagePath,
+            sha256: "openai-luna",
+            mimeType: "image/jpeg",
+          },
+        ],
+      },
+      {
+        provider: "openai",
+        model: "gpt-5.6-luna",
+        apiKey: "openai-test-key",
+        baseUrl: "https://api.openai.com/v1/",
+      },
+    );
+
+    assert.equal(requestedUrl, "https://api.openai.com/v1/chat/completions");
+    assert.equal(requestedHeaders?.get("Authorization"), "Bearer openai-test-key");
+    assert.equal(requestedBody.model, "gpt-5.6-luna");
+    assert.equal(requestedBody.reasoning_effort, "none");
+    assert.equal(requestedBody.temperature, undefined);
+    assert.deepEqual(requestedBody.response_format, { type: "json_object" });
+    assert.equal(requestedBody.messages?.[0]?.content?.[1]?.type, "image_url");
+    assert.match(requestedBody.messages?.[0]?.content?.[1]?.image_url?.url ?? "", /^data:image\/jpeg;base64,/);
+    assert.equal(result.extractorCode, "model-openai-gpt-5.6-luna");
+    assert.equal(result.resultJson.amount, 35.6);
+    assert.equal(result.resultJson.expenseCategory, "flower");
     assert.equal(result.needsReview, false);
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });

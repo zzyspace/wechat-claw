@@ -35,7 +35,7 @@ interface ModelStructuredResponse {
   confidence?: number | null;
 }
 
-interface QwenCompletionPayload {
+interface ChatCompletionPayload {
   id?: string;
   usage?: {
     prompt_tokens?: number;
@@ -87,7 +87,7 @@ const PLANNED_EXPENSE_OCR_NAME = "李晨晨";
 const PLANNED_EXPENSE_OCR_MIN_OCCURRENCES = 3;
 const MANAGER_REIMBURSEMENT_OCR_MARKERS = ["店长报账群"];
 const EMPTY_STRUCTURED_RESULT_MAX_RETRIES = 1;
-const DEFAULT_EMPTY_STRUCTURED_RESULT_RETRY_MODEL = "qwen3.5-plus";
+const DEFAULT_QWEN_EMPTY_STRUCTURED_RESULT_RETRY_MODEL = "qwen3.5-plus";
 const MODEL_RESPONSE_PREVIEW_LIMIT = 240;
 
 function detectEvidenceType(input: ReimbursementExtractionInput): ReimbursementEvidenceType {
@@ -332,7 +332,7 @@ function summarizeMessageContent(content: unknown): Record<string, unknown> {
   };
 }
 
-function summarizeQwenPayload(payload: QwenCompletionPayload): Record<string, unknown> {
+function summarizeChatCompletionPayload(payload: ChatCompletionPayload): Record<string, unknown> {
   const firstChoice = payload.choices?.[0];
 
   return {
@@ -346,17 +346,30 @@ function summarizeQwenPayload(payload: QwenCompletionPayload): Record<string, un
   };
 }
 
-function resolveRetryModel(configuredRetryModel: string | undefined): string {
-  return configuredRetryModel?.trim() || DEFAULT_EMPTY_STRUCTURED_RESULT_RETRY_MODEL;
+function resolveRetryModel(
+  configuredRetryModel: string | undefined,
+  provider: string,
+  baseModel: string,
+): string {
+  const configured = configuredRetryModel?.trim();
+
+  if (configured) {
+    return configured;
+  }
+
+  return provider === "qwen"
+    ? DEFAULT_QWEN_EMPTY_STRUCTURED_RESULT_RETRY_MODEL
+    : baseModel;
 }
 
 function resolveAttemptModel(baseModel: string, retryModel: string, attempt: number): string {
   return attempt <= 1 ? baseModel : retryModel;
 }
 
-async function callQwenReimbursementExtraction(
+async function callChatCompletionReimbursementExtraction(
   input: ReimbursementExtractionInput,
   config: ReimbursementModelProviderConfig,
+  provider: "openai" | "qwen",
 ): Promise<ReimbursementModelAttemptResult> {
   const firstAttachment = input.attachments[0];
   const imageDataUrl = firstAttachment ? buildDataUrl(firstAttachment) : null;
@@ -372,46 +385,59 @@ async function callQwenReimbursementExtraction(
     };
   }
 
-  const response = await fetch(`${config.baseUrl}/chat/completions`, {
+  const baseUrl = config.baseUrl?.replace(/\/+$/, "");
+
+  if (!baseUrl) {
+    throw new Error(`Reimbursement ${provider} base URL is missing`);
+  }
+
+  const requestBody = {
+    model: config.model,
+    messages: [
+      {
+        role: "user",
+        content: [
+          {
+            type: "text",
+            text: buildPrompt(input),
+          },
+          {
+            type: "image_url",
+            image_url: {
+              url: imageDataUrl,
+            },
+          },
+        ],
+      },
+    ],
+    response_format: {
+      type: "json_object",
+    },
+    ...(provider === "openai"
+      ? {
+          reasoning_effort: "none",
+        }
+      : {
+          temperature: 0.1,
+        }),
+  };
+  const response = await fetch(`${baseUrl}/chat/completions`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${config.apiKey}`,
     },
-    body: JSON.stringify({
-      model: config.model,
-      messages: [
-        {
-          role: "user",
-          content: [
-            {
-              type: "text",
-              text: buildPrompt(input),
-            },
-            {
-              type: "image_url",
-              image_url: {
-                url: imageDataUrl,
-              },
-            },
-          ],
-        },
-      ],
-      response_format: {
-        type: "json_object",
-      },
-      temperature: 0.1,
-    }),
+    body: JSON.stringify(requestBody),
   });
 
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(`Qwen reimbursement request failed: ${response.status} ${errorText}`);
+    throw new Error(`Reimbursement ${provider} request failed: ${response.status} ${errorText}`);
   }
 
-  const payload = (await response.json()) as QwenCompletionPayload;
+  const payload = (await response.json()) as ChatCompletionPayload;
   const messageContent = payload.choices?.[0]?.message?.content;
-  const responseSummary = summarizeQwenPayload(payload);
+  const responseSummary = summarizeChatCompletionPayload(payload);
 
   if (typeof messageContent !== "string") {
     return {
@@ -436,6 +462,19 @@ async function callQwenReimbursementExtraction(
     modelResult: JSON.parse(trimmedContent) as ModelStructuredResponse,
     responseSummary,
   };
+}
+
+function callReimbursementModel(
+  input: ReimbursementExtractionInput,
+  config: ReimbursementModelProviderConfig,
+): Promise<ReimbursementModelAttemptResult> {
+  const provider = config.provider?.trim().toLowerCase();
+
+  if (provider === "openai" || provider === "qwen") {
+    return callChatCompletionReimbursementExtraction(input, config, provider);
+  }
+
+  throw new Error(`Unsupported reimbursement extraction provider: ${config.provider}`);
 }
 
 function buildFallbackExtraction(input: ReimbursementExtractionInput): ReimbursementExtractionResult {
@@ -498,7 +537,8 @@ export async function extractReimbursementReport(
 
   const note = normalizeText(input.textContent);
   const messageVoucherDate = getMessageVoucherDate(input);
-  const retryModel = resolveRetryModel(config.retryModel);
+  const provider = config.provider.trim().toLowerCase();
+  const retryModel = resolveRetryModel(config.retryModel, provider, config.model);
 
   try {
     let attempt = 0;
@@ -513,20 +553,15 @@ export async function extractReimbursementReport(
         attempt,
         channelCode: input.channelCode ?? "(empty)",
         model: effectiveModel,
-        provider: config.provider,
+        provider,
         rawMessageId: input.rawMessageId,
         reporter: input.reporter,
       });
-      const attemptResult =
-        config.provider === "qwen"
-          ? await callQwenReimbursementExtraction(input, {
-              ...config,
-              model: effectiveModel,
-            })
-          : {
-              emptyStructuredResult: false,
-              modelResult: null,
-            };
+      const attemptResult = await callReimbursementModel(input, {
+        ...config,
+        provider,
+        model: effectiveModel,
+      });
       modelResult = attemptResult.modelResult;
 
       if (modelResult) {
@@ -538,7 +573,7 @@ export async function extractReimbursementReport(
           attempt,
           channelCode: input.channelCode ?? "(empty)",
           model: effectiveModel,
-          provider: config.provider,
+          provider,
           rawMessageId: input.rawMessageId,
           reporter: input.reporter,
           retryModel,
@@ -551,7 +586,7 @@ export async function extractReimbursementReport(
         attempt,
         channelCode: input.channelCode ?? "(empty)",
         model: effectiveModel,
-        provider: config.provider,
+        provider,
         rawMessageId: input.rawMessageId,
         reporter: input.reporter,
         ...attemptResult.responseSummary,
@@ -582,7 +617,7 @@ export async function extractReimbursementReport(
 
     const result: ReimbursementExtractionResult = {
       scenarioCode: "reimbursement",
-      extractorCode: `model-${config.provider}-${effectiveModel}`,
+      extractorCode: `model-${provider}-${effectiveModel}`,
       status: "extracted",
       confidence,
       needsReview: amount === null,
@@ -631,14 +666,14 @@ export async function extractReimbursementReport(
       channelCode: input.channelCode ?? "(empty)",
       error,
       model: config.model,
-      provider: config.provider,
+      provider,
       rawMessageId: input.rawMessageId,
       reporter: input.reporter,
     });
 
     return {
       ...fallback,
-      extractorCode: `model-${config.provider}-${config.model}-fallback`,
+      extractorCode: `model-${provider}-${config.model}-fallback`,
       confidence: Math.min(fallback.confidence, 0.55),
       needsReview: true,
     };

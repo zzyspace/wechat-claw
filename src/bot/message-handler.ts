@@ -924,9 +924,7 @@ async function handleReimbursementMessage(
       model: context.reimbursementExtractionModel,
       retryModel: context.reimbursementExtractionRetryModel,
       apiKey: context.reimbursementExtractionApiKey,
-      baseUrl:
-        context.reimbursementExtractionBaseUrl ??
-        "https://dashscope.aliyuncs.com/compatible-mode/v1",
+      baseUrl: context.reimbursementExtractionBaseUrl,
     },
     logger,
   );

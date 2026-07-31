@@ -106,11 +106,11 @@ WECHATY_LOSS_EXTRACTION_PROVIDER=
 WECHATY_LOSS_EXTRACTION_MODEL=
 WECHATY_LOSS_EXTRACTION_API_KEY=
 WECHATY_LOSS_EXTRACTION_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
-WECHATY_REIMBURSEMENT_EXTRACTION_PROVIDER=qwen
-WECHATY_REIMBURSEMENT_EXTRACTION_MODEL=qwen3.5-flash
-WECHATY_REIMBURSEMENT_EXTRACTION_RETRY_MODEL=qwen3.5-plus
+WECHATY_REIMBURSEMENT_EXTRACTION_PROVIDER=openai
+WECHATY_REIMBURSEMENT_EXTRACTION_MODEL=gpt-5.6-luna
+WECHATY_REIMBURSEMENT_EXTRACTION_RETRY_MODEL=gpt-5.6-luna
 WECHATY_REIMBURSEMENT_EXTRACTION_API_KEY=
-WECHATY_REIMBURSEMENT_EXTRACTION_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
+WECHATY_REIMBURSEMENT_EXTRACTION_BASE_URL=https://api.openai.com/v1
 WECHATY_BOT_NAME=wechat-loss-bot
 WECHATY_CHANNELS_JSON=[{"code":"loss_a","enabled":true,"scenario":"loss-report","match":{"type":"room_topic","value":"门店食材报损群A"},"deliveryTargets":[{"type":"contact_name","value":"你的主微信昵称"},{"type":"room_topic","value":"门店A日报群"}],"summarySchedule":"0 22 * * *","weeklySummarySchedule":"10 22 * * 0"},{"code":"reimbursement_a","enabled":true,"scenario":"reimbursement","match":{"type":"room_topic","value":"门店报账群A"},"deliveryTargets":[],"summarySchedule":""}]
 ```
@@ -172,11 +172,22 @@ WECHATY_CHANNELS_JSON=[{"code":"loss_a","enabled":true,"scenario":"loss-report",
 - `WECHATY_LOSS_EXTRACTION_MODEL`: 报损提取模型名
 - `WECHATY_LOSS_EXTRACTION_API_KEY`: 报损提取模型 API Key
 - `WECHATY_LOSS_EXTRACTION_BASE_URL`: 报损提取模型接口地址
-- `WECHATY_REIMBURSEMENT_EXTRACTION_PROVIDER`: 报账提取模型提供商，默认 `qwen`
-- `WECHATY_REIMBURSEMENT_EXTRACTION_MODEL`: 报账图片识别模型名，默认 `qwen3.5-flash`
-- `WECHATY_REIMBURSEMENT_EXTRACTION_RETRY_MODEL`: 报账模型首轮返回空结构化结果时的重试模型，默认 `qwen3.5-plus`
-- `WECHATY_REIMBURSEMENT_EXTRACTION_API_KEY`: 报账提取模型 API Key
-- `WECHATY_REIMBURSEMENT_EXTRACTION_BASE_URL`: 报账提取模型接口地址
+- `WECHATY_REIMBURSEMENT_EXTRACTION_PROVIDER`: 报账提取模型提供商，支持 `openai / qwen`，默认 `openai`
+- `WECHATY_REIMBURSEMENT_EXTRACTION_MODEL`: 报账图片识别模型名；OpenAI 默认 `gpt-5.6-luna`，Qwen 默认 `qwen3.5-flash`
+- `WECHATY_REIMBURSEMENT_EXTRACTION_RETRY_MODEL`: 报账模型首轮返回空结构化结果时的重试模型；OpenAI 默认继续使用 `gpt-5.6-luna`，Qwen 默认切换到 `qwen3.5-plus`
+- `WECHATY_REIMBURSEMENT_EXTRACTION_API_KEY`: 当前 provider 对应的 API Key
+- `WECHATY_REIMBURSEMENT_EXTRACTION_BASE_URL`: 报账提取接口地址；OpenAI 使用 `https://api.openai.com/v1`，Qwen 使用 `https://dashscope.aliyuncs.com/compatible-mode/v1`
+
+报账识别可以只通过环境变量在 OpenAI 与 Qwen 之间切换；修改后重启服务即可，不需要再次改代码。切回 Qwen 时使用：
+
+```env
+WECHATY_REIMBURSEMENT_EXTRACTION_PROVIDER=qwen
+WECHATY_REIMBURSEMENT_EXTRACTION_MODEL=qwen3.5-flash
+WECHATY_REIMBURSEMENT_EXTRACTION_RETRY_MODEL=qwen3.5-plus
+WECHATY_REIMBURSEMENT_EXTRACTION_API_KEY=<百炼 / DashScope API Key>
+WECHATY_REIMBURSEMENT_EXTRACTION_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
+```
+
 - `WECHATY_BOT_NAME`: 本地 bot 名称
 - `WECHATY_SUMMARY_CRON`: 仅旧版单群兼容配置使用的默认日报周期
 
