@@ -76,6 +76,7 @@ export interface AppConfig {
   reimbursementExtractionRetryModel?: string;
   reimbursementExtractionApiKey?: string;
   reimbursementExtractionBaseUrl: string;
+  reimbursementOpenAiProxyUrl?: string;
   adminHost?: string;
   adminPort?: number;
   adminUsername?: string;
@@ -521,6 +522,7 @@ export function getAppConfig(): AppConfig {
     reimbursementExtractionRetryModel,
     reimbursementExtractionApiKey: readOptionalEnv("WECHATY_REIMBURSEMENT_EXTRACTION_API_KEY"),
     reimbursementExtractionBaseUrl,
+    reimbursementOpenAiProxyUrl: readOptionalEnv("WECHATY_REIMBURSEMENT_OPENAI_PROXY_URL"),
     adminHost: readStringEnv("WECHATY_ADMIN_HOST", "127.0.0.1") || "127.0.0.1",
     adminPort: readConfiguredPositiveNumberEnv("WECHATY_ADMIN_PORT", 8788),
     adminUsername: readOptionalEnv("WECHATY_ADMIN_USERNAME"),
@@ -794,6 +796,23 @@ export function validateAppConfig(config: AppConfig): ConfigValidationResult {
     errors.push(
       `Unsupported WECHATY_REIMBURSEMENT_EXTRACTION_PROVIDER: ${config.reimbursementExtractionProvider}`,
     );
+  }
+
+  if (
+    config.reimbursementExtractionProvider === "openai" &&
+    config.reimbursementOpenAiProxyUrl
+  ) {
+    try {
+      const proxyUrl = new URL(config.reimbursementOpenAiProxyUrl);
+
+      if (proxyUrl.protocol !== "http:" && proxyUrl.protocol !== "https:") {
+        errors.push(
+          `Unsupported WECHATY_REIMBURSEMENT_OPENAI_PROXY_URL protocol: ${proxyUrl.protocol}`,
+        );
+      }
+    } catch {
+      errors.push("Invalid WECHATY_REIMBURSEMENT_OPENAI_PROXY_URL");
+    }
   }
 
   if (config.alertEmailEnabled) {

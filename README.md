@@ -111,6 +111,7 @@ WECHATY_REIMBURSEMENT_EXTRACTION_MODEL=gpt-5.6-luna
 WECHATY_REIMBURSEMENT_EXTRACTION_RETRY_MODEL=gpt-5.6-luna
 WECHATY_REIMBURSEMENT_EXTRACTION_API_KEY=
 WECHATY_REIMBURSEMENT_EXTRACTION_BASE_URL=https://api.openai.com/v1
+WECHATY_REIMBURSEMENT_OPENAI_PROXY_URL=
 WECHATY_BOT_NAME=wechat-loss-bot
 WECHATY_CHANNELS_JSON=[{"code":"loss_a","enabled":true,"scenario":"loss-report","match":{"type":"room_topic","value":"门店食材报损群A"},"deliveryTargets":[{"type":"contact_name","value":"你的主微信昵称"},{"type":"room_topic","value":"门店A日报群"}],"summarySchedule":"0 22 * * *","weeklySummarySchedule":"10 22 * * 0"},{"code":"reimbursement_a","enabled":true,"scenario":"reimbursement","match":{"type":"room_topic","value":"门店报账群A"},"deliveryTargets":[],"summarySchedule":""}]
 ```
@@ -177,6 +178,7 @@ WECHATY_CHANNELS_JSON=[{"code":"loss_a","enabled":true,"scenario":"loss-report",
 - `WECHATY_REIMBURSEMENT_EXTRACTION_RETRY_MODEL`: 报账模型首轮返回空结构化结果时的重试模型；OpenAI 默认继续使用 `gpt-5.6-luna`，Qwen 默认切换到 `qwen3.5-plus`
 - `WECHATY_REIMBURSEMENT_EXTRACTION_API_KEY`: 当前 provider 对应的 API Key
 - `WECHATY_REIMBURSEMENT_EXTRACTION_BASE_URL`: 报账提取接口地址；OpenAI 使用 `https://api.openai.com/v1`，Qwen 使用 `https://dashscope.aliyuncs.com/compatible-mode/v1`
+- `WECHATY_REIMBURSEMENT_OPENAI_PROXY_URL`: 仅 OpenAI 报账识别请求使用的 HTTP/HTTPS 代理；例如 `http://127.0.0.1:7890`，Qwen 和其他请求保持直连
 
 报账识别可以只通过环境变量在 OpenAI 与 Qwen 之间切换；修改后重启服务即可，不需要再次改代码。切回 Qwen 时使用：
 
@@ -187,6 +189,8 @@ WECHATY_REIMBURSEMENT_EXTRACTION_RETRY_MODEL=qwen3.5-plus
 WECHATY_REIMBURSEMENT_EXTRACTION_API_KEY=<百炼 / DashScope API Key>
 WECHATY_REIMBURSEMENT_EXTRACTION_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 ```
+
+切回 Qwen 时可以保留 `WECHATY_REIMBURSEMENT_OPENAI_PROXY_URL`；代码只会在 provider 为 `openai` 时使用它。
 
 - `WECHATY_BOT_NAME`: 本地 bot 名称
 - `WECHATY_SUMMARY_CRON`: 仅旧版单群兼容配置使用的默认日报周期

@@ -1,5 +1,7 @@
 import fs from "node:fs";
 
+import { ProxyAgent, type Dispatcher } from "undici";
+
 import type { Logger } from "../../core/logging/logger.js";
 import { formatZonedDate } from "../../core/runtime/timezone.js";
 import type { StoredAttachment } from "../../core/storage/types.js";
@@ -21,6 +23,7 @@ export interface ReimbursementModelProviderConfig {
   retryModel?: string;
   apiKey?: string;
   baseUrl?: string;
+  proxyUrl?: string;
 }
 
 interface ModelStructuredResponse {
@@ -89,6 +92,28 @@ const MANAGER_REIMBURSEMENT_OCR_MARKERS = ["店长报账群"];
 const EMPTY_STRUCTURED_RESULT_MAX_RETRIES = 1;
 const DEFAULT_QWEN_EMPTY_STRUCTURED_RESULT_RETRY_MODEL = "qwen3.5-plus";
 const MODEL_RESPONSE_PREVIEW_LIMIT = 240;
+const openAiProxyDispatchers = new Map<string, Dispatcher>();
+
+function resolveOpenAiProxyDispatcher(
+  provider: string,
+  proxyUrl: string | undefined,
+): Dispatcher | undefined {
+  const normalizedProxyUrl = proxyUrl?.trim();
+
+  if (provider !== "openai" || !normalizedProxyUrl) {
+    return undefined;
+  }
+
+  const cachedDispatcher = openAiProxyDispatchers.get(normalizedProxyUrl);
+
+  if (cachedDispatcher) {
+    return cachedDispatcher;
+  }
+
+  const dispatcher = new ProxyAgent(normalizedProxyUrl);
+  openAiProxyDispatchers.set(normalizedProxyUrl, dispatcher);
+  return dispatcher;
+}
 
 function detectEvidenceType(input: ReimbursementExtractionInput): ReimbursementEvidenceType {
   const hasImage = input.attachments.length > 0;
@@ -421,14 +446,21 @@ async function callChatCompletionReimbursementExtraction(
           temperature: 0.1,
         }),
   };
-  const response = await fetch(`${baseUrl}/chat/completions`, {
+  const dispatcher = resolveOpenAiProxyDispatcher(provider, config.proxyUrl);
+  const requestInit: RequestInit & { dispatcher?: Dispatcher } = {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${config.apiKey}`,
     },
     body: JSON.stringify(requestBody),
-  });
+  };
+
+  if (dispatcher) {
+    requestInit.dispatcher = dispatcher;
+  }
+
+  const response = await fetch(`${baseUrl}/chat/completions`, requestInit);
 
   if (!response.ok) {
     const errorText = await response.text();

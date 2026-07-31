@@ -4,6 +4,8 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, test } from "node:test";
 
+import { ProxyAgent } from "undici";
+
 import type { Logger } from "../../core/logging/logger.js";
 import { normalizeReimbursementExpenseCategory } from "./categories.js";
 import { detectExpenseCategoryFromText, extractReimbursementReport } from "./extractor.js";
@@ -35,6 +37,7 @@ test("extractReimbursementReport calls qwen3.5-flash and normalizes amount, date
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "wechat-claw-reimbursement-extractor-"));
   const imagePath = path.join(tempDir, "receipt.jpg");
   let requestedBody: any;
+  let requestedDispatcher: unknown;
   let requestedUrl = "";
 
   try {
@@ -43,6 +46,7 @@ test("extractReimbursementReport calls qwen3.5-flash and normalizes amount, date
     globalThis.fetch = (async (url, init) => {
       requestedUrl = String(url);
       requestedBody = JSON.parse(String(init?.body));
+      requestedDispatcher = (init as RequestInit & { dispatcher?: unknown } | undefined)?.dispatcher;
 
       return new Response(
         JSON.stringify({
@@ -96,6 +100,7 @@ test("extractReimbursementReport calls qwen3.5-flash and normalizes amount, date
         model: "qwen3.5-flash",
         apiKey: "test-key",
         baseUrl: "https://example.com",
+        proxyUrl: "http://127.0.0.1:7890",
       },
     );
 
@@ -103,6 +108,7 @@ test("extractReimbursementReport calls qwen3.5-flash and normalizes amount, date
     assert.equal(requestedBody.model, "qwen3.5-flash");
     assert.equal(requestedBody.temperature, 0.1);
     assert.equal(requestedBody.reasoning_effort, undefined);
+    assert.equal(requestedDispatcher, undefined);
     const promptText = requestedBody.messages?.[0]?.content?.[0]?.text ?? "";
     assert.match(promptText, /外卖或商城订单页如果有多个商品、套餐或明细金额，但页面没有明确总金额，应把每个商品或明细的实际价格加总/);
     assert.match(promptText, /对于订单截图里的“总预算”金额，如果图中没有比它更明确的最终付款金额，也应把它作为最终付款总金额候选值/);
@@ -130,6 +136,7 @@ test("extractReimbursementReport calls OpenAI Luna with non-reasoning image extr
   const imagePath = path.join(tempDir, "receipt.jpg");
   let requestedBody: any;
   let requestedHeaders: Headers | undefined;
+  let requestedDispatcher: unknown;
   let requestedUrl = "";
 
   try {
@@ -139,6 +146,7 @@ test("extractReimbursementReport calls OpenAI Luna with non-reasoning image extr
       requestedUrl = String(url);
       requestedHeaders = new Headers(init?.headers);
       requestedBody = JSON.parse(String(init?.body));
+      requestedDispatcher = (init as RequestInit & { dispatcher?: unknown } | undefined)?.dispatcher;
 
       return new Response(
         JSON.stringify({
@@ -194,6 +202,7 @@ test("extractReimbursementReport calls OpenAI Luna with non-reasoning image extr
         model: "gpt-5.6-luna",
         apiKey: "openai-test-key",
         baseUrl: "https://api.openai.com/v1/",
+        proxyUrl: "http://127.0.0.1:7890",
       },
     );
 
@@ -202,6 +211,7 @@ test("extractReimbursementReport calls OpenAI Luna with non-reasoning image extr
     assert.equal(requestedBody.model, "gpt-5.6-luna");
     assert.equal(requestedBody.reasoning_effort, "none");
     assert.equal(requestedBody.temperature, undefined);
+    assert.ok(requestedDispatcher instanceof ProxyAgent);
     assert.deepEqual(requestedBody.response_format, { type: "json_object" });
     assert.equal(requestedBody.messages?.[0]?.content?.[1]?.type, "image_url");
     assert.match(requestedBody.messages?.[0]?.content?.[1]?.image_url?.url ?? "", /^data:image\/jpeg;base64,/);

@@ -55,6 +55,7 @@ const managedEnvKeys = [
   "WECHATY_REIMBURSEMENT_EXTRACTION_RETRY_MODEL",
   "WECHATY_REIMBURSEMENT_EXTRACTION_API_KEY",
   "WECHATY_REIMBURSEMENT_EXTRACTION_BASE_URL",
+  "WECHATY_REIMBURSEMENT_OPENAI_PROXY_URL",
   "WECHATY_ADMIN_HOST",
   "WECHATY_ADMIN_PORT",
   "WECHATY_ADMIN_USERNAME",
@@ -205,6 +206,7 @@ test("getAppConfig defaults reimbursement extraction to OpenAI Luna", () => {
     WECHATY_REIMBURSEMENT_EXTRACTION_MODEL: undefined,
     WECHATY_REIMBURSEMENT_EXTRACTION_RETRY_MODEL: undefined,
     WECHATY_REIMBURSEMENT_EXTRACTION_BASE_URL: undefined,
+    WECHATY_REIMBURSEMENT_OPENAI_PROXY_URL: "http://127.0.0.1:7890",
   });
 
   const config = getAppConfig();
@@ -213,6 +215,8 @@ test("getAppConfig defaults reimbursement extraction to OpenAI Luna", () => {
   assert.equal(config.reimbursementExtractionModel, "gpt-5.6-luna");
   assert.equal(config.reimbursementExtractionRetryModel, "gpt-5.6-luna");
   assert.equal(config.reimbursementExtractionBaseUrl, "https://api.openai.com/v1");
+  assert.equal(config.reimbursementOpenAiProxyUrl, "http://127.0.0.1:7890");
+  assert.deepEqual(validateAppConfig(config).errors, []);
 });
 
 test("getAppConfig restores Qwen defaults when the provider switches back", () => {
@@ -240,6 +244,22 @@ test("validateAppConfig rejects an unsupported reimbursement extraction provider
   assert(
     validation.errors.includes(
       "Unsupported WECHATY_REIMBURSEMENT_EXTRACTION_PROVIDER: unknown-provider",
+    ),
+  );
+});
+
+test("validateAppConfig rejects an invalid OpenAI reimbursement proxy URL", () => {
+  applyEnv({
+    WECHATY_PUPPET: "wechaty-puppet-wechat",
+    WECHATY_REIMBURSEMENT_EXTRACTION_PROVIDER: "openai",
+    WECHATY_REIMBURSEMENT_OPENAI_PROXY_URL: "socks5://127.0.0.1:7890",
+  });
+
+  const validation = validateAppConfig(getAppConfig());
+
+  assert(
+    validation.errors.includes(
+      "Unsupported WECHATY_REIMBURSEMENT_OPENAI_PROXY_URL protocol: socks5:",
     ),
   );
 });

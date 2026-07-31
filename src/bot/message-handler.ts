@@ -66,6 +66,7 @@ export interface MessageContext {
   reimbursementExtractionRetryModel?: string;
   reimbursementExtractionApiKey?: string;
   reimbursementExtractionBaseUrl?: string;
+  reimbursementOpenAiProxyUrl?: string;
 }
 
 interface ParsedRoomMessage {
@@ -901,6 +902,7 @@ async function handleReimbursementMessage(
     attachmentCount: parsed.attachments.length,
     channelCode: parsed.channel.code,
     hasApiKey: Boolean(context.reimbursementExtractionApiKey),
+    hasOpenAiProxy: Boolean(context.reimbursementOpenAiProxyUrl),
     messageExternalId: parsed.messageExternalId,
     model: context.reimbursementExtractionModel ?? "(empty)",
     provider: context.reimbursementExtractionProvider ?? "(empty)",
@@ -925,6 +927,7 @@ async function handleReimbursementMessage(
       retryModel: context.reimbursementExtractionRetryModel,
       apiKey: context.reimbursementExtractionApiKey,
       baseUrl: context.reimbursementExtractionBaseUrl,
+      proxyUrl: context.reimbursementOpenAiProxyUrl,
     },
     logger,
   );

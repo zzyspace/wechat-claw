@@ -482,6 +482,7 @@ export async function startBot(
           reimbursementExtractionRetryModel: config.reimbursementExtractionRetryModel,
           reimbursementExtractionApiKey: config.reimbursementExtractionApiKey,
           reimbursementExtractionBaseUrl: config.reimbursementExtractionBaseUrl,
+          reimbursementOpenAiProxyUrl: config.reimbursementOpenAiProxyUrl,
         },
         logger,
       );
