@@ -266,6 +266,9 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     assert.match(pageHtml, /placeholder="支持部分匹配，如 补票 \/ 平账"/);
     assert.match(pageHtml, /renderRemarkContent\(item\.note, "-"\)/);
     assert.match(pageHtml, /tag note-pill/);
+    assert.match(pageHtml, /function hasSelectedTextWithin\(element\)/);
+    assert.match(pageHtml, /selection\.getRangeAt\(index\)\.intersectsNode\(element\)/);
+    assert.match(pageHtml, /if \(hasSelectedTextWithin\(trigger\)\) \{\s*return;\s*\}/);
     assert.doesNotMatch(pageHtml, /<label for="needsReview">需复核<\/label>/);
 
     const listResponse = await fetch(

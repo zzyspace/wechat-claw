@@ -334,6 +334,11 @@
         cursor: pointer;
       }
 
+      tbody td:nth-child(3),
+      tbody td:nth-child(4) {
+        cursor: text;
+      }
+
       tbody tr.is-selected {
         background: rgba(0, 122, 255, 0.08);
       }
@@ -1416,6 +1421,21 @@
         elements.tableBody.appendChild(fragment);
       }
 
+      function hasSelectedTextWithin(element) {
+        const selection = window.getSelection();
+        if (!selection || selection.isCollapsed || !selection.toString().trim()) {
+          return false;
+        }
+
+        for (let index = 0; index < selection.rangeCount; index += 1) {
+          if (selection.getRangeAt(index).intersectsNode(element)) {
+            return true;
+          }
+        }
+
+        return false;
+      }
+
       function renderSummary() {
         const pageIndex = Math.floor(state.offset / state.limit) + 1;
         const rangeStart = state.total === 0 ? 0 : state.offset + 1;
@@ -1782,6 +1802,10 @@
 
         const trigger = target.closest("[data-report-id]");
         if (!trigger) {
+          return;
+        }
+
+        if (hasSelectedTextWithin(trigger)) {
           return;
         }
 
