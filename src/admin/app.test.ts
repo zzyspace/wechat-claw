@@ -249,7 +249,7 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     assert.match(pageHtml, /<option value="reimbursement_peanut">Peanut<\/option>/);
     assert.match(pageHtml, /<option value="reimbursement_peanut_manager">Peanut店长报账群<\/option>/);
     assert.match(pageHtml, /<option value="reimbursement_fuzzyqz">Fuzzy泉州店<\/option>/);
-    assert.match(pageHtml, /<option value="reimbursement_fuzzyqz_manager">Fuzzy泉州店长报账群<\/option>/);
+    assert.match(pageHtml, /<option value="reimbursement_fuzzy_qz_manager">Fuzzy泉州店长报账群<\/option>/);
     assert.match(pageHtml, /<th>门店<\/th>/);
     assert.doesNotMatch(pageHtml, /item\.channelCode \? `<div class="mono muted">/);
     assert.match(pageHtml, /已加载 \$\{state\.items\.length\} 条记录，总计金额 \$\{sumLoadedAmounts\(state\.items\)\.toFixed\(2\)\} 元/);
