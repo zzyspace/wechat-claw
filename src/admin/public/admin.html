@@ -3,8 +3,23 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="color-scheme" content="light" />
+    <meta name="color-scheme" content="light dark" />
     <title>报账后台</title>
+    <script>
+      (() => {
+        let savedTheme = null;
+        try {
+          savedTheme = window.localStorage.getItem("reimbursement-admin-theme");
+        } catch {
+          // Storage may be unavailable in privacy-restricted browser contexts.
+        }
+        const theme = savedTheme === "light" || savedTheme === "dark"
+          ? savedTheme
+          : (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+        document.documentElement.dataset.theme = theme;
+        document.documentElement.style.colorScheme = theme;
+      })();
+    </script>
     <style>
       :root {
         --bg: #f2f2f7;
@@ -21,10 +36,46 @@
         --danger: #ff3b30;
         --warn: #c96f00;
         --warn-soft: rgba(255, 149, 0, 0.16);
+        --page-glow-start: rgba(0, 122, 255, 0.16);
+        --page-glow-end: rgba(90, 200, 250, 0.18);
+        --surface-muted: rgba(255, 255, 255, 0.72);
+        --surface-hover: rgba(255, 255, 255, 0.56);
+        --surface-input: rgba(255, 255, 255, 0.92);
+        --surface-image: rgba(255, 255, 255, 0.9);
+        --subtle-border: rgba(60, 60, 67, 0.08);
+        --eyebrow-border: rgba(60, 60, 67, 0.12);
+        --modal-backdrop: rgba(28, 28, 30, 0.4);
         --radius-xl: 28px;
         --radius-lg: 20px;
         --radius-md: 14px;
         --shadow: 0 24px 60px rgba(28, 28, 30, 0.1);
+      }
+
+      :root[data-theme="dark"] {
+        --bg: #0d1117;
+        --bg-accent: #151b25;
+        --surface: rgba(27, 34, 45, 0.88);
+        --surface-strong: #202938;
+        --line: rgba(235, 242, 255, 0.14);
+        --line-strong: rgba(235, 242, 255, 0.28);
+        --ink: #f2f5f9;
+        --ink-soft: #aab4c3;
+        --brand: #5aa7ff;
+        --brand-soft: rgba(90, 167, 255, 0.18);
+        --accent: #5aa7ff;
+        --danger: #ff6961;
+        --warn: #ffb340;
+        --warn-soft: rgba(255, 179, 64, 0.18);
+        --page-glow-start: rgba(32, 110, 210, 0.22);
+        --page-glow-end: rgba(50, 170, 210, 0.14);
+        --surface-muted: rgba(41, 51, 66, 0.82);
+        --surface-hover: rgba(73, 91, 116, 0.32);
+        --surface-input: rgba(17, 23, 32, 0.9);
+        --surface-image: rgba(14, 19, 27, 0.92);
+        --subtle-border: rgba(235, 242, 255, 0.1);
+        --eyebrow-border: rgba(235, 242, 255, 0.14);
+        --modal-backdrop: rgba(0, 0, 0, 0.68);
+        --shadow: 0 24px 60px rgba(0, 0, 0, 0.34);
       }
 
       * {
@@ -37,8 +88,8 @@
         font-family: "SF Pro Text", "PingFang SC", "Noto Sans SC", sans-serif;
         color: var(--ink);
         background:
-          radial-gradient(circle at top left, rgba(0, 122, 255, 0.16), transparent 28%),
-          radial-gradient(circle at top right, rgba(90, 200, 250, 0.18), transparent 26%),
+          radial-gradient(circle at top left, var(--page-glow-start), transparent 28%),
+          radial-gradient(circle at top right, var(--page-glow-end), transparent 26%),
           linear-gradient(180deg, var(--bg) 0%, var(--bg-accent) 100%);
       }
 
@@ -54,13 +105,28 @@
         margin-bottom: 18px;
       }
 
+      .hero-heading {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 18px;
+      }
+
+      .theme-toggle {
+        flex: 0 0 auto;
+        min-height: 40px;
+        padding: 0 14px;
+        background: var(--surface-muted);
+        border-color: var(--eyebrow-border);
+      }
+
       .eyebrow {
         display: inline-flex;
         width: fit-content;
         padding: 8px 12px;
         border-radius: 999px;
-        background: rgba(255, 255, 255, 0.72);
-        border: 1px solid rgba(60, 60, 67, 0.12);
+        background: var(--surface-muted);
+        border: 1px solid var(--eyebrow-border);
         color: var(--ink-soft);
         font-size: 12px;
         font-weight: 700;
@@ -126,7 +192,7 @@
       .field input,
       .field select {
         width: 100%;
-        background: rgba(255, 255, 255, 0.92);
+        background: var(--surface-input);
         color: var(--ink);
       }
 
@@ -241,7 +307,7 @@
       }
 
       thead {
-        background: rgba(255, 255, 255, 0.72);
+        background: var(--surface-muted);
       }
 
       th,
@@ -327,7 +393,7 @@
       }
 
       tbody tr:hover {
-        background: rgba(255, 255, 255, 0.56);
+        background: var(--surface-hover);
       }
 
       tbody tr {
@@ -372,7 +438,7 @@
         border-radius: 14px;
         overflow: hidden;
         border: 1px solid var(--line);
-        background: rgba(255, 255, 255, 0.9);
+        background: var(--surface-image);
       }
 
       .bill-link {
@@ -577,6 +643,56 @@
         border-color: rgba(249, 115, 22, 0.18);
       }
 
+      :root[data-theme="dark"] .tag.note-pill,
+      :root[data-theme="dark"] .tag.category-rent,
+      :root[data-theme="dark"] .tag.reporter-3,
+      :root[data-theme="dark"] .tag.reporter-9 {
+        color: #ffc266;
+      }
+
+      :root[data-theme="dark"] .tag.category-food,
+      :root[data-theme="dark"] .tag.reporter-1,
+      :root[data-theme="dark"] .tag.reporter-13 {
+        color: #69dc8d;
+      }
+
+      :root[data-theme="dark"] .tag.category-flower,
+      :root[data-theme="dark"] .tag.category-manager_reimbursement,
+      :root[data-theme="dark"] .tag.reporter-5,
+      :root[data-theme="dark"] .tag.reporter-11 {
+        color: #ff78ae;
+      }
+
+      :root[data-theme="dark"] .tag.category-salary,
+      :root[data-theme="dark"] .tag.reporter-2,
+      :root[data-theme="dark"] .tag.reporter-10 {
+        color: #d094f5;
+      }
+
+      :root[data-theme="dark"] .tag.category-utilities,
+      :root[data-theme="dark"] .tag.reporter-4,
+      :root[data-theme="dark"] .tag.reporter-12 {
+        color: #70d7ff;
+      }
+
+      :root[data-theme="dark"] .tag.category-planned_expense,
+      :root[data-theme="dark"] .tag.reporter-6,
+      :root[data-theme="dark"] .tag.reporter-14 {
+        color: #a9a7ff;
+      }
+
+      :root[data-theme="dark"] .tag.reporter-7 {
+        color: #c4cad4;
+      }
+
+      :root[data-theme="dark"] .tag.reporter-8 {
+        color: #5ee0d2;
+      }
+
+      :root[data-theme="dark"] .tag.reporter-15 {
+        color: #ff9b66;
+      }
+
       .detail-empty {
         color: var(--ink-soft);
         line-height: 1.7;
@@ -598,7 +714,7 @@
       .modal-backdrop {
         position: absolute;
         inset: 0;
-        background: rgba(28, 28, 30, 0.4);
+        background: var(--modal-backdrop);
         backdrop-filter: blur(8px);
       }
 
@@ -648,8 +764,8 @@
         justify-content: center;
         padding: 12px 66px;
         border-radius: var(--radius-lg);
-        background: rgba(255, 255, 255, 0.72);
-        border: 1px solid rgba(60, 60, 67, 0.08);
+        background: var(--surface-muted);
+        border: 1px solid var(--subtle-border);
         min-height: 220px;
       }
 
@@ -713,8 +829,8 @@
       .detail-card {
         padding: 14px;
         border-radius: var(--radius-lg);
-        background: rgba(255, 255, 255, 0.72);
-        border: 1px solid rgba(60, 60, 67, 0.08);
+        background: var(--surface-muted);
+        border: 1px solid var(--subtle-border);
       }
 
       .detail-card strong {
@@ -756,8 +872,8 @@
       .receipt-item {
         padding: 14px;
         border-radius: var(--radius-lg);
-        background: rgba(255, 255, 255, 0.72);
-        border: 1px solid rgba(60, 60, 67, 0.08);
+        background: var(--surface-muted);
+        border: 1px solid var(--subtle-border);
       }
 
       .source-head,
@@ -803,7 +919,7 @@
         display: block;
         border-radius: 16px;
         border: 1px solid var(--line);
-        background: rgba(255, 255, 255, 0.9);
+        background: var(--surface-image);
       }
 
       .attachment-link {
@@ -884,7 +1000,10 @@
     <div class="page">
       <div class="hero">
         <span class="eyebrow">WECHAT CLAW / REIMBURSEMENT</span>
-        <h1>报账查看后台</h1>
+        <div class="hero-heading">
+          <h1>报账查看后台</h1>
+          <button class="theme-toggle" id="themeToggle" type="button">切换主题</button>
+        </div>
         <p>查看已入库的报账记录，按门店、报账人、类别、日期和备注文字筛选，并展开详情查看 OCR、原始消息、附件和回执记录。</p>
       </div>
 
@@ -1025,6 +1144,7 @@
     <script>
       const BASE_PATH = "/reimbursement";
       const DEFAULT_TIME_ZONE = "Asia/Shanghai";
+      const THEME_STORAGE_KEY = "reimbursement-admin-theme";
       const DETAIL_CLICK_DELAY_MS = 300;
       let pendingDetailTimer = null;
       const state = {
@@ -1040,6 +1160,7 @@
 
       const elements = {
         filters: document.getElementById("filters"),
+        themeToggle: document.getElementById("themeToggle"),
         resetFilters: document.getElementById("resetFilters"),
         totalPill: document.getElementById("totalPill"),
         pagePill: document.getElementById("pagePill"),
@@ -1063,6 +1184,32 @@
         attachmentPreviewPrevious: document.getElementById("attachmentPreviewPrevious"),
         attachmentPreviewNext: document.getElementById("attachmentPreviewNext"),
       };
+
+      function readSavedTheme() {
+        try {
+          const savedTheme = window.localStorage.getItem(THEME_STORAGE_KEY);
+          return savedTheme === "light" || savedTheme === "dark" ? savedTheme : null;
+        } catch {
+          return null;
+        }
+      }
+
+      function applyTheme(theme, persist = false) {
+        const normalizedTheme = theme === "dark" ? "dark" : "light";
+        document.documentElement.dataset.theme = normalizedTheme;
+        document.documentElement.style.colorScheme = normalizedTheme;
+        elements.themeToggle.textContent = normalizedTheme === "dark" ? "☀ 浅色" : "☾ 深色";
+        elements.themeToggle.setAttribute("aria-label", normalizedTheme === "dark" ? "切换到浅色模式" : "切换到深色模式");
+        elements.themeToggle.setAttribute("aria-pressed", String(normalizedTheme === "dark"));
+
+        if (persist) {
+          try {
+            window.localStorage.setItem(THEME_STORAGE_KEY, normalizedTheme);
+          } catch {
+            // The active theme still works when storage is unavailable.
+          }
+        }
+      }
 
       function escapeHtml(value) {
         return String(value ?? "")
@@ -1759,6 +1906,20 @@
           renderTable();
         }
       }
+
+      const systemThemePreference = window.matchMedia("(prefers-color-scheme: dark)");
+      applyTheme(document.documentElement.dataset.theme || (systemThemePreference.matches ? "dark" : "light"));
+
+      elements.themeToggle.addEventListener("click", () => {
+        const nextTheme = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+        applyTheme(nextTheme, true);
+      });
+
+      systemThemePreference.addEventListener("change", (event) => {
+        if (!readSavedTheme()) {
+          applyTheme(event.matches ? "dark" : "light");
+        }
+      });
 
       elements.filters.addEventListener("submit", (event) => {
         event.preventDefault();

@@ -261,6 +261,11 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     assert.match(pageHtml, /Number\(item\.amount\)\.toFixed\(2\)\} 元/);
     assert.match(pageHtml, /报账 #\$\{item\.id\} 附件预览 \(\$\{previewAmount\}\)/);
     assert.match(pageHtml, /<th>金额<\/th>\s*<th>类别<\/th>\s*<th>备注<\/th>/);
+    assert.match(pageHtml, /<meta name="color-scheme" content="light dark"/);
+    assert.match(pageHtml, /id="themeToggle"/);
+    assert.match(pageHtml, /:root\[data-theme="dark"\]/);
+    assert.match(pageHtml, /window\.localStorage\.setItem\(THEME_STORAGE_KEY, normalizedTheme\)/);
+    assert.match(pageHtml, /systemThemePreference\.addEventListener\("change"/);
     assert.match(pageHtml, /placeholder="支持部分匹配，如 Ry \/ 张"/);
     assert.match(pageHtml, /<label for="note">备注<\/label>/);
     assert.match(pageHtml, /placeholder="支持部分匹配，如 补票 \/ 平账"/);
