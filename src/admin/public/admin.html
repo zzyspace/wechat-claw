@@ -1025,6 +1025,8 @@
     <script>
       const BASE_PATH = "/reimbursement";
       const DEFAULT_TIME_ZONE = "Asia/Shanghai";
+      const DETAIL_CLICK_DELAY_MS = 300;
+      let pendingDetailTimer = null;
       const state = {
         items: [],
         limit: 50,
@@ -1436,6 +1438,23 @@
         return false;
       }
 
+      function cancelPendingDetail() {
+        if (pendingDetailTimer === null) {
+          return;
+        }
+
+        window.clearTimeout(pendingDetailTimer);
+        pendingDetailTimer = null;
+      }
+
+      function scheduleDetail(reportId) {
+        cancelPendingDetail();
+        pendingDetailTimer = window.setTimeout(() => {
+          pendingDetailTimer = null;
+          void loadDetail(reportId);
+        }, DETAIL_CLICK_DELAY_MS);
+      }
+
       function renderSummary() {
         const pageIndex = Math.floor(state.offset / state.limit) + 1;
         const rangeStart = state.total === 0 ? 0 : state.offset + 1;
@@ -1780,6 +1799,8 @@
           return;
         }
 
+        cancelPendingDetail();
+
         const previewButton = target.closest("[data-attachment-preview]");
         if (previewButton instanceof HTMLElement) {
           const reportId = Number.parseInt(previewButton.getAttribute("data-attachment-preview-report-id") || "", 10);
@@ -1805,7 +1826,7 @@
           return;
         }
 
-        if (hasSelectedTextWithin(trigger)) {
+        if (event.detail > 1 || hasSelectedTextWithin(trigger)) {
           return;
         }
 
@@ -1814,7 +1835,11 @@
           return;
         }
 
-        void loadDetail(reportId);
+        scheduleDetail(reportId);
+      });
+
+      elements.tableBody.addEventListener("dblclick", () => {
+        cancelPendingDetail();
       });
 
       elements.detailModalBackdrop.addEventListener("click", () => {

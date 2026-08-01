@@ -268,7 +268,9 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     assert.match(pageHtml, /tag note-pill/);
     assert.match(pageHtml, /function hasSelectedTextWithin\(element\)/);
     assert.match(pageHtml, /selection\.getRangeAt\(index\)\.intersectsNode\(element\)/);
-    assert.match(pageHtml, /if \(hasSelectedTextWithin\(trigger\)\) \{\s*return;\s*\}/);
+    assert.match(pageHtml, /if \(event\.detail > 1 \|\| hasSelectedTextWithin\(trigger\)\) \{\s*return;\s*\}/);
+    assert.match(pageHtml, /function scheduleDetail\(reportId\)/);
+    assert.match(pageHtml, /elements\.tableBody\.addEventListener\("dblclick", \(\) => \{\s*cancelPendingDetail\(\);\s*\}\)/);
     assert.doesNotMatch(pageHtml, /<label for="needsReview">需复核<\/label>/);
 
     const listResponse = await fetch(
