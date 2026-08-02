@@ -81,6 +81,8 @@ export interface AppConfig {
   adminPort?: number;
   adminUsername?: string;
   adminPassword?: string;
+  adminGuestUsername?: string;
+  adminGuestPassword?: string;
 }
 
 export interface SelfCanaryConfig {
@@ -527,6 +529,8 @@ export function getAppConfig(): AppConfig {
     adminPort: readConfiguredPositiveNumberEnv("WECHATY_ADMIN_PORT", 8788),
     adminUsername: readOptionalEnv("WECHATY_ADMIN_USERNAME"),
     adminPassword: readOptionalEnv("WECHATY_ADMIN_PASSWORD"),
+    adminGuestUsername: readOptionalEnv("WECHATY_ADMIN_GUEST_USERNAME"),
+    adminGuestPassword: readOptionalEnv("WECHATY_ADMIN_GUEST_PASSWORD"),
   };
 }
 
@@ -706,6 +710,23 @@ export function validateAppConfig(config: AppConfig): ConfigValidationResult {
 
   if ((config.adminUsername && !config.adminPassword) || (!config.adminUsername && config.adminPassword)) {
     warnings.push("WECHATY_ADMIN_USERNAME and WECHATY_ADMIN_PASSWORD should be configured together.");
+  }
+
+  if (
+    (config.adminGuestUsername && !config.adminGuestPassword) ||
+    (!config.adminGuestUsername && config.adminGuestPassword)
+  ) {
+    warnings.push(
+      "WECHATY_ADMIN_GUEST_USERNAME and WECHATY_ADMIN_GUEST_PASSWORD should be configured together.",
+    );
+  }
+
+  if (
+    config.adminUsername &&
+    config.adminGuestUsername &&
+    config.adminUsername === config.adminGuestUsername
+  ) {
+    errors.push("WECHATY_ADMIN_GUEST_USERNAME must differ from WECHATY_ADMIN_USERNAME.");
   }
 
   if (config.channelsParseError) {

@@ -11,7 +11,11 @@ import {
   getAdminReimbursementReportDetail,
   listAdminReimbursementReports,
 } from "../scenarios/reimbursement/repository.js";
-import { createAdminAuthMiddleware } from "./auth.js";
+import {
+  createAdminAuthMiddleware,
+  enforceAdminWriteAccess,
+  getAdminSession,
+} from "./auth.js";
 
 const ADMIN_BASE_PATH = "/reimbursement";
 const DEFAULT_LIMIT = 50;
@@ -154,6 +158,8 @@ export function createApp(input?: {
   const adminAuth = createAdminAuthMiddleware({
     username: config.adminUsername,
     password: config.adminPassword,
+    guestUsername: config.adminGuestUsername,
+    guestPassword: config.adminGuestPassword,
   });
   const app = express();
 
@@ -167,7 +173,24 @@ export function createApp(input?: {
     response.sendFile(path.join(staticDir, "admin.html"));
   });
 
-  app.get(`${ADMIN_BASE_PATH}/api/reports`, adminAuth, (request, response, next) => {
+  app.use(`${ADMIN_BASE_PATH}/api`, adminAuth, enforceAdminWriteAccess);
+
+  app.get(`${ADMIN_BASE_PATH}/api/session`, (_request, response) => {
+    const session = getAdminSession(response);
+
+    response.status(200).json({
+      success: true,
+      account: {
+        username: session?.username,
+        role: session?.role,
+      },
+      permissions: {
+        canWrite: session?.canWrite === true,
+      },
+    });
+  });
+
+  app.get(`${ADMIN_BASE_PATH}/api/reports`, (request, response, next) => {
     try {
       const result = listAdminReimbursementReports(
         {
@@ -185,7 +208,7 @@ export function createApp(input?: {
     }
   });
 
-  app.get(`${ADMIN_BASE_PATH}/api/reports/:id`, adminAuth, (request, response, next) => {
+  app.get(`${ADMIN_BASE_PATH}/api/reports/:id`, (request, response, next) => {
     try {
       const reportId = parsePositiveInteger(request.params.id, "id");
       const report = getAdminReimbursementReportDetail(reportId);
@@ -210,7 +233,7 @@ export function createApp(input?: {
     }
   });
 
-  app.delete(`${ADMIN_BASE_PATH}/api/reports/:id`, adminAuth, (request, response, next) => {
+  app.delete(`${ADMIN_BASE_PATH}/api/reports/:id`, (request, response, next) => {
     try {
       const reportId = parsePositiveInteger(request.params.id, "id");
       const deleted = deleteReimbursementReport(reportId);
@@ -234,7 +257,7 @@ export function createApp(input?: {
     }
   });
 
-  app.get(`${ADMIN_BASE_PATH}/api/attachments/:attachmentId/content`, adminAuth, (request, response, next) => {
+  app.get(`${ADMIN_BASE_PATH}/api/attachments/:attachmentId/content`, (request, response, next) => {
     try {
       const attachmentId = parsePositiveInteger(request.params.attachmentId, "attachmentId");
       const attachment = findAdminReimbursementAttachment(attachmentId);

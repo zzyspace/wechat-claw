@@ -15,6 +15,8 @@ const managedEnvKeys = [
   "WECHATY_ADMIN_PASSWORD",
   "WECHATY_ADMIN_PORT",
   "WECHATY_ADMIN_USERNAME",
+  "WECHATY_ADMIN_GUEST_PASSWORD",
+  "WECHATY_ADMIN_GUEST_USERNAME",
   "WECHATY_PUPPET",
   "WECHATY_STATE_DIR",
   "WECHATY_TIMEZONE",
@@ -224,6 +226,8 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
   applyEnv({
     WECHATY_ADMIN_USERNAME: "admin",
     WECHATY_ADMIN_PASSWORD: "secret-pass",
+    WECHATY_ADMIN_GUEST_USERNAME: "guest",
+    WECHATY_ADMIN_GUEST_PASSWORD: "guest-secret-pass",
   });
   const seeded = seedReports();
   const server = await startServer();
@@ -276,7 +280,46 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     assert.match(pageHtml, /if \(event\.detail > 1 \|\| hasSelectedTextWithin\(trigger\)\) \{\s*return;\s*\}/);
     assert.match(pageHtml, /function scheduleDetail\(reportId\)/);
     assert.match(pageHtml, /elements\.tableBody\.addEventListener\("dblclick", \(\) => \{\s*cancelPendingDetail\(\);\s*\}\)/);
+    assert.match(pageHtml, /id="accessPill" hidden/);
+    assert.match(pageHtml, /id="deleteColumnHeader" hidden/);
+    assert.match(pageHtml, /const deleteCell = state\.canWrite/);
+    assert.match(pageHtml, /fetch\(buildAuthFetchUrl\(`\$\{BASE_PATH\}\/api\/session`\)/);
     assert.doesNotMatch(pageHtml, /<label for="needsReview">需复核<\/label>/);
+
+    const adminSessionResponse = await fetch(`${server.baseUrl}/reimbursement/api/session`, {
+      headers: createAdminAuthHeaders(),
+    });
+    assert.equal(adminSessionResponse.status, 200);
+    assert.deepEqual(await adminSessionResponse.json(), {
+      success: true,
+      account: {
+        username: "admin",
+        role: "admin",
+      },
+      permissions: {
+        canWrite: true,
+      },
+    });
+
+    const guestSessionResponse = await fetch(`${server.baseUrl}/reimbursement/api/session`, {
+      headers: createAdminAuthHeaders("guest", "guest-secret-pass"),
+    });
+    assert.equal(guestSessionResponse.status, 200);
+    assert.deepEqual(await guestSessionResponse.json(), {
+      success: true,
+      account: {
+        username: "guest",
+        role: "readonly",
+      },
+      permissions: {
+        canWrite: false,
+      },
+    });
+
+    const guestPageResponse = await fetch(`${server.baseUrl}/reimbursement`, {
+      headers: createAdminAuthHeaders("guest", "guest-secret-pass"),
+    });
+    assert.equal(guestPageResponse.status, 200);
 
     const listResponse = await fetch(
       `${server.baseUrl}/reimbursement/api/reports?search=%E6%B5%8B%E8%AF%95%E8%8F%9C%E5%9C%BA&reporter=Ry&note=%E6%99%9A%E9%A4%90&limit=20`,
@@ -296,6 +339,15 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     assert.equal(listPayload.items[0]?.billAttachment?.id, seeded.existingAttachmentId);
     assert.equal(listPayload.items[0]?.billAttachment?.mimeType, "image/jpeg");
     assert.equal(listPayload.items[0]?.billAttachment?.exists, true);
+
+    const guestListResponse = await fetch(`${server.baseUrl}/reimbursement/api/reports?limit=20`, {
+      headers: {
+        ...createAdminAuthHeaders("guest", "guest-secret-pass"),
+        Accept: "application/json",
+      },
+    });
+    assert.equal(guestListResponse.status, 200);
+    assert.equal((await guestListResponse.json()).success, true);
 
     const detailResponse = await fetch(`${server.baseUrl}/reimbursement/api/reports/${seeded.reportId}`, {
       headers: {
@@ -333,6 +385,44 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     );
     assert.equal(missingAttachmentResponse.status, 404);
     assert.equal((await missingAttachmentResponse.json()).success, false);
+
+    const guestDeleteResponse = await fetch(
+      `${server.baseUrl}/reimbursement/api/reports/${seeded.missingReportId}`,
+      {
+        method: "DELETE",
+        headers: {
+          ...createAdminAuthHeaders("guest", "guest-secret-pass"),
+          Accept: "application/json",
+        },
+      },
+    );
+    assert.equal(guestDeleteResponse.status, 403);
+    assert.deepEqual(await guestDeleteResponse.json(), {
+      success: false,
+      error: {
+        message: "只读账号无权执行删除或其他编辑操作。",
+      },
+    });
+
+    const guestWriteResponse = await fetch(`${server.baseUrl}/reimbursement/api/reports`, {
+      method: "POST",
+      headers: {
+        ...createAdminAuthHeaders("guest", "guest-secret-pass"),
+        Accept: "application/json",
+      },
+    });
+    assert.equal(guestWriteResponse.status, 403);
+
+    const reportAfterGuestDeleteAttempt = await fetch(
+      `${server.baseUrl}/reimbursement/api/reports/${seeded.missingReportId}`,
+      {
+        headers: {
+          ...createAdminAuthHeaders("guest", "guest-secret-pass"),
+          Accept: "application/json",
+        },
+      },
+    );
+    assert.equal(reportAfterGuestDeleteAttempt.status, 200);
 
     const deleteResponse = await fetch(`${server.baseUrl}/reimbursement/api/reports/${seeded.missingReportId}`, {
       method: "DELETE",

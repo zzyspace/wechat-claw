@@ -60,6 +60,8 @@ const managedEnvKeys = [
   "WECHATY_ADMIN_PORT",
   "WECHATY_ADMIN_USERNAME",
   "WECHATY_ADMIN_PASSWORD",
+  "WECHATY_ADMIN_GUEST_USERNAME",
+  "WECHATY_ADMIN_GUEST_PASSWORD",
   "WECHATY_ENV_FILE",
 ];
 const originalEnv = new Map(managedEnvKeys.map((key) => [key, process.env[key]]));
@@ -149,6 +151,8 @@ test("getAppConfig parses WECHATY_CHANNELS_JSON with mixed delivery targets", ()
     WECHATY_ADMIN_PORT: "8788",
     WECHATY_ADMIN_USERNAME: "admin",
     WECHATY_ADMIN_PASSWORD: "secret-pass",
+    WECHATY_ADMIN_GUEST_USERNAME: "guest",
+    WECHATY_ADMIN_GUEST_PASSWORD: "guest-secret-pass",
   });
 
   const config = getAppConfig();
@@ -190,6 +194,8 @@ test("getAppConfig parses WECHATY_CHANNELS_JSON with mixed delivery targets", ()
   assert.equal(config.adminPort, 8788);
   assert.equal(config.adminUsername, "admin");
   assert.equal(config.adminPassword, "secret-pass");
+  assert.equal(config.adminGuestUsername, "guest");
+  assert.equal(config.adminGuestPassword, "guest-secret-pass");
   assert.deepEqual(validation.errors, []);
   assert.equal(config.channels[0]?.deliveryTargets.length, 2);
   assert.deepEqual(config.channels[0]?.deliveryTargets[1], {
@@ -372,6 +378,38 @@ test("getAppConfig defaults log settings from state dir", () => {
   assert.equal(config.adminPort, 8788);
   assert.equal(config.adminUsername, undefined);
   assert.equal(config.adminPassword, undefined);
+  assert.equal(config.adminGuestUsername, undefined);
+  assert.equal(config.adminGuestPassword, undefined);
+});
+
+test("validateAppConfig validates optional admin guest credentials", () => {
+  applyEnv({
+    WECHATY_ADMIN_USERNAME: "admin",
+    WECHATY_ADMIN_PASSWORD: "secret-pass",
+    WECHATY_ADMIN_GUEST_USERNAME: "guest",
+    WECHATY_ADMIN_GUEST_PASSWORD: undefined,
+  });
+
+  const incompleteGuestValidation = validateAppConfig(getAppConfig());
+  assert(
+    incompleteGuestValidation.warnings.some((warning) =>
+      warning.includes("WECHATY_ADMIN_GUEST_USERNAME and WECHATY_ADMIN_GUEST_PASSWORD"),
+    ),
+  );
+
+  applyEnv({
+    WECHATY_ADMIN_USERNAME: "admin",
+    WECHATY_ADMIN_PASSWORD: "secret-pass",
+    WECHATY_ADMIN_GUEST_USERNAME: "admin",
+    WECHATY_ADMIN_GUEST_PASSWORD: "guest-secret-pass",
+  });
+
+  const duplicateUsernameValidation = validateAppConfig(getAppConfig());
+  assert(
+    duplicateUsernameValidation.errors.includes(
+      "WECHATY_ADMIN_GUEST_USERNAME must differ from WECHATY_ADMIN_USERNAME.",
+    ),
+  );
 });
 
 test("getAppConfig parses self canary settings", () => {

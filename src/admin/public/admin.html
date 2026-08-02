@@ -1070,6 +1070,7 @@
             <span class="pill" id="totalPill">总数 0</span>
             <span class="pill" id="pagePill">第 1 页</span>
             <span class="pill" id="timeZonePill">时区 Asia/Shanghai</span>
+            <span class="pill" id="accessPill" hidden></span>
           </div>
           <div class="status" id="statusText">等待加载</div>
         </div>
@@ -1091,7 +1092,7 @@
                   <th>需复核</th>
                   <th>更新时间</th>
                   <th>报账 ID</th>
-                  <th>删除</th>
+                  <th id="deleteColumnHeader" hidden>删除</th>
                 </tr>
               </thead>
               <tbody id="tableBody"></tbody>
@@ -1155,6 +1156,7 @@
         selectedReportId: null,
         attachmentPreviewReportId: null,
         timeZone: DEFAULT_TIME_ZONE,
+        canWrite: false,
         deletingIds: new Set(),
       };
 
@@ -1165,8 +1167,10 @@
         totalPill: document.getElementById("totalPill"),
         pagePill: document.getElementById("pagePill"),
         timeZonePill: document.getElementById("timeZonePill"),
+        accessPill: document.getElementById("accessPill"),
         statusText: document.getElementById("statusText"),
         tableBody: document.getElementById("tableBody"),
+        deleteColumnHeader: document.getElementById("deleteColumnHeader"),
         emptyState: document.getElementById("emptyState"),
         rangeText: document.getElementById("rangeText"),
         prevPage: document.getElementById("prevPage"),
@@ -1551,6 +1555,9 @@
           row.setAttribute("data-report-id", String(item.id));
           row.classList.toggle("is-selected", item.id === state.selectedReportId);
           const isDeleting = state.deletingIds.has(item.id);
+          const deleteCell = state.canWrite
+            ? `<td><button class="button-danger" type="button" data-delete-id="${item.id}" ${isDeleting ? "disabled" : ""}>${isDeleting ? "删除中" : "删除"}</button></td>`
+            : "";
           row.innerHTML = `
             <td>${renderStoreCell(item)}</td>
             <td class="column-created-at">${renderCreatedAtCell(item.createdAt)}</td>
@@ -1562,7 +1569,7 @@
             <td><span class="tag ${item.needsReview ? "warn" : "ok"}">${item.needsReview ? "需复核" : "已确认"}</span></td>
             <td>${escapeHtml(formatTimestamp(item.updatedAt))}</td>
             <td><button type="button" data-report-id="${item.id}">#${item.id}</button></td>
-            <td><button class="button-danger" type="button" data-delete-id="${item.id}" ${isDeleting ? "disabled" : ""}>${isDeleting ? "删除中" : "删除"}</button></td>
+            ${deleteCell}
           `;
           fragment.appendChild(row);
         }
@@ -1866,7 +1873,32 @@
         }
       }
 
+      async function loadSession() {
+        const response = await fetch(buildAuthFetchUrl(`${BASE_PATH}/api/session`), {
+          headers: {
+            Accept: "application/json",
+          },
+        });
+        const payload = await response.json();
+
+        if (!response.ok || !payload.success) {
+          throw new Error(payload?.error?.message || "账号权限加载失败");
+        }
+
+        state.canWrite = payload.permissions?.canWrite === true;
+        elements.deleteColumnHeader.hidden = !state.canWrite;
+        elements.accessPill.hidden = false;
+        elements.accessPill.textContent = state.canWrite
+          ? `管理员 ${payload.account?.username || ""}`.trim()
+          : `只读账号 ${payload.account?.username || ""}`.trim();
+      }
+
       async function deleteReport(reportId) {
+        if (!state.canWrite) {
+          setStatus("只读账号无权删除报账记录。", true);
+          return;
+        }
+
         if (!window.confirm(`确认删除报账 #${reportId} 吗？此操作不可恢复。`)) {
           return;
         }
@@ -1973,6 +2005,10 @@
 
         const deleteButton = target.closest("button[data-delete-id]");
         if (deleteButton) {
+          if (!state.canWrite) {
+            return;
+          }
+
           const reportId = Number.parseInt(deleteButton.getAttribute("data-delete-id") || "", 10);
           if (!Number.isFinite(reportId) || reportId <= 0 || state.deletingIds.has(reportId)) {
             return;
@@ -2048,8 +2084,17 @@
         }
       });
 
+      async function initialize() {
+        try {
+          await loadSession();
+          await loadReports();
+        } catch (error) {
+          setStatus(error instanceof Error ? error.message : String(error), true);
+        }
+      }
+
       writeFiltersFromUrl();
-      void loadReports();
+      void initialize();
     </script>
   </body>
 </html>
