@@ -275,6 +275,9 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     assert.match(pageHtml, /placeholder="支持部分匹配，如 补票 \/ 平账"/);
     assert.match(pageHtml, /\.field \{[^}]*min-width: 0;/s);
     assert.match(pageHtml, /\.field input,\s*\.field select \{[^}]*min-width: 0;/s);
+    assert.match(pageHtml, /@supports \(-webkit-touch-callout: none\)/);
+    assert.match(pageHtml, /\.field input\[type="date"\] \{\s*padding-inline: 0;/);
+    assert.match(pageHtml, /::-webkit-date-and-time-value \{\s*padding-inline-start: 14px;/);
     assert.match(pageHtml, /renderRemarkContent\(item\.note, "-"\)/);
     assert.match(pageHtml, /tag note-pill/);
     assert.match(pageHtml, /function hasSelectedTextWithin\(element\)/);

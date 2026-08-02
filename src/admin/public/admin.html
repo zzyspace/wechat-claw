@@ -967,6 +967,17 @@
           padding-top: 18px;
         }
 
+        @supports (-webkit-touch-callout: none) {
+          .field input[type="date"] {
+            padding-inline: 0;
+          }
+
+          .field input[type="date"]::-webkit-date-and-time-value {
+            padding-inline-start: 14px;
+            text-align: left;
+          }
+        }
+
         .controls-grid,
         .detail-grid {
           grid-template-columns: 1fr;
