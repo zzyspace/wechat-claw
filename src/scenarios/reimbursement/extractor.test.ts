@@ -114,11 +114,11 @@ test("extractReimbursementReport calls qwen3.5-flash and normalizes amount, date
     assert.match(promptText, /对于订单截图里的“总预算”金额，如果图中没有比它更明确的最终付款金额，也应把它作为最终付款总金额候选值/);
     assert.match(promptText, /微信聊天界面的转账截图如果包含多条转账记录，应把每条转账的金额加起来/);
     assert.match(promptText, /支付宝聊天界面的转账或代付截图如果包含多条记录，应把每条转账或代付的金额加起来/);
-    assert.match(promptText, /如果识别结果表示这笔记录是退款、退回、退款成功或退款到账，amount 应返回负数/);
+    assert.match(promptText, /只有当前交易状态明确显示“退款成功”“已退款”“退款到账”或“退回成功”时，amount 才返回负数/);
     assert.match(promptText, /只要明确包含“店长报账”字样一律输出 manager_reimbursement/);
     assert.match(promptText, /当前常用 code 包括 food、flower、salary/);
     assert.match(promptText, /报账图片中的商品是鲜花、花卉、绿植、花材、花束、菊花、百合等花卉类型，一律输出 flower/);
-    assert.match(promptText, /如果报账图片中出现“金辉”字样，一律输出 food/);
+    assert.match(promptText, /如果报账图片中出现“金辉”字样，或商户名称包含“泉州市丰泽区喜相逢百货商行”，一律输出 food/);
     assert.equal(result.extractorCode, "model-qwen-qwen3.5-flash");
     assert.equal(result.resultJson.amount, 128.5);
     assert.equal(result.resultJson.currency, "CNY");
@@ -518,6 +518,168 @@ test("extractReimbursementReport retries once when the model returns an empty st
     assert.equal(retryLog.context?.responseId, "empty-first-attempt");
     assert.equal(retryLog.context?.retryModel, "qwen3.5-plus");
     assert.equal(retryLog.context?.usageTotalTokens, 120);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test("extractReimbursementReport retries with qwen3.5-plus when the first model request fails", async () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "wechat-claw-reimbursement-extractor-"));
+  const imagePath = path.join(tempDir, "receipt.jpg");
+  const logs: Array<{ level: string; message: string; context?: Record<string, unknown> }> = [];
+  let fetchCallCount = 0;
+  const requestedModels: string[] = [];
+
+  try {
+    fs.writeFileSync(imagePath, Buffer.from([0xff, 0xd8, 0xff, 0xd9]));
+
+    globalThis.fetch = (async (_url, init) => {
+      fetchCallCount += 1;
+      requestedModels.push(JSON.parse(String(init?.body)).model);
+
+      if (fetchCallCount === 1) {
+        return new Response(
+          JSON.stringify({
+            error: {
+              message: "The provided URL does not appear to be valid.",
+              code: "invalid_parameter_error",
+            },
+          }),
+          {
+            status: 400,
+            headers: {
+              "Content-Type": "application/json",
+            },
+          },
+        );
+      }
+
+      return new Response(
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  amount: "111.30",
+                  currency: "CNY",
+                  expense_category: "other",
+                  voucher_date: "2026-08-02",
+                  merchant: "测试商户",
+                  document_no: null,
+                  voucher_type: "小票",
+                  ocr_text: "实付 111.30",
+                  confidence: 0.92,
+                }),
+              },
+            },
+          ],
+        }),
+        {
+          status: 200,
+          headers: {
+            "Content-Type": "application/json",
+          },
+        },
+      );
+    }) as typeof fetch;
+
+    const result = await extractReimbursementReport(
+      {
+        rawMessageId: 1113,
+        channelCode: "reimbursement_fuzzy_qz_manager",
+        channelName: "Fuzzy泉州-店长报账群",
+        reporter: "Memories.",
+        textContent: "(非文本消息)",
+        sentAt: "2026-08-02T02:57:13.000Z",
+        timeZone: "Asia/Shanghai",
+        attachments: [
+          {
+            type: "image",
+            localPath: imagePath,
+            sha256: "retry-on-request-failure",
+            mimeType: "image/jpeg",
+          },
+        ],
+      },
+      {
+        provider: "qwen",
+        model: "qwen3.5-flash",
+        apiKey: "test-key",
+        baseUrl: "https://example.com",
+      },
+      createLogger(logs),
+    );
+
+    assert.equal(fetchCallCount, 2);
+    assert.deepEqual(requestedModels, ["qwen3.5-flash", "qwen3.5-plus"]);
+    assert.equal(result.extractorCode, "model-qwen-qwen3.5-plus");
+    assert.equal(result.resultJson.amount, 111.3);
+    assert.equal(result.needsReview, false);
+
+    const retryLog = logs.find((entry) => entry.message === "Reimbursement model extraction failed, retrying once");
+    assert(retryLog);
+    assert.equal(retryLog.level, "warn");
+    assert.equal(retryLog.context?.attempt, 1);
+    assert.equal(retryLog.context?.model, "qwen3.5-flash");
+    assert.equal(retryLog.context?.retryModel, "qwen3.5-plus");
+    assert.match(String(retryLog.context?.error), /request failed: 400/);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test("extractReimbursementReport falls back after both model requests fail", async () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "wechat-claw-reimbursement-extractor-"));
+  const imagePath = path.join(tempDir, "receipt.jpg");
+  let fetchCallCount = 0;
+  const requestedModels: string[] = [];
+
+  try {
+    fs.writeFileSync(imagePath, Buffer.from([0xff, 0xd8, 0xff, 0xd9]));
+
+    globalThis.fetch = (async (_url, init) => {
+      fetchCallCount += 1;
+      requestedModels.push(JSON.parse(String(init?.body)).model);
+
+      return new Response(JSON.stringify({ error: { message: "temporary failure" } }), {
+        status: 500,
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+    }) as typeof fetch;
+
+    const result = await extractReimbursementReport(
+      {
+        rawMessageId: 6,
+        channelCode: "reimbursement_a",
+        channelName: "AI报账群",
+        reporter: "小王",
+        textContent: "(非文本消息)",
+        sentAt: "2026-05-21T02:00:00.000Z",
+        timeZone: "Asia/Shanghai",
+        attachments: [
+          {
+            type: "image",
+            localPath: imagePath,
+            sha256: "both-requests-fail",
+            mimeType: "image/jpeg",
+          },
+        ],
+      },
+      {
+        provider: "qwen",
+        model: "qwen3.5-flash",
+        apiKey: "test-key",
+        baseUrl: "https://example.com",
+      },
+    );
+
+    assert.equal(fetchCallCount, 2);
+    assert.deepEqual(requestedModels, ["qwen3.5-flash", "qwen3.5-plus"]);
+    assert.equal(result.extractorCode, "model-qwen-qwen3.5-flash-fallback");
+    assert.equal(result.resultJson.amount, null);
+    assert.equal(result.needsReview, true);
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });
   }

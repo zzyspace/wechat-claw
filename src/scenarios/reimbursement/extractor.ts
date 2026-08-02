@@ -589,11 +589,32 @@ export async function extractReimbursementReport(
         rawMessageId: input.rawMessageId,
         reporter: input.reporter,
       });
-      const attemptResult = await callReimbursementModel(input, {
-        ...config,
-        provider,
-        model: effectiveModel,
-      });
+      let attemptResult: ReimbursementModelAttemptResult;
+
+      try {
+        attemptResult = await callReimbursementModel(input, {
+          ...config,
+          provider,
+          model: effectiveModel,
+        });
+      } catch (error) {
+        if (attempt <= EMPTY_STRUCTURED_RESULT_MAX_RETRIES) {
+          logger?.warn("Reimbursement model extraction failed, retrying once", {
+            attempt,
+            attachmentCount: input.attachments.length,
+            channelCode: input.channelCode ?? "(empty)",
+            error,
+            model: effectiveModel,
+            provider,
+            rawMessageId: input.rawMessageId,
+            reporter: input.reporter,
+            retryModel,
+          });
+          continue;
+        }
+
+        throw error;
+      }
       modelResult = attemptResult.modelResult;
 
       if (modelResult) {
