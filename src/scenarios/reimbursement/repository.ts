@@ -44,6 +44,14 @@ export interface ReimbursementImageSourceLookupInput {
   messageExternalId: string;
 }
 
+export interface ReimbursementImageReferenceLookupInput {
+  channelCode?: string;
+  channelExternalId?: string;
+  channelName: string;
+  senderName: string;
+  sentAt: string;
+}
+
 export interface RecentTextOnlyReportLookupInput {
   beforeIso: string;
   channelCode?: string;
@@ -594,6 +602,43 @@ export function findReimbursementReportByImageMessageExternalId(
     .get(input.messageExternalId, channelValue) as { reimbursementReportId: number } | undefined;
 
   return row ? selectReportById(row.reimbursementReportId) : null;
+}
+
+export function findUniqueReimbursementReportByImageReference(
+  input: ReimbursementImageReferenceLookupInput,
+): ReimbursementReportRecord | null {
+  const db = getDatabase();
+  const channelCondition = input.channelExternalId
+    ? "rm.channel_external_id = ?"
+    : input.channelCode
+      ? "rm.channel_code = ?"
+      : "rm.channel_name = ?";
+  const channelValue = input.channelExternalId ?? input.channelCode ?? input.channelName;
+  const rows = db
+    .prepare(
+      `
+        SELECT DISTINCT rrs.reimbursement_report_id as reimbursementReportId
+        FROM reimbursement_report_sources rrs
+        INNER JOIN raw_messages rm ON rm.id = rrs.raw_message_id
+        INNER JOIN reimbursement_reports rr ON rr.id = rrs.reimbursement_report_id
+        WHERE ${channelCondition}
+          AND rm.sender_name = ?
+          AND rm.sent_at = ?
+          AND EXISTS (
+            SELECT 1
+            FROM message_attachments ma
+            WHERE ma.raw_message_id = rm.id
+              AND ma.attachment_type = 'image'
+          )
+        ORDER BY rrs.reimbursement_report_id DESC
+        LIMIT 2
+      `,
+    )
+    .all(channelValue, input.senderName, input.sentAt) as Array<{
+    reimbursementReportId: number;
+  }>;
+
+  return rows.length === 1 ? selectReportById(rows[0]!.reimbursementReportId) : null;
 }
 
 export function findLatestReimbursementReportByReceiptText(input: {

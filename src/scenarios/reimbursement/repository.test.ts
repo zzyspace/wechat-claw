@@ -10,6 +10,7 @@ import {
   attachRemarkToReimbursementReport,
   findAdminReimbursementAttachment,
   findReimbursementReportByImageMessageExternalId,
+  findUniqueReimbursementReportByImageReference,
   getAdminReimbursementReportDetail,
   listAdminReimbursementReports,
   mergePrimaryImageIntoTextOnlyReimbursementReport,
@@ -79,6 +80,71 @@ test("findReimbursementReportByImageMessageExternalId matches an image source on
       channelExternalId: "reimbursement_repository_room_other",
       channelName: "报账仓储测试群",
       messageExternalId,
+    }),
+    null,
+  );
+  assert.equal(
+    findUniqueReimbursementReportByImageReference({
+      channelExternalId: "reimbursement_repository_room_image_lookup",
+      channelName: "报账仓储测试群",
+      senderName: "小图",
+      sentAt: "2026-05-22T10:00:00.000Z",
+    })?.id,
+    report.id,
+  );
+});
+
+test("findUniqueReimbursementReportByImageReference rejects ambiguous same-time images", () => {
+  const sentAt = "2026-05-22T11:00:00.000Z";
+
+  for (const suffix of ["a", "b"]) {
+    const messageExternalId = `reimbursement-repository-image-reference-ambiguous-${suffix}`;
+    const primaryMessage = saveRawMessage({
+      messageExternalId,
+      channelCode: "reimbursement_repository_ambiguous",
+      channelName: "报账仓储歧义测试群",
+      senderName: "小同秒",
+      messageType: "6",
+      textContent: "(非文本消息)",
+      messageSentAt: sentAt,
+      eventReceivedAt: sentAt,
+      dedupeKey: messageExternalId,
+      attachments: [
+        {
+          type: "image",
+          localPath: `/tmp/${messageExternalId}.jpg`,
+          sha256: `${messageExternalId}-sha256`,
+          mimeType: "image/jpeg",
+        },
+      ],
+    });
+    saveReimbursementReport({
+      channelCode: "reimbursement_repository_ambiguous",
+      channelName: "报账仓储歧义测试群",
+      reporter: "小同秒",
+      amount: suffix === "a" ? 10 : 20,
+      currency: "CNY",
+      expenseCategory: "other",
+      voucherDate: "2026-05-22",
+      voucherDateSource: "message",
+      note: "",
+      evidenceType: "image",
+      merchant: null,
+      documentNo: null,
+      voucherType: null,
+      ocrText: null,
+      confidence: 0.72,
+      needsReview: false,
+      primaryRawMessageId: primaryMessage.rawMessageId,
+    });
+  }
+
+  assert.equal(
+    findUniqueReimbursementReportByImageReference({
+      channelCode: "reimbursement_repository_ambiguous",
+      channelName: "报账仓储歧义测试群",
+      senderName: "小同秒",
+      sentAt,
     }),
     null,
   );

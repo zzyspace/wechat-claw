@@ -1421,6 +1421,89 @@ test("handleMessage executes a reimbursement command when replying directly to t
   assert.equal(delivered.some((item) => item.text === "已处理"), true);
 });
 
+test("handleMessage matches a production-shaped flattened image reply by sender and sent time", { concurrency: false }, async () => {
+  const logs: Array<{ level: string; message: string; context?: Record<string, unknown> }> = [];
+  const delivered: DeliveredMessage[] = [];
+  const imageMessageId = "reimbursement-flattened-image-command-source";
+  const commandMessageId = "reimbursement-flattened-image-command-reply";
+  const sourceDate = new Date("2026-05-22T10:42:44.000Z");
+  const reporter = "小生产引用";
+  const context = createMessageContext([
+    createReimbursementChannelWithTargets([{ type: "room_topic", value: "AI报账群" }]),
+  ]);
+  const wechaty = createWechatyMock(delivered);
+
+  await handleMessage(
+    {
+      id: () => imageMessageId,
+      date: () => sourceDate,
+      room: async () => ({
+        alias: async () => reporter,
+        id: () => "reimbursement_room_flattened_image_command",
+        topic: async () => "AI报账群",
+      }),
+      self: () => false,
+      talker: async () => ({
+        id: () => "reimbursement_talker_flattened_image_command",
+        name: () => reporter,
+      }),
+      text: () => "",
+      toFileBox: async () => ({
+        name: "flattened-image-command.jpg",
+        toBuffer: async () => Buffer.from([0xff, 0xd8, 0xff, 0xd9]),
+      }),
+      type: () => 6,
+      wechaty,
+    },
+    context,
+    createLogger(logs),
+  );
+
+  const initialReport = listRecentReimbursementReports(1000).find(
+    (report) => report.reporter === reporter,
+  );
+  assert(initialReport);
+
+  await handleMessage(
+    {
+      id: () => commandMessageId,
+      date: () => sourceDate,
+      room: async () => ({
+        alias: async () => reporter,
+        id: () => "reimbursement_room_flattened_image_command",
+        topic: async () => "AI报账群",
+      }),
+      self: () => false,
+      talker: async () => ({
+        id: () => "reimbursement_talker_flattened_image_command",
+        name: () => reporter,
+      }),
+      text: () => `「${reporter}：[图片]」<br/>- - - - - - - - - - - - - - -<br/>130.25`,
+      type: () => 7,
+      wechaty,
+    },
+    context,
+    createLogger(logs),
+  );
+
+  const reporterReports = listRecentReimbursementReports(1000).filter(
+    (report) => report.reporter === reporter,
+  );
+  const updatedReport = reporterReports.find((report) => report.id === initialReport.id);
+  const commandLog = logs.find(
+    (entry) =>
+      entry.message === "Persisted reimbursement receipt command raw message" &&
+      entry.context?.messageExternalId === commandMessageId,
+  );
+
+  assert(updatedReport);
+  assert.equal(updatedReport.amount, 130.25);
+  assert.equal(updatedReport.needsReview, false);
+  assert.equal(reporterReports.length, 1);
+  assert.equal(commandLog?.context?.quotedImageMatchStrategy, "sender_and_sent_at");
+  assert.equal(delivered.some((item) => item.text === "已处理"), true);
+});
+
 test("handleMessage updates reimbursement amount and clears review when replying a number to a receipt", { concurrency: false }, async () => {
   const logs: Array<{ level: string; message: string; context?: Record<string, unknown> }> = [];
   const delivered: DeliveredMessage[] = [];

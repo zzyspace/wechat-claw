@@ -27,6 +27,7 @@ import {
   findRecentTextOnlyReimbursementReport,
   findReimbursementReportByImageMessageExternalId,
   findReimbursementReportByReceiptMessageExternalId,
+  findUniqueReimbursementReportByImageReference,
   getReimbursementReportByRawMessageId,
   mergePrimaryImageIntoTextOnlyReimbursementReport,
   moveRemarkToReimbursementReport,
@@ -103,6 +104,7 @@ interface ParsedReimbursementReceiptReply {
   commandText: string;
   quotedMessageExternalId?: string;
   quotedMessageType?: number;
+  quotedSenderName?: string;
   quotedText: string;
 }
 
@@ -557,7 +559,8 @@ async function handleReimbursementMessage(
     logger,
   );
 
-  const quotedImageReport =
+  let quotedImageMatchStrategy: "message_external_id" | "sender_and_sent_at" | undefined;
+  let quotedImageReport =
     receiptReply?.quotedMessageExternalId
       ? findReimbursementReportByImageMessageExternalId({
           channelCode: parsed.channel.code,
@@ -566,6 +569,25 @@ async function handleReimbursementMessage(
           messageExternalId: receiptReply.quotedMessageExternalId,
         })
       : null;
+
+  if (quotedImageReport) {
+    quotedImageMatchStrategy = "message_external_id";
+  } else if (
+    receiptReply?.quotedMessageType === 3 &&
+    receiptReply.quotedSenderName &&
+    parsed.messageSentAt
+  ) {
+    quotedImageReport = findUniqueReimbursementReportByImageReference({
+      channelCode: parsed.channel.code,
+      channelExternalId: parsed.channelExternalId,
+      channelName: parsed.roomTopic,
+      senderName: receiptReply.quotedSenderName,
+      sentAt: parsed.messageSentAt,
+    });
+    if (quotedImageReport) {
+      quotedImageMatchStrategy = "sender_and_sent_at";
+    }
+  }
 
   if (
     receiptReply &&
@@ -580,6 +602,7 @@ async function handleReimbursementMessage(
       logger,
       receiptReply,
       quotedImageReport,
+      quotedImageMatchStrategy,
     );
     return;
   }
@@ -1194,6 +1217,7 @@ async function handleReimbursementReceiptReplyCommand(
   logger: Logger,
   receiptReply: ParsedReimbursementReceiptReply,
   quotedImageReport: ReimbursementReportRecord | null = null,
+  quotedImageMatchStrategy?: "message_external_id" | "sender_and_sent_at",
 ) {
   const normalized = normalizeMessage({
     messageExternalId: parsed.messageExternalId,
@@ -1236,6 +1260,9 @@ async function handleReimbursementReceiptReplyCommand(
     matchedReportId: matchedReport?.id,
     messageExternalId: parsed.messageExternalId,
     quotedMessageExternalId: receiptReply.quotedMessageExternalId,
+    quotedImageMatchStrategy,
+    quotedMessageType: receiptReply.quotedMessageType,
+    quotedSenderName: receiptReply.quotedSenderName,
     quotedText: receiptReply.quotedText,
     rawMessageId: saveResult.rawMessageId,
     roomTopic: parsed.roomTopic,
@@ -1670,6 +1697,7 @@ function parseReimbursementReceiptReplyFromRawPayload(
   const quotedText = referXml ? extractXmlTagValue(referXml, "content") : null;
   const quotedMessageExternalId = referXml ? extractXmlTagValue(referXml, "svrid") : null;
   const quotedMessageTypeText = referXml ? extractXmlTagValue(referXml, "type") : null;
+  const quotedSenderName = referXml ? extractXmlTagValue(referXml, "displayname") : null;
   const quotedMessageType = quotedMessageTypeText ? Number(quotedMessageTypeText) : undefined;
 
   if (!commandText || !quotedText) {
@@ -1680,6 +1708,7 @@ function parseReimbursementReceiptReplyFromRawPayload(
     commandText: sanitizeReplyText(commandText),
     quotedMessageExternalId: quotedMessageExternalId?.trim() || undefined,
     quotedMessageType: Number.isFinite(quotedMessageType) ? quotedMessageType : undefined,
+    quotedSenderName: quotedSenderName?.trim() || undefined,
     quotedText: sanitizeReplyText(quotedText),
   };
 }
@@ -1695,19 +1724,21 @@ function parseReimbursementReceiptReplyFromText(text: string): ParsedReimburseme
 
   const quotedPart = normalized.slice(0, dividerIndex).trim();
   const commandText = normalized.slice(dividerIndex + divider.length).trim();
-  const quotedText = extractQuotedReplyText(quotedPart);
+  const quoted = extractQuotedReply(quotedPart);
 
-  if (!quotedText || !commandText) {
+  if (!quoted || !commandText) {
     return null;
   }
 
   return {
     commandText: sanitizeReplyText(commandText),
-    quotedText: sanitizeReplyText(quotedText),
+    quotedMessageType: quoted.text === "[图片]" ? 3 : undefined,
+    quotedSenderName: quoted.senderName,
+    quotedText: sanitizeReplyText(quoted.text),
   };
 }
 
-function extractQuotedReplyText(quotedPart: string) {
+function extractQuotedReply(quotedPart: string): { senderName?: string; text: string } | null {
   if (!quotedPart.startsWith("「") || !quotedPart.endsWith("」")) {
     return null;
   }
@@ -1721,10 +1752,13 @@ function extractQuotedReplyText(quotedPart: string) {
       : Math.max(colonIndex, asciiColonIndex);
 
   if (splitIndex < 0) {
-    return inner.trim();
+    return { text: inner.trim() };
   }
 
-  return inner.slice(splitIndex + 1).trim();
+  return {
+    senderName: inner.slice(0, splitIndex).trim() || undefined,
+    text: inner.slice(splitIndex + 1).trim(),
+  };
 }
 
 function extractXmlTagValue(
