@@ -1432,7 +1432,7 @@ async function handleReimbursementReceiptReplyCommand(
     logger,
     parsed.channel,
     parsed.roomTopic,
-    REIMBURSEMENT_COMMAND_PROCESSED_TEXT,
+    buildReimbursementCommandProcessedText(command),
   );
 
   await sendReceivedRoomMessageDebugNotification(message, context, logger, parsed.channel, [
@@ -1899,8 +1899,28 @@ function isReimbursementCommandResponseText(text: string) {
   return (
     text === REIMBURSEMENT_COMMAND_PROCESSED_TEXT ||
     text === REIMBURSEMENT_COMMAND_NOT_FOUND_TEXT ||
-    text === REIMBURSEMENT_COMMAND_UNSUPPORTED_TEXT
+    text === REIMBURSEMENT_COMMAND_UNSUPPORTED_TEXT ||
+    text === "该报账已删除" ||
+    new RegExp(`^金额已修改为 ${REIMBURSEMENT_AMOUNT_PATTERN} 元$`).test(text) ||
+    text.startsWith("分类已修改为：") ||
+    text.startsWith("备注已添加：") ||
+    text.startsWith("已归入 ")
   );
+}
+
+function buildReimbursementCommandProcessedText(command: ReimbursementReceiptCommand) {
+  switch (command.kind) {
+    case "delete":
+      return "该报账已删除";
+    case "set_amount":
+      return `金额已修改为 ${formatReimbursementReceiptAmount(command.amount)} 元`;
+    case "set_category":
+      return `分类已修改为：${getReimbursementExpenseCategoryLabel(command.expenseCategory)}`;
+    case "append_note":
+      return `备注已添加：${command.note}`;
+    case "set_monthly_ledger_note":
+      return `已归入 ${command.note}`;
+  }
 }
 
 function formatReimbursementReceiptAmount(amount: number) {

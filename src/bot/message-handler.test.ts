@@ -1175,7 +1175,10 @@ test("handleMessage deletes a reimbursement when replying delete to the receipt 
   assert(logs.some((entry) => entry.message === "Executed reimbursement receipt command"));
   assert.equal(
     delivered.some(
-      (item) => item.targetType === "room_topic" && item.targetValue === "AI报账群" && item.text === "已处理",
+      (item) =>
+        item.targetType === "room_topic" &&
+        item.targetValue === "AI报账群" &&
+        item.text === "该报账已删除",
     ),
     true,
   );
@@ -1323,7 +1326,10 @@ test("handleMessage deletes a negative reimbursement when replying delete to a n
     assert(logs.some((entry) => entry.message === "Executed reimbursement receipt command"));
     assert.equal(
       delivered.some(
-        (item) => item.targetType === "room_topic" && item.targetValue === "AI报账群" && item.text === "已处理",
+        (item) =>
+          item.targetType === "room_topic" &&
+          item.targetValue === "AI报账群" &&
+          item.text === "该报账已删除",
       ),
       true,
     );
@@ -1418,7 +1424,7 @@ test("handleMessage executes a reimbursement command when replying directly to t
   assert(rawCommandMessage);
   assert.equal(rawCommandMessage.textContent, "88.5");
   assert(logs.some((entry) => entry.message === "Executed reimbursement receipt command"));
-  assert.equal(delivered.some((item) => item.text === "已处理"), true);
+  assert.equal(delivered.some((item) => item.text === "金额已修改为 88.5 元"), true);
 });
 
 test("handleMessage matches a production-shaped flattened image reply by sender and sent time", { concurrency: false }, async () => {
@@ -1501,7 +1507,7 @@ test("handleMessage matches a production-shaped flattened image reply by sender 
   assert.equal(updatedReport.needsReview, false);
   assert.equal(reporterReports.length, 1);
   assert.equal(commandLog?.context?.quotedImageMatchStrategy, "sender_and_sent_at");
-  assert.equal(delivered.some((item) => item.text === "已处理"), true);
+  assert.equal(delivered.some((item) => item.text === "金额已修改为 130.25 元"), true);
 });
 
 test("handleMessage updates reimbursement amount and clears review when replying a number to a receipt", { concurrency: false }, async () => {
@@ -1617,7 +1623,10 @@ test("handleMessage updates reimbursement amount and clears review when replying
   assert(logs.some((entry) => entry.message === "Executed reimbursement receipt command"));
   assert.equal(
     delivered.some(
-      (item) => item.targetType === "room_topic" && item.targetValue === "AI报账群" && item.text === "已处理",
+      (item) =>
+        item.targetType === "room_topic" &&
+        item.targetValue === "AI报账群" &&
+        item.text === "金额已修改为 88.5 元",
     ),
     true,
   );
@@ -1730,7 +1739,10 @@ test("handleMessage updates reimbursement amount to a negative value when replyi
   assert(logs.some((entry) => entry.message === "Executed reimbursement receipt command"));
   assert.equal(
     delivered.some(
-      (item) => item.targetType === "room_topic" && item.targetValue === "AI报账群" && item.text === "已处理",
+      (item) =>
+        item.targetType === "room_topic" &&
+        item.targetValue === "AI报账群" &&
+        item.text === "金额已修改为 -88.5 元",
     ),
     true,
   );
@@ -1863,7 +1875,10 @@ test("handleMessage updates reimbursement category when replying category comman
   assert(logs.some((entry) => entry.message === "Executed reimbursement receipt command"));
   assert.equal(
     delivered.some(
-      (item) => item.targetType === "room_topic" && item.targetValue === "AI报账群" && item.text === "已处理",
+      (item) =>
+        item.targetType === "room_topic" &&
+        item.targetValue === "AI报账群" &&
+        item.text === "分类已修改为：水电",
     ),
     true,
   );
@@ -2005,7 +2020,10 @@ test("handleMessage appends monthly ledger note when replying x月账 to a recei
   assert(logs.some((entry) => entry.message === "Executed reimbursement receipt command"));
   assert.equal(
     delivered.some(
-      (item) => item.targetType === "room_topic" && item.targetValue === "AI报账群" && item.text === "已处理",
+      (item) =>
+        item.targetType === "room_topic" &&
+        item.targetValue === "AI报账群" &&
+        item.text === "已归入 4月账",
     ),
     true,
   );
@@ -2142,7 +2160,10 @@ test("handleMessage appends note when replying note command to a receipt", { con
   assert(logs.some((entry) => entry.message === "Executed reimbursement receipt command"));
   assert.equal(
     delivered.some(
-      (item) => item.targetType === "room_topic" && item.targetValue === "AI报账群" && item.text === "已处理",
+      (item) =>
+        item.targetType === "room_topic" &&
+        item.targetValue === "AI报账群" &&
+        item.text === "备注已添加：补开发票",
     ),
     true,
   );
@@ -2395,7 +2416,7 @@ test("handleMessage replies not found message for valid reimbursement receipt co
 test("handleMessage ignores replies that quote bot command response text", { concurrency: false }, async () => {
   const logs: Array<{ level: string; message: string; context?: Record<string, unknown> }> = [];
   const delivered: DeliveredMessage[] = [];
-  const reporterName = "回复已处理专测";
+  const reporterName = "回复执行结果专测";
   const context = createMessageContext([
     createReimbursementChannelWithTargets([{ type: "room_topic", value: "AI报账群" }]),
   ]);
@@ -2442,7 +2463,7 @@ test("handleMessage ignores replies that quote bot command response text", { con
         id: () => "reimbursement_talker_ignore_command_response",
         name: () => "Ryan。",
       }),
-      text: () => "「Claw：已处理」<br/>- - - - - - - - - - - - - - -<br/>2550",
+      text: () => "「Claw：金额已修改为 88.5 元」<br/>- - - - - - - - - - - - - - -<br/>2550",
       type: () => 7,
       wechaty,
     },
