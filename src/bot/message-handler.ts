@@ -25,6 +25,7 @@ import {
   findRecentImageRawMessage,
   findRecentRemarkTextSource,
   findRecentTextOnlyReimbursementReport,
+  findReimbursementReportByImageMessageExternalId,
   findReimbursementReportByReceiptMessageExternalId,
   getReimbursementReportByRawMessageId,
   mergePrimaryImageIntoTextOnlyReimbursementReport,
@@ -38,7 +39,10 @@ import {
   getReimbursementExpenseCategoryLabel,
   normalizeReimbursementExpenseCategory,
 } from "../scenarios/reimbursement/categories.js";
-import type { ReimbursementExpenseCategory } from "../scenarios/reimbursement/types.js";
+import type {
+  ReimbursementExpenseCategory,
+  ReimbursementReportRecord,
+} from "../scenarios/reimbursement/types.js";
 import { resolveMessageSentAt } from "./cold-start-filter.js";
 import { countSuccessfulDeliveries, sendTextToTarget, sendTextToTargets } from "./delivery-contact.js";
 const REIMBURSEMENT_RECEIPT_PENDING_TEXT = "此次报账待核验";
@@ -98,6 +102,7 @@ interface ParsedPrivateMessage {
 interface ParsedReimbursementReceiptReply {
   commandText: string;
   quotedMessageExternalId?: string;
+  quotedMessageType?: number;
   quotedText: string;
 }
 
@@ -552,8 +557,30 @@ async function handleReimbursementMessage(
     logger,
   );
 
-  if (receiptReply && isReimbursementReceiptText(receiptReply.quotedText)) {
-    await handleReimbursementReceiptReplyCommand(message, parsed, context, logger, receiptReply);
+  const quotedImageReport =
+    receiptReply?.quotedMessageExternalId
+      ? findReimbursementReportByImageMessageExternalId({
+          channelCode: parsed.channel.code,
+          channelExternalId: parsed.channelExternalId,
+          channelName: parsed.roomTopic,
+          messageExternalId: receiptReply.quotedMessageExternalId,
+        })
+      : null;
+
+  if (
+    receiptReply &&
+    (isReimbursementReceiptText(receiptReply.quotedText) ||
+      receiptReply.quotedMessageType === 3 ||
+      quotedImageReport)
+  ) {
+    await handleReimbursementReceiptReplyCommand(
+      message,
+      parsed,
+      context,
+      logger,
+      receiptReply,
+      quotedImageReport,
+    );
     return;
   }
 
@@ -1166,6 +1193,7 @@ async function handleReimbursementReceiptReplyCommand(
   context: MessageContext,
   logger: Logger,
   receiptReply: ParsedReimbursementReceiptReply,
+  quotedImageReport: ReimbursementReportRecord | null = null,
 ) {
   const normalized = normalizeMessage({
     messageExternalId: parsed.messageExternalId,
@@ -1183,6 +1211,7 @@ async function handleReimbursementReceiptReplyCommand(
   const saveResult = saveRawMessage(normalized);
   const command = parseReimbursementReceiptCommand(receiptReply.commandText);
   const matchedReport =
+    quotedImageReport ??
     (receiptReply.quotedMessageExternalId
       ? findReimbursementReportByReceiptMessageExternalId(receiptReply.quotedMessageExternalId)
       : null) ??
@@ -1640,6 +1669,8 @@ function parseReimbursementReceiptReplyFromRawPayload(
   });
   const quotedText = referXml ? extractXmlTagValue(referXml, "content") : null;
   const quotedMessageExternalId = referXml ? extractXmlTagValue(referXml, "svrid") : null;
+  const quotedMessageTypeText = referXml ? extractXmlTagValue(referXml, "type") : null;
+  const quotedMessageType = quotedMessageTypeText ? Number(quotedMessageTypeText) : undefined;
 
   if (!commandText || !quotedText) {
     return null;
@@ -1648,6 +1679,7 @@ function parseReimbursementReceiptReplyFromRawPayload(
   return {
     commandText: sanitizeReplyText(commandText),
     quotedMessageExternalId: quotedMessageExternalId?.trim() || undefined,
+    quotedMessageType: Number.isFinite(quotedMessageType) ? quotedMessageType : undefined,
     quotedText: sanitizeReplyText(quotedText),
   };
 }

@@ -1332,6 +1332,95 @@ test("handleMessage deletes a negative reimbursement when replying delete to a n
   }
 });
 
+test("handleMessage executes a reimbursement command when replying directly to the original image", { concurrency: false }, async () => {
+  const logs: Array<{ level: string; message: string; context?: Record<string, unknown> }> = [];
+  const delivered: DeliveredMessage[] = [];
+  const imageMessageId = "reimbursement-direct-image-command-source";
+  const commandMessageId = "reimbursement-direct-image-command-reply";
+  const rawPayloadByMessageId = {
+    [commandMessageId]: {
+      AppMsgType: 57,
+      Content:
+        "<msg><appmsg><title><![CDATA[88.5]]></title><refermsg>" +
+        "<type>3</type><svrid><![CDATA[" +
+        imageMessageId +
+        "]]></svrid><displayname><![CDATA[小图]]></displayname>" +
+        "<content><![CDATA[[图片]]]></content></refermsg></appmsg></msg>",
+      MsgType: 49,
+    },
+  };
+  const context = createMessageContext([
+    createReimbursementChannelWithTargets([{ type: "room_topic", value: "AI报账群" }]),
+  ]);
+  const wechaty = createWechatyMock(delivered, { rawPayloadByMessageId });
+
+  await handleMessage(
+    {
+      id: () => imageMessageId,
+      room: async () => ({
+        alias: async () => "小图",
+        id: () => "reimbursement_room_direct_image_command",
+        topic: async () => "AI报账群",
+      }),
+      self: () => false,
+      talker: async () => ({
+        id: () => "reimbursement_talker_direct_image_command",
+        name: () => "Ryan。",
+      }),
+      text: () => "",
+      toFileBox: async () => ({
+        name: "direct-image-command.jpg",
+        toBuffer: async () => Buffer.from([0xff, 0xd8, 0xff, 0xd9]),
+      }),
+      type: () => 6,
+      wechaty,
+    },
+    context,
+    createLogger(logs),
+  );
+
+  const initialReport = listRecentReimbursementReports(1000).find(
+    (report) => report.reporter === "小图",
+  );
+  assert(initialReport);
+
+  await handleMessage(
+    {
+      id: () => commandMessageId,
+      room: async () => ({
+        alias: async () => "小图",
+        id: () => "reimbursement_room_direct_image_command",
+        topic: async () => "AI报账群",
+      }),
+      self: () => false,
+      talker: async () => ({
+        id: () => "reimbursement_talker_direct_image_command",
+        name: () => "Ryan。",
+      }),
+      text: () => "<msg><appmsg><title>88.5</title></appmsg></msg>",
+      type: () => 49,
+      wechaty,
+    },
+    context,
+    createLogger(logs),
+  );
+
+  const updatedReport = listRecentReimbursementReports(1000).find(
+    (report) => report.id === initialReport.id,
+  );
+  const rawCommandMessage = listRecentRawMessages(1000).find(
+    (message) => message.messageExternalId === commandMessageId,
+  );
+
+  assert(updatedReport);
+  assert.equal(updatedReport.amount, 88.5);
+  assert.equal(updatedReport.needsReview, false);
+  assert(rawCommandMessage);
+  assert.equal(rawCommandMessage.textContent, "88.5");
+  assert(logs.some((entry) => entry.message === "Executed reimbursement receipt command"));
+  assert.equal(delivered.some((item) => item.text === "已处理"), true);
+});
+
 test("handleMessage updates reimbursement amount and clears review when replying a number to a receipt", { concurrency: false }, async () => {
   const logs: Array<{ level: string; message: string; context?: Record<string, unknown> }> = [];
   const delivered: DeliveredMessage[] = [];

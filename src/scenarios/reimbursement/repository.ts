@@ -37,6 +37,13 @@ export interface RecentPrimaryImageReportLookupInput {
   sinceIso: string;
 }
 
+export interface ReimbursementImageSourceLookupInput {
+  channelCode?: string;
+  channelExternalId?: string;
+  channelName: string;
+  messageExternalId: string;
+}
+
 export interface RecentTextOnlyReportLookupInput {
   beforeIso: string;
   channelCode?: string;
@@ -551,6 +558,40 @@ export function findReimbursementReportByReceiptMessageExternalId(
       `,
     )
     .get(messageExternalId) as { reimbursementReportId: number } | undefined;
+
+  return row ? selectReportById(row.reimbursementReportId) : null;
+}
+
+export function findReimbursementReportByImageMessageExternalId(
+  input: ReimbursementImageSourceLookupInput,
+): ReimbursementReportRecord | null {
+  const db = getDatabase();
+  const channelCondition = input.channelExternalId
+    ? "rm.channel_external_id = ?"
+    : input.channelCode
+      ? "rm.channel_code = ?"
+      : "rm.channel_name = ?";
+  const channelValue = input.channelExternalId ?? input.channelCode ?? input.channelName;
+  const row = db
+    .prepare(
+      `
+        SELECT rrs.reimbursement_report_id as reimbursementReportId
+        FROM reimbursement_report_sources rrs
+        INNER JOIN raw_messages rm ON rm.id = rrs.raw_message_id
+        INNER JOIN reimbursement_reports rr ON rr.id = rrs.reimbursement_report_id
+        WHERE rm.message_external_id = ?
+          AND ${channelCondition}
+          AND EXISTS (
+            SELECT 1
+            FROM message_attachments ma
+            WHERE ma.raw_message_id = rm.id
+              AND ma.attachment_type = 'image'
+          )
+        ORDER BY rrs.id DESC
+        LIMIT 1
+      `,
+    )
+    .get(input.messageExternalId, channelValue) as { reimbursementReportId: number } | undefined;
 
   return row ? selectReportById(row.reimbursementReportId) : null;
 }

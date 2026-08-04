@@ -9,6 +9,7 @@ import { saveRawMessage } from "../../core/storage/raw-message-repository.js";
 import {
   attachRemarkToReimbursementReport,
   findAdminReimbursementAttachment,
+  findReimbursementReportByImageMessageExternalId,
   getAdminReimbursementReportDetail,
   listAdminReimbursementReports,
   mergePrimaryImageIntoTextOnlyReimbursementReport,
@@ -23,6 +24,65 @@ function formatLocalTimestamp(value: string, timeZone: string) {
   const parts = getZonedDateParts(date, timeZone);
   return `${parts.year}-${String(parts.month).padStart(2, "0")}-${String(parts.day).padStart(2, "0")} ${String(parts.hour).padStart(2, "0")}:${String(parts.minute).padStart(2, "0")}:${String(parts.second).padStart(2, "0")}`;
 }
+
+test("findReimbursementReportByImageMessageExternalId matches an image source only in its room", () => {
+  const messageExternalId = "reimbursement-repository-image-source-lookup";
+  const primaryMessage = saveRawMessage({
+    messageExternalId,
+    channelCode: "reimbursement_repository_test",
+    channelExternalId: "reimbursement_repository_room_image_lookup",
+    channelName: "报账仓储测试群",
+    senderName: "小图",
+    messageType: "6",
+    textContent: "(非文本消息)",
+    eventReceivedAt: "2026-05-22T10:00:00.000Z",
+    dedupeKey: messageExternalId,
+    attachments: [
+      {
+        type: "image",
+        localPath: "/tmp/reimbursement-repository-image-source-lookup.jpg",
+        sha256: "reimbursement-repository-image-source-lookup-sha256",
+        mimeType: "image/jpeg",
+      },
+    ],
+  });
+  const report = saveReimbursementReport({
+    channelCode: "reimbursement_repository_test",
+    channelName: "报账仓储测试群",
+    reporter: "小图",
+    amount: 20,
+    currency: "CNY",
+    expenseCategory: "other",
+    voucherDate: "2026-05-22",
+    voucherDateSource: "message",
+    note: "",
+    evidenceType: "image",
+    merchant: null,
+    documentNo: null,
+    voucherType: null,
+    ocrText: null,
+    confidence: 0.72,
+    needsReview: false,
+    primaryRawMessageId: primaryMessage.rawMessageId,
+  });
+
+  assert.equal(
+    findReimbursementReportByImageMessageExternalId({
+      channelExternalId: "reimbursement_repository_room_image_lookup",
+      channelName: "报账仓储测试群",
+      messageExternalId,
+    })?.id,
+    report.id,
+  );
+  assert.equal(
+    findReimbursementReportByImageMessageExternalId({
+      channelExternalId: "reimbursement_repository_room_other",
+      channelName: "报账仓储测试群",
+      messageExternalId,
+    }),
+    null,
+  );
+});
 
 test("saveReimbursementReport backdates createdAt when note contains x月账", () => {
   const primaryMessage = saveRawMessage({
