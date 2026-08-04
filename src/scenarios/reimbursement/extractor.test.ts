@@ -111,6 +111,8 @@ test("extractReimbursementReport calls qwen3.5-flash and normalizes amount, date
     assert.equal(requestedDispatcher, undefined);
     const promptText = requestedBody.messages?.[0]?.content?.[0]?.text ?? "";
     assert.match(promptText, /外卖或商城订单页如果有多个商品、套餐或明细金额，但页面没有明确总金额，应把每个商品或明细的实际价格加总/);
+    assert.match(promptText, /外卖或商城的订单列表截图如果同时展示多笔已完成订单，应把每笔完整可见订单的“实付”金额相加/);
+    assert.match(promptText, /被截图截断且看不到实付金额的订单不计入/);
     assert.match(promptText, /对于订单截图里的“总预算”金额，如果图中没有比它更明确的最终付款金额，也应把它作为最终付款总金额候选值/);
     assert.match(promptText, /微信聊天界面的转账截图如果包含多条转账记录，应把每条转账的金额加起来/);
     assert.match(promptText, /支付宝聊天界面的转账或代付截图如果包含多条记录，应把每条转账或代付的金额加起来/);
