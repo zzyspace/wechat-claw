@@ -2266,13 +2266,28 @@ test("handleMessage fallback receipt matching prefers the same reporter when pen
   assert.equal(updatedReportB.needsReview, true);
 });
 
-test("handleMessage replies unsupported message for unsupported reimbursement receipt command", { concurrency: false }, async () => {
+test("handleMessage appends an unrecognized reimbursement receipt reply as a note", { concurrency: false }, async () => {
   const logs: Array<{ level: string; message: string; context?: Record<string, unknown> }> = [];
   const delivered: DeliveredMessage[] = [];
+  const imageMessageId = "reimbursement-unrecognized-note-image";
+  const commandMessageId = "reimbursement-unrecognized-note-command";
   const context = createMessageContext([
     createReimbursementChannelWithTargets([{ type: "room_topic", value: "AI报账群" }]),
   ]);
-  const wechaty = createWechatyMock(delivered);
+  const wechaty = createWechatyMock(delivered, {
+    rawPayloadByMessageId: {
+      [commandMessageId]: {
+        AppMsgType: 57,
+        Content:
+          "<msg><appmsg><title><![CDATA[客户招待]]></title><refermsg>" +
+          "<type>3</type><svrid><![CDATA[" +
+          imageMessageId +
+          "]]></svrid><displayname><![CDATA[小错]]></displayname>" +
+          "<content><![CDATA[[图片]]]></content></refermsg></appmsg></msg>",
+        MsgType: 49,
+      },
+    },
+  });
 
   await handleMessage(
     {
@@ -2297,7 +2312,7 @@ test("handleMessage replies unsupported message for unsupported reimbursement re
 
   await handleMessage(
     {
-      id: () => "reimbursement-unsupported-image-second",
+      id: () => imageMessageId,
       room: async () => ({
         alias: async () => "小错",
         id: () => "reimbursement_room_unsupported",
@@ -2326,7 +2341,7 @@ test("handleMessage replies unsupported message for unsupported reimbursement re
 
   await handleMessage(
     {
-      id: () => "reimbursement-unsupported-command",
+      id: () => commandMessageId,
       room: async () => ({
         alias: async () => "小错",
         id: () => "reimbursement_room_unsupported",
@@ -2337,8 +2352,8 @@ test("handleMessage replies unsupported message for unsupported reimbursement re
         id: () => "reimbursement_talker_unsupported",
         name: () => "Ryan。",
       }),
-      text: () => "「机器人：报账30元已录入(category: other)」\n- - - - - - - - - - - - - - -\n30元",
-      type: () => 7,
+      text: () => "<msg><appmsg><title>客户招待</title></appmsg></msg>",
+      type: () => 49,
       wechaty,
     },
     context,
@@ -2349,16 +2364,17 @@ test("handleMessage replies unsupported message for unsupported reimbursement re
 
   assert(reportAfterCommand);
   assert.equal(reportAfterCommand.amount, 30);
+  assert.equal(reportAfterCommand.note, "午餐报账 30元；客户招待");
   assert.equal(
     delivered.some(
       (item) =>
         item.targetType === "room_topic" &&
         item.targetValue === "AI报账群" &&
-        item.text === "不支持的指令",
+        item.text === "备注已添加：客户招待",
     ),
     true,
   );
-  assert(logs.some((entry) => entry.message === "Ignored unsupported reimbursement receipt command"));
+  assert(logs.some((entry) => entry.message === "Executed reimbursement receipt command"));
 });
 
 test("handleMessage replies not found message for valid reimbursement receipt command without matched report", { concurrency: false }, async () => {

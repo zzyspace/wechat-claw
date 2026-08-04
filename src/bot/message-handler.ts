@@ -1809,6 +1809,10 @@ function normalizeReplyStructureText(text: string) {
 function parseReimbursementReceiptCommand(text: string): ReimbursementReceiptCommand | null {
   const normalized = text.trim();
 
+  if (!normalized) {
+    return null;
+  }
+
   if (normalized.toLowerCase() === "delete") {
     return { kind: "delete" };
   }
@@ -1837,14 +1841,12 @@ function parseReimbursementReceiptCommand(text: string): ReimbursementReceiptCom
   if (categoryMatch) {
     const expenseCategory = normalizeReceiptCommandExpenseCategory(categoryMatch[1] ?? "");
 
-    if (!expenseCategory) {
-      return null;
+    if (expenseCategory) {
+      return {
+        expenseCategory,
+        kind: "set_category",
+      };
     }
-
-    return {
-      expenseCategory,
-      kind: "set_category",
-    };
   }
 
   if (new RegExp(`^${REIMBURSEMENT_AMOUNT_PATTERN}$`).test(normalized)) {
@@ -1854,7 +1856,10 @@ function parseReimbursementReceiptCommand(text: string): ReimbursementReceiptCom
     };
   }
 
-  return null;
+  return {
+    kind: "append_note",
+    note: normalized,
+  };
 }
 
 function normalizeReceiptCommandExpenseCategory(value: string): ReimbursementExpenseCategory | null {
