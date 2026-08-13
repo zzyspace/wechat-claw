@@ -151,7 +151,7 @@ WECHATY_CHANNELS_JSON=[{"code":"loss_a","enabled":true,"scenario":"loss-report",
 - `WECHATY_ROOM_CANARY_AUTO_RESTART_ENABLED`: 连续失败达到阈值后是否自动重启 `wechat-claw`，默认 `false`
 - `WECHATY_TIMEZONE`: 日期边界和 cron 解释时区，默认 `Asia/Shanghai`
 - `WECHATY_DEBUG_CONTACT_NAME`: `"[wechat-claw]"` 调试信息的接收联系人，不参与业务日报发送；上线通知始终走这里
-- `WECHATY_MANUAL_REIMBURSEMENT_CONTACT_NAME`: 允许通过私聊发送“补录报账”结构化命令的联系人昵称；未配置时该能力关闭
+- `WECHATY_MANUAL_REIMBURSEMENT_CONTACT_NAME`: 允许通过私聊或报账群发送“补录报账”结构化命令的联系人昵称；未配置时该能力关闭
 - `WECHATY_ADMIN_HOST`: 报账后台监听地址，默认 `127.0.0.1`
 - `WECHATY_ADMIN_PORT`: 报账后台监听端口，默认 `8788`
 - `WECHATY_ADMIN_USERNAME/WECHATY_ADMIN_PASSWORD`: 报账后台 Basic Auth 账号密码；未配置时 `/reimbursement` 会返回 `503`
@@ -242,7 +242,7 @@ WECHATY_REIMBURSEMENT_EXTRACTION_BASE_URL=https://dashscope.aliyuncs.com/compati
   - 指令执行成功后，bot 会回复 `已处理`
   - 指令格式正确但没找到对应报账时，bot 会回复 `未找到对应报账`
   - 指令不支持时，bot 会回复 `不支持的指令`
-- 如果配置了 `WECHATY_MANUAL_REIMBURSEMENT_CONTACT_NAME`，该联系人还可以通过私聊发送固定结构化命令手工补录报账；成功后 bot 会私聊回复 `已处理`
+- 如果配置了 `WECHATY_MANUAL_REIMBURSEMENT_CONTACT_NAME`，该联系人可以通过私聊或报账群发送固定结构化命令手工补录报账；成功后 bot 会在命令所在私聊或群聊回复 `已处理`
   - 固定格式如下：
     ```text
     补录报账
@@ -255,6 +255,7 @@ WECHATY_REIMBURSEMENT_EXTRACTION_BASE_URL=https://dashscope.aliyuncs.com/compati
     ```
   - 必填字段：`channel_code`、`reporter`、`amount`、`category`
   - 可选字段：`note`、`sent_at`
+  - 在报账群中发送时，`channel_code` 可省略并自动使用当前群的 channel code；如果显式填写，则必须与当前群一致
   - 支持中英文键名和中英文冒号，例如 `群聊代码：reimbursement_fuzzy`、`报账人：张三`、`金额：36.5`、`分类：食材`
 - 也就是说：
   - `summarySchedule` 留空时，不会自动发送日报
@@ -372,17 +373,29 @@ note: 午餐报账
 sent_at: 2026-07-02T14:32:00+08:00
 ```
 
-私聊补录说明：
+在报账群内补录时可以省略 `channel_code`：
+
+```text
+补录报账
+reporter: 张三
+amount: 36.5
+category: 食材
+note: 午餐报账
+sent_at: 2026-07-02T14:32:00+08:00
+```
+
+微信补录说明：
 
 - 需要先配置 `WECHATY_MANUAL_REIMBURSEMENT_CONTACT_NAME=你的微信昵称`
-- 只有这个联系人发来的私聊消息会触发补录；其他私聊消息会被忽略
+- 只有这个联系人发来的私聊或报账群消息会触发补录；其他联系人发送的同类命令会被忽略
 - 第一行必须精确写 `补录报账`
-- 必填字段：`channel_code`、`reporter`、`amount`、`category`
+- 私聊必填字段：`channel_code`、`reporter`、`amount`、`category`
+- 报账群必填字段：`reporter`、`amount`、`category`；`channel_code` 可省略，显式填写时必须与当前群一致
 - 可选字段：`note`、`sent_at`
 - `channel_code` 必须是当前 `WECHATY_CHANNELS_JSON` 里已存在且 `scenario=reimbursement` 的 channel code
 - `category` 必须是现有报账类别或别名，例如 `food / flower / salary / rent / utilities / manager_reimbursement / planned_expense / other / 食材 / 花 / 花卉 / 工资 / 房租 / 水电 / 店长报账 / 预报账 / 其他`
-- `sent_at` 建议使用带时区的 ISO 时间，例如 `2026-07-02T14:32:00+08:00`；不传时默认使用收到这条私聊命令的时间
-- 补录成功后，bot 会私聊回复 `已处理`
+- `sent_at` 建议使用带时区的 ISO 时间，例如 `2026-07-02T14:32:00+08:00`；不传时默认使用收到这条微信命令的时间
+- 补录成功后，bot 会在命令所在私聊或群聊回复 `已处理`
 - 如果字段格式不对，例如金额不是数字、类别不存在、缺少必填字段，bot 会回复格式示例
 - 如果 `channel_code` 不存在，或该 channel 不是报账 channel，bot 会回复 `不支持的指令`
 

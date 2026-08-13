@@ -84,6 +84,7 @@ interface ParsedRoomMessage {
   messageType: string;
   normalizedText: string;
   roomTopic: string;
+  senderContactName: string;
   senderExternalId?: string;
   senderName: string;
   typeValue: unknown;
@@ -133,6 +134,7 @@ export async function handleMessage(message: any, context: MessageContext, logge
     ? (matchChannelByRoomTopic(context.channels, roomTopic) ?? undefined)
     : undefined;
   const senderExternalId = talker && typeof talker.id === "function" ? talker.id() : undefined;
+  const senderContactName = await resolveContactName(talker, senderName);
 
   if (message.self && typeof message.self === "function" && message.self()) {
     await handleSelfMessage(
@@ -247,6 +249,7 @@ export async function handleMessage(message: any, context: MessageContext, logge
     messageSentAt,
     normalizedText,
     roomTopic,
+    senderContactName,
     senderExternalId,
     senderName,
     typeValue,
@@ -551,6 +554,10 @@ async function handleReimbursementMessage(
     text: parsed.normalizedText,
     typeValue: parsed.typeValue,
   });
+
+  if (await handleRoomManualReimbursementCommand(message, parsed, context, logger)) {
+    return;
+  }
 
   const receiptReply = await extractReimbursementReceiptReply(
     message,
@@ -1208,6 +1215,111 @@ async function handleReimbursementMessage(
     `入库: ${saveResult.inserted ? "新消息" : "已去重"}`,
     `报账处理: ${savedExtraction.status} / amount=${report.amount ?? "待复核"} / review=${savedExtraction.needsReview ? "是" : "否"}`,
   ]);
+}
+
+async function handleRoomManualReimbursementCommand(
+  message: any,
+  parsed: ParsedRoomMessage,
+  context: MessageContext,
+  logger: Logger,
+) {
+  const firstLine = extractFirstLine(parsed.normalizedText);
+
+  if (firstLine !== "补录报账") {
+    return false;
+  }
+
+  const allowedContactName = context.manualReimbursementContactName?.trim();
+
+  if (!allowedContactName || parsed.senderContactName !== allowedContactName) {
+    logger.info("Ignored room manual reimbursement command due to sender mismatch", {
+      expectedSenderName: allowedContactName ?? "(not configured)",
+      messageExternalId: parsed.messageExternalId,
+      roomTopic: parsed.roomTopic,
+      senderContactName: parsed.senderContactName,
+      senderName: parsed.senderName,
+    });
+    return true;
+  }
+
+  let command;
+
+  try {
+    command = parseManualReimbursementImportMessageCommand(parsed.normalizedText, {
+      defaultChannelCode: parsed.channel.code,
+    });
+  } catch (error) {
+    logger.warn("Rejected malformed room manual reimbursement command", {
+      commandText: parsed.normalizedText,
+      message: error instanceof Error ? error.message : String(error),
+      roomTopic: parsed.roomTopic,
+      senderName: parsed.senderName,
+    });
+    await sendReimbursementCommandResponse(
+      message,
+      logger,
+      parsed.channel,
+      parsed.roomTopic,
+      `格式错误，请按以下格式发送：\n${buildManualReimbursementImportMessageFormatText()}`,
+    );
+    return true;
+  }
+
+  if (!command) {
+    return false;
+  }
+
+  if (command.channelCode !== parsed.channel.code) {
+    logger.warn("Rejected room manual reimbursement command with mismatched channel", {
+      channelCode: command.channelCode,
+      currentChannelCode: parsed.channel.code,
+      roomTopic: parsed.roomTopic,
+      senderName: parsed.senderName,
+    });
+    await sendReimbursementCommandResponse(
+      message,
+      logger,
+      parsed.channel,
+      parsed.roomTopic,
+      REIMBURSEMENT_COMMAND_UNSUPPORTED_TEXT,
+    );
+    return true;
+  }
+
+  const sentAt = command.sentAt ?? parsed.messageSentAt ?? parsed.eventReceivedAt;
+  const result = importManualReimbursementReport({
+    amount: command.amount,
+    channelCode: parsed.channel.code,
+    channelName: parsed.channel.match.value,
+    expenseCategory: command.expenseCategory,
+    note: command.note,
+    reporter: command.reporter,
+    sentAt,
+    timeZone: context.timeZone,
+  });
+
+  logger.info("Imported reimbursement report from room manual command", {
+    amount: command.amount,
+    category: command.expenseCategory,
+    channelCode: parsed.channel.code,
+    extractionId: result.extraction.id,
+    messageExternalId: parsed.messageExternalId,
+    rawMessageId: result.rawMessageId,
+    reimbursementReportId: result.report.id,
+    reporter: command.reporter,
+    roomTopic: parsed.roomTopic,
+    senderName: parsed.senderName,
+    sentAt,
+  });
+
+  await sendReimbursementCommandResponse(
+    message,
+    logger,
+    parsed.channel,
+    parsed.roomTopic,
+    REIMBURSEMENT_COMMAND_PROCESSED_TEXT,
+  );
+  return true;
 }
 
 async function handleReimbursementReceiptReplyCommand(
@@ -2079,7 +2191,7 @@ function readMessageAge(message: any) {
 }
 
 function extractFirstLine(text: string) {
-  return text.split(/\r?\n/, 1)[0]?.trim() ?? "";
+  return text.replace(/<br\s*\/?>/gi, "\n").split(/\r?\n/, 1)[0]?.trim() ?? "";
 }
 
 function isXmlImagePayload(text: string, typeValue: unknown) {
@@ -2113,4 +2225,13 @@ async function resolveSenderName(room: any, talker: any) {
   }
 
   return "unknown";
+}
+
+async function resolveContactName(talker: any, fallback: string) {
+  if (!talker || typeof talker.name !== "function") {
+    return fallback;
+  }
+
+  const contactName = await talker.name();
+  return String(contactName ?? "").trim() || fallback;
 }

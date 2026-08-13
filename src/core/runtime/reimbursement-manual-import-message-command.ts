@@ -10,6 +10,10 @@ export interface ManualReimbursementImportMessageCommand {
   sentAt?: string;
 }
 
+export interface ManualReimbursementImportMessageCommandOptions {
+  defaultChannelCode?: string;
+}
+
 const COMMAND_HEADER = "补录报账";
 const SUPPORTED_KEYS = new Map<string, keyof ManualReimbursementImportMessageCommand>([
   ["amount", "amount"],
@@ -81,6 +85,7 @@ function parseCategory(value: string) {
 
 export function parseManualReimbursementImportMessageCommand(
   text: string,
+  options?: ManualReimbursementImportMessageCommandOptions,
 ): ManualReimbursementImportMessageCommand | null {
   const lines = normalizeMessageLineBreaks(text)
     .split(/\r?\n/)
@@ -132,7 +137,9 @@ export function parseManualReimbursementImportMessageCommand(
     parsed[key] = value;
   }
 
-  if (!parsed.channelCode) {
+  const channelCode = parsed.channelCode ?? options?.defaultChannelCode?.trim();
+
+  if (!channelCode) {
     throw new Error("Missing field: channel_code");
   }
 
@@ -150,7 +157,7 @@ export function parseManualReimbursementImportMessageCommand(
 
   return {
     amount: parsed.amount,
-    channelCode: parsed.channelCode,
+    channelCode,
     expenseCategory: parsed.expenseCategory,
     note: parsed.note ?? "",
     reporter: parsed.reporter,

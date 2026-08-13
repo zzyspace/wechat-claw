@@ -62,6 +62,40 @@ test("parseManualReimbursementImportMessageCommand supports wechat html line bre
   });
 });
 
+test("parseManualReimbursementImportMessageCommand uses a default channel code when omitted", () => {
+  const command = parseManualReimbursementImportMessageCommand(
+    [
+      "补录报账",
+      "reporter: 张三",
+      "amount: 36.5",
+      "category: 食材",
+    ].join("\n"),
+    { defaultChannelCode: "reimbursement_fuzzy" },
+  );
+
+  assert.deepEqual(command, {
+    amount: 36.5,
+    channelCode: "reimbursement_fuzzy",
+    expenseCategory: "food",
+    note: "",
+    reporter: "张三",
+    sentAt: undefined,
+  });
+});
+
+test("parseManualReimbursementImportMessageCommand still requires a channel code without a default", () => {
+  assert.throws(
+    () =>
+      parseManualReimbursementImportMessageCommand([
+        "补录报账",
+        "reporter: 张三",
+        "amount: 36.5",
+        "category: 食材",
+      ].join("\n")),
+    /Missing field: channel_code/,
+  );
+});
+
 test("parseManualReimbursementImportMessageCommand returns null for unrelated text", () => {
   assert.equal(parseManualReimbursementImportMessageCommand("hello"), null);
 });

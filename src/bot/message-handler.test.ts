@@ -2876,6 +2876,158 @@ test("handleMessage rechecks forward reimbursement text after image extraction",
   }
 });
 
+test("handleMessage imports reimbursement from configured room command sender using the current channel by default", { concurrency: false }, async () => {
+  const logs: Array<{ level: string; message: string; context?: Record<string, unknown> }> = [];
+  const delivered: DeliveredMessage[] = [];
+  const reporter = "群内补录默认频道测试";
+  const beforeReportCount = listRecentReimbursementReports(1000).length;
+  const beforeRawMessageCount = listRecentRawMessages(1000).length;
+
+  globalThis.fetch = (async () => {
+    throw new Error("manual room import should not call the extraction model");
+  }) as typeof fetch;
+
+  try {
+    await handleMessage(
+      {
+        id: () => "room-manual-import-default-channel",
+        date: () => new Date("2026-07-02T06:32:00.000Z"),
+        room: async () => ({
+          alias: async () => "群内别名",
+          id: () => "reimbursement_room_manual_import",
+          topic: async () => "AI报账群",
+        }),
+        self: () => false,
+        talker: async () => ({
+          id: () => "room_manual_import_sender",
+          name: () => "补录操作员",
+        }),
+        text: () =>
+          [
+            "补录报账",
+            `reporter: ${reporter}`,
+            "amount: 36.5",
+            "category: 食材",
+            "note: 午餐报账",
+          ].join("\n"),
+        type: () => 7,
+        wechaty: createWechatyMock(delivered),
+      },
+      {
+        ...createMessageContext([createReimbursementChannel()]),
+        manualReimbursementContactName: "补录操作员",
+      },
+      createLogger(logs),
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
+  const reports = listRecentReimbursementReports(1000).filter((report) => report.reporter === reporter);
+  const rawMessages = listRecentRawMessages(1000);
+
+  assert.equal(reports.length, 1);
+  assert.equal(reports[0]?.channelCode, "reimbursement_a");
+  assert.equal(reports[0]?.channelName, "AI报账群");
+  assert.equal(reports[0]?.amount, 36.5);
+  assert.equal(reports[0]?.expenseCategory, "food");
+  assert.equal(reports[0]?.note, "午餐报账");
+  assert.equal(reports[0]?.voucherDate, "2026-07-02");
+  assert.equal(listRecentReimbursementReports(1000).length, beforeReportCount + 1);
+  assert.equal(rawMessages.length, beforeRawMessageCount + 1);
+  assert.equal(rawMessages.some((item) => item.messageExternalId === "room-manual-import-default-channel"), false);
+  assert.equal(rawMessages.some((item) => item.messageType === "manual_import" && item.senderName === reporter), true);
+  assert.deepEqual(delivered, [
+    {
+      targetType: "room_topic",
+      targetValue: "AI报账群",
+      text: "已处理",
+    },
+  ]);
+  assert(logs.some((entry) => entry.message === "Imported reimbursement report from room manual command"));
+});
+
+test("handleMessage rejects a room manual reimbursement command targeting another channel", { concurrency: false }, async () => {
+  const delivered: DeliveredMessage[] = [];
+  const reporter = "群内补录跨群测试";
+  const beforeReportCount = listRecentReimbursementReports(1000).length;
+
+  await handleMessage(
+    {
+      id: () => "room-manual-import-mismatched-channel",
+      room: async () => ({
+        alias: async () => null,
+        id: () => "reimbursement_room_manual_import_mismatch",
+        topic: async () => "AI报账群",
+      }),
+      self: () => false,
+      talker: async () => ({
+        id: () => "room_manual_import_sender_mismatch",
+        name: () => "补录操作员",
+      }),
+      text: () =>
+        [
+          "补录报账",
+          "channel_code: reimbursement_other",
+          `reporter: ${reporter}`,
+          "amount: 18",
+          "category: 其他",
+        ].join("\n"),
+      type: () => 7,
+      wechaty: createWechatyMock(delivered),
+    },
+    {
+      ...createMessageContext([createReimbursementChannel()]),
+      manualReimbursementContactName: "补录操作员",
+    },
+    createLogger([]),
+  );
+
+  assert.equal(listRecentReimbursementReports(1000).length, beforeReportCount);
+  assert.equal(listRecentReimbursementReports(1000).some((report) => report.reporter === reporter), false);
+  assert.equal(delivered.at(-1)?.text, "不支持的指令");
+});
+
+test("handleMessage ignores a room manual reimbursement command from an unconfigured sender", { concurrency: false }, async () => {
+  const delivered: DeliveredMessage[] = [];
+  const reporter = "群内补录未授权测试";
+  const beforeReportCount = listRecentReimbursementReports(1000).length;
+
+  await handleMessage(
+    {
+      id: () => "room-manual-import-unauthorized",
+      room: async () => ({
+        alias: async () => "补录操作员",
+        id: () => "reimbursement_room_manual_import_unauthorized",
+        topic: async () => "AI报账群",
+      }),
+      self: () => false,
+      talker: async () => ({
+        id: () => "room_manual_import_unauthorized_sender",
+        name: () => "其他联系人",
+      }),
+      text: () =>
+        [
+          "补录报账",
+          `reporter: ${reporter}`,
+          "amount: 18",
+          "category: 其他",
+        ].join("\n"),
+      type: () => 7,
+      wechaty: createWechatyMock(delivered),
+    },
+    {
+      ...createMessageContext([createReimbursementChannel()]),
+      manualReimbursementContactName: "补录操作员",
+    },
+    createLogger([]),
+  );
+
+  assert.equal(listRecentReimbursementReports(1000).length, beforeReportCount);
+  assert.equal(listRecentReimbursementReports(1000).some((report) => report.reporter === reporter), false);
+  assert.equal(delivered.length, 0);
+});
+
 test("handleMessage imports reimbursement from configured private command sender and replies processed", { concurrency: false }, async () => {
   const logs: Array<{ level: string; message: string; context?: Record<string, unknown> }> = [];
   const replies: string[] = [];
