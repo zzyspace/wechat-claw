@@ -70,3 +70,34 @@ test("importManualReimbursementReport uses fallback source text when note is emp
   assert.equal(result.report.note, "");
   assert.equal(result.textContent, "(手工补录)");
 });
+
+test("importManualReimbursementReport stores an uploaded image without model extraction", () => {
+  const imagePath = path.join(process.env.WECHATY_STATE_DIR ?? os.tmpdir(), "manual-upload.png");
+  fs.writeFileSync(imagePath, "manual-upload-image", "utf8");
+  const result = importManualReimbursementReport({
+    amount: 29.9,
+    channelCode: "reimbursement_fuzzy",
+    channelName: "模糊报账群",
+    expenseCategory: "flower",
+    reporter: "小陈",
+    sentAt: "2026-07-02T09:00:00.000Z",
+    timeZone: "Asia/Shanghai",
+    attachments: [
+      {
+        type: "image",
+        localPath: imagePath,
+        sha256: "manual-upload-sha256",
+        mimeType: "image/png",
+      },
+    ],
+  });
+
+  assert.equal(result.report.evidenceType, "image+text");
+  const detail = getAdminReimbursementReportDetail(result.report.id);
+  assert.equal(detail?.sources[0]?.attachments.length, 1);
+  assert.equal(detail?.sources[0]?.attachments[0]?.localPath, imagePath);
+  const extractions = listScenarioExtractionsByRawMessageId(result.rawMessageId);
+  assert.equal(extractions.length, 1);
+  assert.equal(extractions[0]?.extractorCode, "manual-import-v1");
+  assert.equal((extractions[0]?.resultJson as { source?: string }).source, "manual_import");
+});

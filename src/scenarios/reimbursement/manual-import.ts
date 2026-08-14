@@ -7,6 +7,7 @@ import { saveRawMessage } from "../../core/storage/raw-message-repository.js";
 import { getReimbursementExpenseCategoryLabel } from "./categories.js";
 import { saveReimbursementReport } from "./repository.js";
 import type { ReimbursementExpenseCategory, ReimbursementReportRecord } from "./types.js";
+import type { StoredAttachment } from "../../core/storage/types.js";
 
 const MANUAL_IMPORT_EXTRACTOR_CODE = "manual-import-v1";
 const MANUAL_IMPORT_MESSAGE_TYPE = "manual_import";
@@ -22,6 +23,7 @@ export interface ManualReimbursementImportInput {
   reporter: string;
   sentAt: string;
   timeZone?: string;
+  attachments?: StoredAttachment[];
 }
 
 export interface ManualReimbursementImportResult {
@@ -52,6 +54,7 @@ export function importManualReimbursementReport(
   input: ManualReimbursementImportInput,
 ): ManualReimbursementImportResult {
   const normalizedNote = normalizeNote(input.note);
+  const attachments = input.attachments ?? [];
   const textContent = buildManualImportTextContent(normalizedNote);
   const messageExternalId = buildManualImportExternalId({
     channelCode: input.channelCode,
@@ -67,7 +70,7 @@ export function importManualReimbursementReport(
     textContent,
     messageSentAt: input.sentAt,
     eventReceivedAt: input.sentAt,
-    attachments: [],
+    attachments,
   });
   const saveResult = saveRawMessage(normalizedMessage);
   const voucherDate = formatZonedDate(new Date(input.sentAt), input.timeZone ?? DEFAULT_TIME_ZONE);
@@ -81,7 +84,7 @@ export function importManualReimbursementReport(
     voucherDate,
     voucherDateSource: "message",
     note: normalizedNote,
-    evidenceType: "text",
+    evidenceType: attachments.length > 0 ? "image+text" : "text",
     merchant: null,
     documentNo: null,
     voucherType: null,
@@ -113,7 +116,7 @@ export function importManualReimbursementReport(
       voucherDate,
       voucherDateSource: "message",
       note: normalizedNote,
-      evidenceType: "text",
+      evidenceType: attachments.length > 0 ? "image+text" : "text",
       merchant: null,
       documentNo: null,
       voucherType: null,

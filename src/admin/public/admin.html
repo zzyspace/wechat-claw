@@ -112,6 +112,14 @@
         gap: 18px;
       }
 
+      .hero-actions {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+      }
+
       .theme-toggle {
         flex: 0 0 auto;
         min-height: 40px;
@@ -160,6 +168,20 @@
         margin-bottom: 18px;
       }
 
+      .manual-import-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
+      }
+
+      .manual-import-dialog {
+        width: min(900px, calc(100vw - 32px));
+      }
+
+      .field-wide {
+        grid-column: span 1;
+      }
+
       .controls-grid {
         display: grid;
         grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -182,6 +204,7 @@
 
       .field input,
       .field select,
+      .field textarea,
       button {
         min-height: 46px;
         border-radius: var(--radius-md);
@@ -191,15 +214,23 @@
       }
 
       .field input,
-      .field select {
+      .field select,
+      .field textarea {
         width: 100%;
         min-width: 0;
         background: var(--surface-input);
         color: var(--ink);
       }
 
+      .field textarea {
+        min-height: 84px;
+        padding: 12px 14px;
+        resize: vertical;
+      }
+
       .field input:focus,
       .field select:focus,
+      .field textarea:focus,
       button:focus {
         outline: 2px solid rgba(0, 122, 255, 0.28);
         outline-offset: 2px;
@@ -956,8 +987,13 @@
 
       @media (max-width: 900px) {
         .controls-grid,
+        .manual-import-grid,
         .detail-grid {
           grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .field-wide {
+          grid-column: span 2;
         }
       }
 
@@ -979,8 +1015,13 @@
         }
 
         .controls-grid,
+        .manual-import-grid,
         .detail-grid {
           grid-template-columns: 1fr;
+        }
+
+        .field-wide {
+          grid-column: span 1;
         }
 
         .actions,
@@ -1015,7 +1056,10 @@
         <span class="eyebrow">WECHAT CLAW / REIMBURSEMENT</span>
         <div class="hero-heading">
           <h1>报账查看后台</h1>
-          <button class="theme-toggle" id="themeToggle" type="button">切换主题</button>
+          <div class="hero-actions">
+            <button class="button-primary" id="manualImportOpen" type="button" hidden>手工补录</button>
+            <button class="theme-toggle" id="themeToggle" type="button">切换主题</button>
+          </div>
         </div>
         <p>查看已入库的报账记录，按门店、报账人、类别、日期和备注文字筛选，并展开详情查看 OCR、原始消息、附件和回执记录。</p>
       </div>
@@ -1123,6 +1167,62 @@
 
       </div>
 
+      <div class="modal" id="manualImportModal" hidden>
+        <div class="modal-backdrop" id="manualImportModalBackdrop"></div>
+        <div class="panel modal-dialog manual-import-dialog" role="dialog" aria-modal="true" aria-labelledby="manualImportModalTitle">
+          <div class="modal-frame">
+            <div class="modal-topbar">
+              <div>
+                <h2 id="manualImportModalTitle">手工补录</h2>
+                <p class="muted">填写结果将直接入库；上传的报账图仅作附件保存，不调用模型识别。</p>
+              </div>
+              <button class="modal-close" id="manualImportModalClose" type="button" aria-label="关闭手工补录弹窗">×</button>
+            </div>
+            <form id="manualImportForm">
+              <div class="manual-import-grid">
+                <div class="field">
+                  <label for="manualChannelCode">门店</label>
+                  <select id="manualChannelCode" name="channelCode" required>
+                    <option value="">请选择门店</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label for="manualReporter">报账人</label>
+                  <input id="manualReporter" name="reporter" required autocomplete="off" placeholder="请输入报账人姓名" />
+                </div>
+                <div class="field">
+                  <label for="manualAmount">金额（元）</label>
+                  <input id="manualAmount" name="amount" type="number" min="0.01" step="0.01" inputmode="decimal" required placeholder="0.00" />
+                </div>
+                <div class="field">
+                  <label for="manualExpenseCategory">类别</label>
+                  <select id="manualExpenseCategory" name="expenseCategory" required>
+                    <option value="">请选择类别</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label for="manualSentAt">报账时间</label>
+                  <input id="manualSentAt" name="sentAt" type="datetime-local" step="60" required />
+                </div>
+                <div class="field">
+                  <label for="manualImage">报账图（选填）</label>
+                  <input id="manualImage" name="image" type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif" />
+                </div>
+                <div class="field field-wide">
+                  <label for="manualNote">备注（选填）</label>
+                  <textarea id="manualNote" name="note" maxlength="1000" placeholder="填写这笔报账的用途或说明"></textarea>
+                </div>
+              </div>
+              <div class="actions">
+                <button class="button-primary" id="manualImportSubmit" type="submit">确认补录</button>
+                <button id="manualImportReset" type="button">清空</button>
+                <span class="status" id="manualImportStatus" aria-live="polite"></span>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+
       <div class="modal" id="detailModal" hidden>
         <div class="modal-backdrop" id="detailModalBackdrop"></div>
         <div class="panel modal-dialog" role="dialog" aria-modal="true" aria-labelledby="detailModalTitle">
@@ -1170,11 +1270,24 @@
         attachmentPreviewReportId: null,
         timeZone: DEFAULT_TIME_ZONE,
         canWrite: false,
+        importing: false,
         deletingIds: new Set(),
       };
 
       const elements = {
         filters: document.getElementById("filters"),
+        manualImportOpen: document.getElementById("manualImportOpen"),
+        manualImportModal: document.getElementById("manualImportModal"),
+        manualImportModalBackdrop: document.getElementById("manualImportModalBackdrop"),
+        manualImportModalClose: document.getElementById("manualImportModalClose"),
+        manualImportForm: document.getElementById("manualImportForm"),
+        manualChannelCode: document.getElementById("manualChannelCode"),
+        manualExpenseCategory: document.getElementById("manualExpenseCategory"),
+        manualSentAt: document.getElementById("manualSentAt"),
+        manualImage: document.getElementById("manualImage"),
+        manualImportSubmit: document.getElementById("manualImportSubmit"),
+        manualImportReset: document.getElementById("manualImportReset"),
+        manualImportStatus: document.getElementById("manualImportStatus"),
         themeToggle: document.getElementById("themeToggle"),
         resetFilters: document.getElementById("resetFilters"),
         totalPill: document.getElementById("totalPill"),
@@ -1462,6 +1575,50 @@
       function setStatus(text, isError = false) {
         elements.statusText.textContent = text;
         elements.statusText.classList.toggle("error", isError);
+      }
+
+      function setManualImportStatus(text, isError = false) {
+        elements.manualImportStatus.textContent = text;
+        elements.manualImportStatus.classList.toggle("error", isError);
+      }
+
+      function formatLocalDateTimeInput(date = new Date()) {
+        const parts = new Intl.DateTimeFormat("en-CA", {
+          timeZone: state.timeZone || DEFAULT_TIME_ZONE,
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit",
+          hourCycle: "h23",
+        }).formatToParts(date);
+        const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+        return `${values.year}-${values.month}-${values.day}T${values.hour}:${values.minute}`;
+      }
+
+      function resetManualImportForm({ preserveSelections = false } = {}) {
+        const channelCode = preserveSelections ? elements.manualChannelCode.value : "";
+        const expenseCategory = preserveSelections ? elements.manualExpenseCategory.value : "";
+        elements.manualImportForm.reset();
+        elements.manualChannelCode.value = channelCode;
+        elements.manualExpenseCategory.value = expenseCategory;
+        elements.manualSentAt.value = formatLocalDateTimeInput();
+        setManualImportStatus("");
+      }
+
+      function openManualImportModal() {
+        resetManualImportForm();
+        elements.manualImportModal.hidden = false;
+        window.setTimeout(() => elements.manualChannelCode.focus(), 0);
+      }
+
+      function closeManualImportModal() {
+        if (state.importing) {
+          return;
+        }
+
+        elements.manualImportModal.hidden = true;
+        setManualImportStatus("");
       }
 
       function buildAuthFetchUrl(pathname, params) {
@@ -1904,6 +2061,92 @@
         elements.accessPill.textContent = state.canWrite
           ? `管理员 ${payload.account?.username || ""}`.trim()
           : `只读账号 ${payload.account?.username || ""}`.trim();
+        elements.manualImportOpen.hidden = !state.canWrite;
+      }
+
+      async function loadManualImportOptions() {
+        const response = await fetch(buildAuthFetchUrl(`${BASE_PATH}/api/manual-import-options`), {
+          headers: {
+            Accept: "application/json",
+          },
+        });
+        const payload = await response.json();
+
+        if (!response.ok || !payload.success) {
+          throw new Error(payload?.error?.message || "补录选项加载失败");
+        }
+
+        state.timeZone = payload.timeZone || state.timeZone || DEFAULT_TIME_ZONE;
+        elements.manualChannelCode.innerHTML = [
+          '<option value="">请选择门店</option>',
+          ...(payload.channels || []).map((channel) =>
+            `<option value="${escapeHtml(channel.code)}">${escapeHtml(channel.name)}（${escapeHtml(channel.code)}）</option>`,
+          ),
+        ].join("");
+        elements.manualExpenseCategory.innerHTML = [
+          '<option value="">请选择类别</option>',
+          ...(payload.categories || []).map((category) =>
+            `<option value="${escapeHtml(category.code)}">${escapeHtml(category.label)}</option>`,
+          ),
+        ].join("");
+        resetManualImportForm();
+
+        if (!(payload.channels || []).length) {
+          elements.manualImportSubmit.disabled = true;
+          setManualImportStatus("当前没有已启用的报账门店，请先检查 WECHATY_CHANNELS_JSON。", true);
+        }
+      }
+
+      async function submitManualImport() {
+        if (!state.canWrite || state.importing) {
+          return;
+        }
+
+        const formData = new FormData(elements.manualImportForm);
+        for (const name of ["channelCode", "reporter", "amount", "expenseCategory", "note", "sentAt"]) {
+          formData.set(name, String(formData.get(name) || "").trim());
+        }
+
+        const image = elements.manualImage.files?.[0];
+        if (image && image.size > 20 * 1024 * 1024) {
+          setManualImportStatus("报账图不能超过 20MB。", true);
+          return;
+        }
+
+        state.importing = true;
+        elements.manualImportSubmit.disabled = true;
+        elements.manualImportReset.disabled = true;
+        setManualImportStatus("正在补录...");
+
+        try {
+          const response = await fetch(buildAuthFetchUrl(`${BASE_PATH}/api/reports`), {
+            method: "POST",
+            headers: {
+              Accept: "application/json",
+            },
+            body: formData,
+          });
+          const payload = await response.json();
+
+          if (!response.ok || !payload.success) {
+            throw new Error(payload?.error?.message || "补录失败");
+          }
+
+          const reportId = payload.report?.id;
+          elements.manualImportModal.hidden = true;
+          await loadReports({ resetOffset: true });
+          setStatus(`补录成功，报账 ID #${reportId}`);
+
+          if (reportId) {
+            await loadDetail(reportId);
+          }
+        } catch (error) {
+          setManualImportStatus(error instanceof Error ? error.message : String(error), true);
+        } finally {
+          state.importing = false;
+          elements.manualImportSubmit.disabled = false;
+          elements.manualImportReset.disabled = false;
+        }
       }
 
       async function deleteReport(reportId) {
@@ -1969,6 +2212,27 @@
       elements.filters.addEventListener("submit", (event) => {
         event.preventDefault();
         void loadReports({ resetOffset: true });
+      });
+
+      elements.manualImportOpen.addEventListener("click", () => {
+        openManualImportModal();
+      });
+
+      elements.manualImportModalBackdrop.addEventListener("click", () => {
+        closeManualImportModal();
+      });
+
+      elements.manualImportModalClose.addEventListener("click", () => {
+        closeManualImportModal();
+      });
+
+      elements.manualImportForm.addEventListener("submit", (event) => {
+        event.preventDefault();
+        void submitManualImport();
+      });
+
+      elements.manualImportReset.addEventListener("click", () => {
+        resetManualImportForm();
       });
 
       elements.resetFilters.addEventListener("click", () => {
@@ -2092,6 +2356,11 @@
           return;
         }
 
+        if (event.key === "Escape" && !elements.manualImportModal.hidden) {
+          closeManualImportModal();
+          return;
+        }
+
         if (event.key === "Escape" && !elements.detailModal.hidden) {
           closeDetailModal();
         }
@@ -2100,6 +2369,9 @@
       async function initialize() {
         try {
           await loadSession();
+          if (state.canWrite) {
+            await loadManualImportOptions();
+          }
           await loadReports();
         } catch (error) {
           setStatus(error instanceof Error ? error.message : String(error), true);

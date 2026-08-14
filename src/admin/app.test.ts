@@ -17,6 +17,7 @@ const managedEnvKeys = [
   "WECHATY_ADMIN_USERNAME",
   "WECHATY_ADMIN_GUEST_PASSWORD",
   "WECHATY_ADMIN_GUEST_USERNAME",
+  "WECHATY_CHANNELS_JSON",
   "WECHATY_PUPPET",
   "WECHATY_STATE_DIR",
   "WECHATY_TIMEZONE",
@@ -32,6 +33,24 @@ function applyEnv(values: Record<string, string | undefined>) {
   process.env.WECHATY_TIMEZONE = "Asia/Shanghai";
   process.env.WECHATY_ADMIN_HOST = "127.0.0.1";
   process.env.WECHATY_ADMIN_PORT = "8788";
+  process.env.WECHATY_CHANNELS_JSON = JSON.stringify([
+    {
+      code: "reimbursement_admin_test",
+      enabled: true,
+      scenario: "reimbursement",
+      match: { type: "room_topic", value: "报账后台测试群" },
+      deliveryTargets: [],
+      summarySchedule: "",
+    },
+    {
+      code: "loss_admin_test",
+      enabled: true,
+      scenario: "loss-report",
+      match: { type: "room_topic", value: "报损后台测试群" },
+      deliveryTargets: [],
+      summarySchedule: "",
+    },
+  ]);
 
   for (const [key, value] of Object.entries(values)) {
     if (value === undefined) {
@@ -246,6 +265,17 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     assert.equal(pageResponse.status, 200);
     const pageHtml = await pageResponse.text();
     assert.match(pageHtml, /报账查看后台/);
+    assert.match(pageHtml, /<h2 id="manualImportModalTitle">手工补录<\/h2>/);
+    assert.match(pageHtml, /id="manualImportOpen"[^>]*hidden>手工补录<\/button>/);
+    assert.match(pageHtml, /id="manualImportModal" hidden/);
+    assert.match(pageHtml, /id="manualImportForm"/);
+    assert.match(pageHtml, /id="manualSentAt" name="sentAt" type="datetime-local"/);
+    assert.match(pageHtml, /id="manualImage" name="image" type="file"/);
+    assert.match(pageHtml, /上传的报账图仅作附件保存，不调用模型识别/);
+    assert.match(pageHtml, /fetch\(buildAuthFetchUrl\(`\$\{BASE_PATH\}\/api\/manual-import-options`\)/);
+    assert.match(pageHtml, /method: "POST"/);
+    assert.match(pageHtml, /body: formData/);
+    assert.match(pageHtml, /elements\.manualImportOpen\.hidden = !state\.canWrite/);
     assert.match(pageHtml, /<label for="channelCode">门店<\/label>/);
     assert.match(pageHtml, /<option value="">全部<\/option>/);
     assert.match(pageHtml, /<option value="reimbursement_fuzzy">Fuzzy<\/option>/);
@@ -274,7 +304,7 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     assert.match(pageHtml, /<label for="note">备注<\/label>/);
     assert.match(pageHtml, /placeholder="支持部分匹配，如 补票 \/ 平账"/);
     assert.match(pageHtml, /\.field \{[^}]*min-width: 0;/s);
-    assert.match(pageHtml, /\.field input,\s*\.field select \{[^}]*min-width: 0;/s);
+    assert.match(pageHtml, /\.field input,\s*\.field select,\s*\.field textarea \{[^}]*min-width: 0;/s);
     assert.match(pageHtml, /@supports \(-webkit-touch-callout: none\)/);
     assert.match(pageHtml, /\.field input\[type="date"\] \{\s*padding-inline: 0;/);
     assert.match(pageHtml, /::-webkit-date-and-time-value \{\s*padding-inline-start: 14px;/);
@@ -320,6 +350,93 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
         canWrite: false,
       },
     });
+
+    const manualImportOptionsResponse = await fetch(
+      `${server.baseUrl}/reimbursement/api/manual-import-options`,
+      { headers: createAdminAuthHeaders() },
+    );
+    assert.equal(manualImportOptionsResponse.status, 200);
+    const manualImportOptions = await manualImportOptionsResponse.json();
+    assert.deepEqual(manualImportOptions.channels, [
+      { code: "reimbursement_admin_test", name: "报账后台测试群" },
+    ]);
+    assert.equal(manualImportOptions.categories.some((item: { code: string }) => item.code === "flower"), true);
+
+    const manualImportForm = new FormData();
+    manualImportForm.set("channelCode", "reimbursement_admin_test");
+    manualImportForm.set("reporter", "手工补录测试人");
+    manualImportForm.set("amount", "36.50");
+    manualImportForm.set("expenseCategory", "food");
+    manualImportForm.set("note", "后台页面补录");
+    manualImportForm.set("sentAt", "2026-08-14T10:30");
+    manualImportForm.set("image", new Blob(["manual-receipt-image"], { type: "image/png" }), "receipt.png");
+    const manualImportResponse = await fetch(`${server.baseUrl}/reimbursement/api/reports`, {
+      method: "POST",
+      headers: {
+        ...createAdminAuthHeaders(),
+        Accept: "application/json",
+      },
+      body: manualImportForm,
+    });
+    assert.equal(manualImportResponse.status, 201);
+    const manualImportPayload = await manualImportResponse.json();
+    assert.equal(manualImportPayload.success, true);
+    assert.equal(manualImportPayload.report.channelCode, "reimbursement_admin_test");
+    assert.equal(manualImportPayload.report.reporter, "手工补录测试人");
+    assert.equal(manualImportPayload.report.amount, 36.5);
+    assert.equal(manualImportPayload.report.voucherDate, "2026-08-14");
+    assert.equal(manualImportPayload.report.evidenceType, "image+text");
+
+    const manualImportDetailResponse = await fetch(
+      `${server.baseUrl}/reimbursement/api/reports/${manualImportPayload.report.id}`,
+      { headers: createAdminAuthHeaders() },
+    );
+    assert.equal(manualImportDetailResponse.status, 200);
+    const manualImportDetail = (await manualImportDetailResponse.json()).report;
+    assert.equal(manualImportDetail.sources[0]?.attachments.length, 1);
+    assert.equal(manualImportDetail.sources[0]?.attachments[0]?.mimeType, "image/png");
+    const manualAttachmentResponse = await fetch(
+      `${server.baseUrl}/reimbursement/api/attachments/${manualImportDetail.sources[0]?.attachments[0]?.id}/content`,
+      { headers: createAdminAuthHeaders() },
+    );
+    assert.equal(manualAttachmentResponse.status, 200);
+    assert.equal(await manualAttachmentResponse.text(), "manual-receipt-image");
+
+    const invalidManualImportResponse = await fetch(`${server.baseUrl}/reimbursement/api/reports`, {
+      method: "POST",
+      headers: {
+        ...createAdminAuthHeaders(),
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        channelCode: "loss_admin_test",
+        reporter: "错误频道测试人",
+        amount: 10,
+        expenseCategory: "food",
+        sentAt: "2026-08-14T10:30",
+      }),
+    });
+    assert.equal(invalidManualImportResponse.status, 400);
+    assert.equal((await invalidManualImportResponse.json()).error.field, "channelCode");
+
+    const invalidImageForm = new FormData();
+    invalidImageForm.set("channelCode", "reimbursement_admin_test");
+    invalidImageForm.set("reporter", "错误图片测试人");
+    invalidImageForm.set("amount", "10");
+    invalidImageForm.set("expenseCategory", "food");
+    invalidImageForm.set("sentAt", "2026-08-14T10:30");
+    invalidImageForm.set("image", new Blob(["not-an-image"], { type: "text/plain" }), "receipt.txt");
+    const invalidImageResponse = await fetch(`${server.baseUrl}/reimbursement/api/reports`, {
+      method: "POST",
+      headers: {
+        ...createAdminAuthHeaders(),
+        Accept: "application/json",
+      },
+      body: invalidImageForm,
+    });
+    assert.equal(invalidImageResponse.status, 400);
+    assert.equal((await invalidImageResponse.json()).error.field, "image");
 
     const guestPageResponse = await fetch(`${server.baseUrl}/reimbursement`, {
       headers: createAdminAuthHeaders("guest", "guest-secret-pass"),

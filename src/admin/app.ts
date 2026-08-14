@@ -2,9 +2,19 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import express from "express";
+import multer from "multer";
 
 import { getAppConfig, type AppConfig } from "../core/config/env.js";
-import { normalizeReimbursementExpenseCategory } from "../scenarios/reimbursement/categories.js";
+import {
+  ADMIN_MANUAL_IMPORT_IMAGE_MIME_TYPES,
+  saveUploadedReimbursementImage,
+} from "../core/attachments/save-uploaded-image.js";
+import { getZonedDateParts, zonedDateTimeToUtc } from "../core/runtime/timezone.js";
+import {
+  normalizeReimbursementExpenseCategory,
+  REIMBURSEMENT_EXPENSE_CATEGORY_DEFINITIONS,
+} from "../scenarios/reimbursement/categories.js";
+import { importManualReimbursementReport } from "../scenarios/reimbursement/manual-import.js";
 import {
   deleteReimbursementReport,
   findAdminReimbursementAttachment,
@@ -20,6 +30,7 @@ import {
 const ADMIN_BASE_PATH = "/reimbursement";
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 1000;
+const MAX_MANUAL_IMPORT_IMAGE_BYTES = 20 * 1024 * 1024;
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
 const defaultStaticDir = path.join(currentDir, "public");
 
@@ -32,6 +43,22 @@ class AdminValidationError extends Error {
     this.field = field;
   }
 }
+
+const manualImportImageUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: MAX_MANUAL_IMPORT_IMAGE_BYTES,
+    files: 1,
+  },
+  fileFilter: (_request, file, callback) => {
+    if (!ADMIN_MANUAL_IMPORT_IMAGE_MIME_TYPES.has(file.mimetype)) {
+      callback(new AdminValidationError("报账图仅支持 JPG、PNG、WEBP、GIF、HEIC 或 HEIF。", "image"));
+      return;
+    }
+
+    callback(null, true);
+  },
+});
 
 function trimString(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
@@ -115,6 +142,74 @@ function parseExpenseCategory(value: unknown) {
   return category;
 }
 
+function parseRequiredString(value: unknown, field: string, label: string) {
+  const normalized = trimString(value);
+
+  if (!normalized) {
+    throw new AdminValidationError(`${label}不能为空。`, field);
+  }
+
+  return normalized;
+}
+
+function parseManualImportAmount(value: unknown) {
+  const normalized = trimString(value);
+  const amount = Number(normalized);
+
+  if (!normalized || !Number.isFinite(amount) || amount <= 0) {
+    throw new AdminValidationError("金额必须是大于 0 的数字。", "amount");
+  }
+
+  return amount;
+}
+
+function parseManualImportSentAt(value: unknown, timeZone: string) {
+  const normalized = parseRequiredString(value, "sentAt", "报账时间");
+  const localMatch = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/.exec(normalized);
+
+  if (localMatch) {
+    const expected = [
+      Number(localMatch[1]),
+      Number(localMatch[2]),
+      Number(localMatch[3]),
+      Number(localMatch[4]),
+      Number(localMatch[5]),
+      Number(localMatch[6] ?? "0"),
+    ];
+    const sentAt = zonedDateTimeToUtc(
+      expected[0],
+      expected[1],
+      expected[2],
+      expected[3],
+      expected[4],
+      expected[5],
+      timeZone,
+    );
+    const actual = getZonedDateParts(sentAt, timeZone);
+
+    if (
+      actual.year !== expected[0] ||
+      actual.month !== expected[1] ||
+      actual.day !== expected[2] ||
+      actual.hour !== expected[3] ||
+      actual.minute !== expected[4] ||
+      actual.second !== expected[5]
+    ) {
+      throw new AdminValidationError("报账时间无效。", "sentAt");
+    }
+
+    return sentAt.toISOString();
+  }
+
+  const sentAt = new Date(normalized);
+
+  if (!Number.isFinite(sentAt.getTime())) {
+    throw new AdminValidationError("报账时间无效。", "sentAt");
+  }
+
+  return sentAt.toISOString();
+}
+
 function buildAttachmentDownloadName(localPath: string) {
   const fileName = path.basename(localPath);
   return fileName || "attachment.bin";
@@ -164,6 +259,7 @@ export function createApp(input?: {
   const app = express();
 
   app.disable("x-powered-by");
+  app.use(express.json({ limit: "32kb" }));
 
   app.get(`${ADMIN_BASE_PATH}/healthz`, (_request, response) => {
     response.status(200).json({ ok: true });
@@ -188,6 +284,74 @@ export function createApp(input?: {
         canWrite: session?.canWrite === true,
       },
     });
+  });
+
+  app.get(`${ADMIN_BASE_PATH}/api/manual-import-options`, (_request, response) => {
+    response.status(200).json({
+      success: true,
+      channels: config.channels
+        .filter((channel) => channel.enabled && channel.scenario === "reimbursement")
+        .map((channel) => ({
+          code: channel.code,
+          name: channel.match.value,
+        })),
+      categories: REIMBURSEMENT_EXPENSE_CATEGORY_DEFINITIONS.map((category) => ({
+        code: category.code,
+        label: category.label,
+      })),
+      timeZone: config.timeZone,
+    });
+  });
+
+  app.post(`${ADMIN_BASE_PATH}/api/reports`, manualImportImageUpload.single("image"), (request, response, next) => {
+    try {
+      const channelCode = parseRequiredString(request.body?.channelCode, "channelCode", "门店");
+      const channel = config.channels.find(
+        (item) => item.enabled && item.scenario === "reimbursement" && item.code === channelCode,
+      );
+
+      if (!channel) {
+        throw new AdminValidationError("请选择有效的报账门店。", "channelCode");
+      }
+
+      const expenseCategory = parseExpenseCategory(request.body?.expenseCategory);
+
+      if (!expenseCategory) {
+        throw new AdminValidationError("请选择报账类别。", "expenseCategory");
+      }
+
+      const reporter = parseRequiredString(request.body?.reporter, "reporter", "报账人");
+      const amount = parseManualImportAmount(request.body?.amount);
+      const sentAt = parseManualImportSentAt(request.body?.sentAt, config.timeZone);
+      const attachments = request.file
+        ? [
+            saveUploadedReimbursementImage({
+              buffer: request.file.buffer,
+              config,
+              mimeType: request.file.mimetype,
+            }),
+          ]
+        : [];
+
+      const result = importManualReimbursementReport({
+        channelCode: channel.code,
+        channelName: channel.match.value,
+        reporter,
+        amount,
+        expenseCategory,
+        note: trimString(request.body?.note),
+        sentAt,
+        timeZone: config.timeZone,
+        attachments,
+      });
+
+      response.status(201).json({
+        success: true,
+        report: result.report,
+      });
+    } catch (error) {
+      next(error);
+    }
   });
 
   app.get(`${ADMIN_BASE_PATH}/api/reports`, (request, response, next) => {
@@ -289,6 +453,17 @@ export function createApp(input?: {
   app.use(sendNotFound);
 
   app.use((error: unknown, request: express.Request, response: express.Response, _next: express.NextFunction) => {
+    if (error instanceof multer.MulterError) {
+      response.status(400).json({
+        success: false,
+        error: {
+          field: "image",
+          message: error.code === "LIMIT_FILE_SIZE" ? "报账图不能超过 20MB。" : "报账图上传失败。",
+        },
+      });
+      return;
+    }
+
     if (error instanceof AdminValidationError) {
       response.status(400).json({
         success: false,
