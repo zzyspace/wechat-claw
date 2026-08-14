@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { afterEach, beforeEach, test } from "node:test";
 
 import type { Logger } from "../core/logging/logger.js";
 import { countSuccessfulDeliveries, sendTextToTargets } from "./delivery-contact.js";
@@ -19,6 +19,20 @@ const logger = {
     // no-op
   },
 } satisfies Logger;
+
+const originalSuppressRoomTextDelivery = process.env.WECHATY_SUPPRESS_ROOM_TEXT_DELIVERY;
+
+beforeEach(() => {
+  process.env.WECHATY_SUPPRESS_ROOM_TEXT_DELIVERY = "false";
+});
+
+afterEach(() => {
+  if (originalSuppressRoomTextDelivery === undefined) {
+    delete process.env.WECHATY_SUPPRESS_ROOM_TEXT_DELIVERY;
+  } else {
+    process.env.WECHATY_SUPPRESS_ROOM_TEXT_DELIVERY = originalSuppressRoomTextDelivery;
+  }
+});
 
 test("sendTextToTargets supports contact_name and room_topic without aborting on failures", async () => {
   const delivered: string[] = [];
@@ -112,4 +126,58 @@ test("sendTextToTargets resolves 文件传输助手 via filehelper contact id", 
   assert.equal(results.length, 1);
   assert.equal(results[0]?.delivered, true);
   assert.deepEqual(delivered, ["filehelper:ping"]);
+});
+
+test("sendTextToTargets suppresses room text while preserving contact delivery", async () => {
+  const previous = process.env.WECHATY_SUPPRESS_ROOM_TEXT_DELIVERY;
+  process.env.WECHATY_SUPPRESS_ROOM_TEXT_DELIVERY = "true";
+  const delivered: string[] = [];
+  const bot = {
+    Contact: {
+      find: async () => ({
+        async say(text: string) {
+          delivered.push(`contact:${text}`);
+        },
+      }),
+    },
+    Room: {
+      find: async () => ({
+        async say(text: string) {
+          delivered.push(`room:${text}`);
+        },
+      }),
+    },
+    on() {
+      return this;
+    },
+    async start() {
+      // no-op
+    },
+    async stop() {
+      // no-op
+    },
+  } satisfies WechatyInstance;
+
+  try {
+    const results = await sendTextToTargets(
+      bot,
+      [
+        { type: "contact_name", value: "店长A" },
+        { type: "room_topic", value: "门店A日报群" },
+      ],
+      "hello",
+      logger,
+    );
+
+    assert.deepEqual(delivered, ["contact:hello"]);
+    assert.equal(results[0]?.delivered, true);
+    assert.equal(results[1]?.delivered, false);
+    assert.match(results[1]?.error ?? "", /WECHATY_SUPPRESS_ROOM_TEXT_DELIVERY/);
+  } finally {
+    if (previous === undefined) {
+      delete process.env.WECHATY_SUPPRESS_ROOM_TEXT_DELIVERY;
+    } else {
+      process.env.WECHATY_SUPPRESS_ROOM_TEXT_DELIVERY = previous;
+    }
+  }
 });

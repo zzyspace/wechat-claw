@@ -159,6 +159,7 @@ WECHATY_CHANNELS_JSON=[{"code":"loss_a","enabled":true,"scenario":"loss-report",
 - `WECHATY_ADMIN_NGINX_SITE_NAME`: 仅 deploy 脚本使用；表示把 `/reimbursement` 自动挂到哪个现有 Nginx site，默认 `invoice-submit`
 - `WECHATY_ADMIN_NGINX_HEALTHZ_URL`: 仅 deploy 脚本使用；deploy 完成后用于校验 Nginx 外网入口，默认 `http://127.0.0.1:8080/reimbursement/healthz`
 - `WECHATY_DEBUG_RECEIVED_ROOM_MESSAGE_ENABLED`: 是否发送 `"[wechat-claw] 已收到群消息"` 这类调试摘要，默认 `false`
+- `WECHATY_SUPPRESS_ROOM_TEXT_DELIVERY`: 临时禁止 bot 向任何群聊发送文字，默认 `false`；开启后私聊和后台处理不受影响，群消息链路自检会暂时停用
 - `WECHATY_CHANNELS_JSON`: 推荐的多群配置入口，支持 `loss-report` 和 `reimbursement` 场景
 - `WECHATY_ATTACHMENT_RETENTION_DAYS`: 图片附件保留天数，默认 `60` 天；会清理 `raw/` 和 `reimbursement/raw/` 下更早的历史目录，设为 `0` 可关闭
 - `WECHATY_COLD_START_IGNORE_WINDOW_SECONDS`: 冷启动忽略窗口，默认 `60` 秒；会忽略发送时间早于“bot 启动时间 - 窗口”的历史消息，设为 `0` 可关闭

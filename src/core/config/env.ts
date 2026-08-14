@@ -59,6 +59,7 @@ export interface AppConfig {
   debugContactName?: string;
   manualReimbursementContactName?: string;
   debugReceivedRoomMessageEnabled?: boolean;
+  suppressRoomTextDelivery?: boolean;
   channels: ChannelConfig[];
   channelsSource: ChannelsSource;
   channelsParseError?: string;
@@ -165,6 +166,10 @@ function readBooleanEnv(name: string, fallback: boolean): boolean {
   }
 
   return parseBooleanLiteral(raw);
+}
+
+export function isRoomTextDeliverySuppressed(): boolean {
+  return readBooleanEnv("WECHATY_SUPPRESS_ROOM_TEXT_DELIVERY", false);
 }
 
 function isServicePuppet(puppet?: string): boolean {
@@ -437,6 +442,7 @@ export function getAppConfig(): AppConfig {
     (reimbursementExtractionProvider === "qwen"
       ? "https://dashscope.aliyuncs.com/compatible-mode/v1"
       : "https://api.openai.com/v1");
+  const suppressRoomTextDelivery = isRoomTextDeliverySuppressed();
 
   return {
     puppet: readOptionalEnv("WECHATY_PUPPET"),
@@ -484,7 +490,7 @@ export function getAppConfig(): AppConfig {
       autoResetEnabled: readBooleanEnv("WECHATY_SELF_CANARY_AUTO_RESET_ENABLED", false),
     },
     roomCanary: {
-      enabled: readBooleanEnv("WECHATY_ROOM_CANARY_ENABLED", false),
+      enabled: !suppressRoomTextDelivery && readBooleanEnv("WECHATY_ROOM_CANARY_ENABLED", false),
       targetRoomTopic: readStringEnv("WECHATY_ROOM_CANARY_TARGET_ROOM_TOPIC", ""),
       intervalMinSeconds: roomCanaryIntervalRange.min,
       intervalMaxSeconds: roomCanaryIntervalRange.max,
@@ -499,6 +505,7 @@ export function getAppConfig(): AppConfig {
       "WECHATY_DEBUG_RECEIVED_ROOM_MESSAGE_ENABLED",
       false,
     ),
+    suppressRoomTextDelivery,
     channels: channelResolution.channels,
     channelsSource: channelResolution.source,
     channelsParseError: channelResolution.error,

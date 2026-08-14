@@ -1,5 +1,6 @@
 import { dedupeDeliveryTargets, serializeDeliveryTarget } from "../core/channels/router.js";
 import type { DeliveryTarget } from "../core/channels/types.js";
+import { isRoomTextDeliverySuppressed } from "../core/config/env.js";
 import type { Logger } from "../core/logging/logger.js";
 import type { WechatyInstance } from "./types.js";
 
@@ -51,6 +52,19 @@ export async function sendTextToTarget(
   text: string,
   logger: Logger,
 ): Promise<DeliveryTargetResult> {
+  if (target.type === "room_topic" && isRoomTextDeliverySuppressed()) {
+    logger.info("Suppressed room text delivery", {
+      targetType: target.type,
+      targetValue: target.value,
+    });
+
+    return {
+      target,
+      delivered: false,
+      error: "Room text delivery is suppressed by WECHATY_SUPPRESS_ROOM_TEXT_DELIVERY",
+    };
+  }
+
   try {
     const recipient = await findDeliveryTarget(bot, target);
 

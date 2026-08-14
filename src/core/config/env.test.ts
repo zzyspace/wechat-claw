@@ -47,6 +47,7 @@ const managedEnvKeys = [
   "WECHATY_DEBUG_CONTACT_NAME",
   "WECHATY_MANUAL_REIMBURSEMENT_CONTACT_NAME",
   "WECHATY_DEBUG_RECEIVED_ROOM_MESSAGE_ENABLED",
+  "WECHATY_SUPPRESS_ROOM_TEXT_DELIVERY",
   "WECHATY_ATTACHMENT_RETENTION_DAYS",
   "WECHATY_COLD_START_IGNORE_WINDOW_SECONDS",
   "WECHATY_REIMBURSEMENT_BACKWARD_TEXT_MERGE_WINDOW_SECONDS",
@@ -460,6 +461,7 @@ test("getAppConfig parses room canary settings", () => {
       },
     ]),
     WECHATY_ROOM_CANARY_ENABLED: "true",
+    WECHATY_SUPPRESS_ROOM_TEXT_DELIVERY: "false",
     WECHATY_ROOM_CANARY_TARGET_ROOM_TOPIC: "AI报账群",
     WECHATY_ROOM_CANARY_INTERVAL_SECONDS: "600-1200",
     WECHATY_ROOM_CANARY_ACK_TIMEOUT_SECONDS: "90",
@@ -478,6 +480,18 @@ test("getAppConfig parses room canary settings", () => {
   assert.equal(config.roomCanary?.failureThreshold, 2);
   assert.equal(config.roomCanary?.autoRestartEnabled, true);
   assert.deepEqual(validation.errors, []);
+});
+
+test("getAppConfig disables room canary while room text delivery is suppressed", () => {
+  applyEnv({
+    WECHATY_ROOM_CANARY_ENABLED: "true",
+    WECHATY_SUPPRESS_ROOM_TEXT_DELIVERY: "true",
+  });
+
+  const config = getAppConfig();
+
+  assert.equal(config.suppressRoomTextDelivery, true);
+  assert.equal(config.roomCanary?.enabled, false);
 });
 
 test("validateAppConfig rejects invalid room canary settings", () => {

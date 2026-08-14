@@ -325,6 +325,7 @@ export async function startBot(
     debugContactName: config.debugContactName ?? "(empty)",
     debugMessageSnapshotEnabled: config.debugMessageSnapshotEnabled,
     debugReceivedRoomMessageEnabled: config.debugReceivedRoomMessageEnabled,
+    suppressRoomTextDelivery: config.suppressRoomTextDelivery,
     channels: enabledChannels.map((channel) => ({
       code: channel.code,
       deliveryTargets: channel.deliveryTargets,
