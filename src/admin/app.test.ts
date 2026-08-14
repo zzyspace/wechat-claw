@@ -271,7 +271,14 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     assert.match(pageHtml, /id="manualImportForm"/);
     assert.match(pageHtml, /id="manualSentAt" name="sentAt" type="datetime-local"/);
     assert.match(pageHtml, /id="manualImage" name="image" type="file"/);
-    assert.match(pageHtml, /上传的报账图仅作附件保存，不调用模型识别/);
+    assert.match(pageHtml, /报账图仅作附件保存，不参与模型识别/);
+    assert.match(pageHtml, /class="manual-upload" id="manualImagePicker"/);
+    assert.match(pageHtml, /id="manualImagePreview" hidden/);
+    assert.match(pageHtml, /id="manualImageRemove" type="button">移除/);
+    assert.match(pageHtml, /id="manualImportCancel" type="button">取消/);
+    assert.match(pageHtml, /\.manual-import-grid \{[^}]*grid-template-columns: repeat\(2,/s);
+    assert.match(pageHtml, /\.manual-import-dialog \{[^}]*width: min\(760px,/s);
+    assert.match(pageHtml, /function renderManualImage\(file\)/);
     assert.match(pageHtml, /fetch\(buildAuthFetchUrl\(`\$\{BASE_PATH\}\/api\/manual-import-options`\)/);
     assert.match(pageHtml, /method: "POST"/);
     assert.match(pageHtml, /body: formData/);

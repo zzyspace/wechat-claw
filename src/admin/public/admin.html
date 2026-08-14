@@ -170,16 +170,180 @@
 
       .manual-import-grid {
         display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 12px;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 16px;
       }
 
       .manual-import-dialog {
-        width: min(900px, calc(100vw - 32px));
+        width: min(760px, calc(100vw - 32px));
+        padding: 28px;
+        border-radius: 24px;
       }
 
       .field-wide {
-        grid-column: span 1;
+        grid-column: span 2;
+      }
+
+      .manual-import-heading {
+        display: grid;
+        gap: 6px;
+      }
+
+      .manual-import-heading p {
+        margin: 0;
+        max-width: 560px;
+        font-size: 13px;
+        line-height: 1.55;
+      }
+
+      #manualImportForm .field input:not([type="file"]),
+      #manualImportForm .field select {
+        height: 48px;
+        min-height: 48px;
+        border-radius: 14px;
+      }
+
+      #manualImportForm .field textarea {
+        min-height: 92px;
+        border-radius: 14px;
+      }
+
+      .visually-hidden {
+        position: absolute !important;
+        width: 1px !important;
+        height: 1px !important;
+        padding: 0 !important;
+        margin: -1px !important;
+        overflow: hidden !important;
+        clip: rect(0, 0, 0, 0) !important;
+        white-space: nowrap !important;
+        border: 0 !important;
+      }
+
+      .manual-upload {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        min-height: 88px;
+        padding: 16px;
+        border: 1px dashed var(--line-strong);
+        border-radius: 16px;
+        background: var(--surface-input);
+        cursor: pointer;
+        text-transform: none !important;
+        letter-spacing: normal !important;
+        transition: border-color 0.16s ease, background 0.16s ease;
+      }
+
+      .manual-upload:hover {
+        border-color: var(--brand);
+        background: var(--brand-soft);
+      }
+
+      .manual-upload[hidden] {
+        display: none;
+      }
+
+      .manual-upload-icon {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 42px;
+        height: 42px;
+        flex: 0 0 42px;
+        border-radius: 12px;
+        color: var(--brand);
+        background: var(--brand-soft);
+        font-size: 22px;
+      }
+
+      .manual-upload-copy {
+        display: grid;
+        gap: 4px;
+      }
+
+      .manual-upload-copy strong {
+        color: var(--ink);
+        font-size: 14px;
+      }
+
+      .manual-upload-copy small {
+        color: var(--ink-soft);
+        font-size: 12px;
+        font-weight: 500;
+        line-height: 1.45;
+      }
+
+      .manual-image-preview {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        min-height: 72px;
+        padding: 10px;
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        background: var(--surface-muted);
+      }
+
+      .manual-image-preview[hidden] {
+        display: none;
+      }
+
+      .manual-image-preview img {
+        width: 52px;
+        height: 52px;
+        flex: 0 0 52px;
+        object-fit: cover;
+        border-radius: 11px;
+        background: var(--surface-image);
+      }
+
+      .manual-image-info {
+        display: grid;
+        gap: 3px;
+        min-width: 0;
+        flex: 1 1 auto;
+      }
+
+      .manual-image-name {
+        overflow: hidden;
+        color: var(--ink);
+        font-size: 13px;
+        font-weight: 700;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .manual-image-size {
+        color: var(--ink-soft);
+        font-size: 12px;
+      }
+
+      .manual-image-remove {
+        min-width: 64px;
+        min-height: 36px;
+        padding: 0 12px;
+        border-radius: 10px;
+        color: var(--danger);
+        white-space: nowrap;
+      }
+
+      .manual-import-footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        margin-top: 22px;
+      }
+
+      .manual-import-buttons {
+        display: flex;
+        gap: 10px;
+        margin-left: auto;
+      }
+
+      .manual-import-buttons button {
+        min-width: 104px;
       }
 
       .controls-grid {
@@ -194,7 +358,8 @@
         min-width: 0;
       }
 
-      .field label {
+      .field label,
+      .field-label {
         color: var(--ink-soft);
         font-size: 12px;
         font-weight: 700;
@@ -770,7 +935,7 @@
         display: flex;
         justify-content: space-between;
         gap: 12px;
-        align-items: center;
+        align-items: flex-start;
       }
 
       .modal-topbar h2 {
@@ -780,13 +945,14 @@
       }
 
       .modal-close {
-        min-width: 46px;
-        min-height: 46px;
+        min-width: 38px;
+        min-height: 38px;
         padding: 0;
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        font-size: 22px;
+        border-radius: 12px;
+        font-size: 20px;
         line-height: 1;
       }
 
@@ -1024,6 +1190,19 @@
           grid-column: span 1;
         }
 
+        .manual-import-footer {
+          align-items: stretch;
+          flex-direction: column;
+        }
+
+        .manual-import-buttons {
+          width: 100%;
+        }
+
+        .manual-import-buttons button {
+          flex: 1 1 0;
+        }
+
         .actions,
         .pagination {
           align-items: stretch;
@@ -1172,13 +1351,13 @@
         <div class="panel modal-dialog manual-import-dialog" role="dialog" aria-modal="true" aria-labelledby="manualImportModalTitle">
           <div class="modal-frame">
             <div class="modal-topbar">
-              <div>
+              <div class="manual-import-heading">
                 <h2 id="manualImportModalTitle">手工补录</h2>
-                <p class="muted">填写结果将直接入库；上传的报账图仅作附件保存，不调用模型识别。</p>
+                <p class="muted">信息将直接入库，报账图仅作附件保存，不参与模型识别。</p>
               </div>
               <button class="modal-close" id="manualImportModalClose" type="button" aria-label="关闭手工补录弹窗">×</button>
             </div>
-            <form id="manualImportForm">
+            <form id="manualImportForm" class="manual-import-form">
               <div class="manual-import-grid">
                 <div class="field">
                   <label for="manualChannelCode">门店</label>
@@ -1192,7 +1371,7 @@
                 </div>
                 <div class="field">
                   <label for="manualAmount">金额（元）</label>
-                  <input id="manualAmount" name="amount" type="number" min="0.01" step="0.01" inputmode="decimal" required placeholder="0.00" />
+                  <input id="manualAmount" name="amount" type="number" min="0.01" step="0.01" inputmode="decimal" required placeholder="请输入金额" />
                 </div>
                 <div class="field">
                   <label for="manualExpenseCategory">类别</label>
@@ -1200,23 +1379,40 @@
                     <option value="">请选择类别</option>
                   </select>
                 </div>
-                <div class="field">
+                <div class="field field-wide">
                   <label for="manualSentAt">报账时间</label>
                   <input id="manualSentAt" name="sentAt" type="datetime-local" step="60" required />
                 </div>
-                <div class="field">
-                  <label for="manualImage">报账图（选填）</label>
-                  <input id="manualImage" name="image" type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif" />
+                <div class="field field-wide">
+                  <span class="field-label">报账图（选填）</span>
+                  <input class="visually-hidden" id="manualImage" name="image" type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif" />
+                  <label class="manual-upload" id="manualImagePicker" for="manualImage">
+                    <span class="manual-upload-icon" aria-hidden="true">↑</span>
+                    <span class="manual-upload-copy">
+                      <strong>点击选择报账图</strong>
+                      <small>支持 JPG、PNG、WEBP、GIF、HEIC、HEIF，最大 20MB</small>
+                    </span>
+                  </label>
+                  <div class="manual-image-preview" id="manualImagePreview" hidden>
+                    <img id="manualImagePreviewImage" alt="已选择的报账图预览" />
+                    <div class="manual-image-info">
+                      <span class="manual-image-name" id="manualImageName"></span>
+                      <span class="manual-image-size" id="manualImageSize"></span>
+                    </div>
+                    <button class="manual-image-remove" id="manualImageRemove" type="button">移除</button>
+                  </div>
                 </div>
                 <div class="field field-wide">
                   <label for="manualNote">备注（选填）</label>
                   <textarea id="manualNote" name="note" maxlength="1000" placeholder="填写这笔报账的用途或说明"></textarea>
                 </div>
               </div>
-              <div class="actions">
-                <button class="button-primary" id="manualImportSubmit" type="submit">确认补录</button>
-                <button id="manualImportReset" type="button">清空</button>
+              <div class="manual-import-footer">
                 <span class="status" id="manualImportStatus" aria-live="polite"></span>
+                <div class="manual-import-buttons">
+                  <button id="manualImportCancel" type="button">取消</button>
+                  <button class="button-primary" id="manualImportSubmit" type="submit">确认补录</button>
+                </div>
               </div>
             </form>
           </div>
@@ -1271,6 +1467,7 @@
         timeZone: DEFAULT_TIME_ZONE,
         canWrite: false,
         importing: false,
+        manualImagePreviewUrl: null,
         deletingIds: new Set(),
       };
 
@@ -1285,8 +1482,14 @@
         manualExpenseCategory: document.getElementById("manualExpenseCategory"),
         manualSentAt: document.getElementById("manualSentAt"),
         manualImage: document.getElementById("manualImage"),
+        manualImagePicker: document.getElementById("manualImagePicker"),
+        manualImagePreview: document.getElementById("manualImagePreview"),
+        manualImagePreviewImage: document.getElementById("manualImagePreviewImage"),
+        manualImageName: document.getElementById("manualImageName"),
+        manualImageSize: document.getElementById("manualImageSize"),
+        manualImageRemove: document.getElementById("manualImageRemove"),
         manualImportSubmit: document.getElementById("manualImportSubmit"),
-        manualImportReset: document.getElementById("manualImportReset"),
+        manualImportCancel: document.getElementById("manualImportCancel"),
         manualImportStatus: document.getElementById("manualImportStatus"),
         themeToggle: document.getElementById("themeToggle"),
         resetFilters: document.getElementById("resetFilters"),
@@ -1596,10 +1799,51 @@
         return `${values.year}-${values.month}-${values.day}T${values.hour}:${values.minute}`;
       }
 
+      function formatFileSize(bytes) {
+        if (bytes < 1024 * 1024) {
+          return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+        }
+
+        return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+      }
+
+      function clearManualImage(clearInput = true) {
+        if (state.manualImagePreviewUrl) {
+          URL.revokeObjectURL(state.manualImagePreviewUrl);
+          state.manualImagePreviewUrl = null;
+        }
+
+        if (clearInput) {
+          elements.manualImage.value = "";
+        }
+        elements.manualImagePicker.hidden = false;
+        elements.manualImagePreview.hidden = true;
+        elements.manualImagePreviewImage.hidden = false;
+        elements.manualImagePreviewImage.removeAttribute("src");
+        elements.manualImageName.textContent = "";
+        elements.manualImageSize.textContent = "";
+      }
+
+      function renderManualImage(file) {
+        clearManualImage(false);
+        elements.manualImagePicker.hidden = true;
+        elements.manualImagePreview.hidden = false;
+        elements.manualImageName.textContent = file.name;
+        elements.manualImageSize.textContent = formatFileSize(file.size);
+
+        if (["image/jpeg", "image/png", "image/webp", "image/gif"].includes(file.type)) {
+          state.manualImagePreviewUrl = URL.createObjectURL(file);
+          elements.manualImagePreviewImage.src = state.manualImagePreviewUrl;
+        } else {
+          elements.manualImagePreviewImage.hidden = true;
+        }
+      }
+
       function resetManualImportForm({ preserveSelections = false } = {}) {
         const channelCode = preserveSelections ? elements.manualChannelCode.value : "";
         const expenseCategory = preserveSelections ? elements.manualExpenseCategory.value : "";
         elements.manualImportForm.reset();
+        clearManualImage();
         elements.manualChannelCode.value = channelCode;
         elements.manualExpenseCategory.value = expenseCategory;
         elements.manualSentAt.value = formatLocalDateTimeInput();
@@ -1618,6 +1862,7 @@
         }
 
         elements.manualImportModal.hidden = true;
+        clearManualImage();
         setManualImportStatus("");
       }
 
@@ -2115,7 +2360,7 @@
 
         state.importing = true;
         elements.manualImportSubmit.disabled = true;
-        elements.manualImportReset.disabled = true;
+        elements.manualImportCancel.disabled = true;
         setManualImportStatus("正在补录...");
 
         try {
@@ -2133,6 +2378,7 @@
           }
 
           const reportId = payload.report?.id;
+          clearManualImage();
           elements.manualImportModal.hidden = true;
           await loadReports({ resetOffset: true });
           setStatus(`补录成功，报账 ID #${reportId}`);
@@ -2145,7 +2391,7 @@
         } finally {
           state.importing = false;
           elements.manualImportSubmit.disabled = false;
-          elements.manualImportReset.disabled = false;
+          elements.manualImportCancel.disabled = false;
         }
       }
 
@@ -2231,8 +2477,30 @@
         void submitManualImport();
       });
 
-      elements.manualImportReset.addEventListener("click", () => {
-        resetManualImportForm();
+      elements.manualImportCancel.addEventListener("click", () => {
+        closeManualImportModal();
+      });
+
+      elements.manualImage.addEventListener("change", () => {
+        const file = elements.manualImage.files?.[0];
+
+        if (!file) {
+          clearManualImage();
+          return;
+        }
+
+        if (file.size > 20 * 1024 * 1024) {
+          clearManualImage();
+          setManualImportStatus("报账图不能超过 20MB。", true);
+          return;
+        }
+
+        setManualImportStatus("");
+        renderManualImage(file);
+      });
+
+      elements.manualImageRemove.addEventListener("click", () => {
+        clearManualImage();
       });
 
       elements.resetFilters.addEventListener("click", () => {
