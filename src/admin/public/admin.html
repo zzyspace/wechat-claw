@@ -240,6 +240,12 @@
         background: var(--brand-soft);
       }
 
+      .manual-upload.is-dragover {
+        border-color: var(--brand);
+        background: var(--brand-soft);
+        box-shadow: 0 0 0 3px var(--brand-soft);
+      }
+
       .manual-upload[hidden] {
         display: none;
       }
@@ -1389,7 +1395,7 @@
                   <label class="manual-upload" id="manualImagePicker" for="manualImage">
                     <span class="manual-upload-icon" aria-hidden="true">↑</span>
                     <span class="manual-upload-copy">
-                      <strong>点击选择报账图</strong>
+                      <strong>点击选择或拖拽报账图到这里</strong>
                       <small>支持 JPG、PNG、WEBP、GIF、HEIC、HEIF，最大 20MB</small>
                     </span>
                   </label>
@@ -1456,6 +1462,14 @@
       const DEFAULT_TIME_ZONE = "Asia/Shanghai";
       const THEME_STORAGE_KEY = "reimbursement-admin-theme";
       const DETAIL_CLICK_DELAY_MS = 300;
+      const MANUAL_IMAGE_MIME_TYPES = new Set([
+        "image/jpeg",
+        "image/png",
+        "image/webp",
+        "image/gif",
+        "image/heic",
+        "image/heif",
+      ]);
       let pendingDetailTimer = null;
       const state = {
         items: [],
@@ -1467,6 +1481,8 @@
         timeZone: DEFAULT_TIME_ZONE,
         canWrite: false,
         importing: false,
+        manualImageFile: null,
+        manualImageDragDepth: 0,
         manualImagePreviewUrl: null,
         deletingIds: new Set(),
       };
@@ -1816,6 +1832,9 @@
         if (clearInput) {
           elements.manualImage.value = "";
         }
+        state.manualImageFile = null;
+        state.manualImageDragDepth = 0;
+        elements.manualImagePicker.classList.remove("is-dragover");
         elements.manualImagePicker.hidden = false;
         elements.manualImagePreview.hidden = true;
         elements.manualImagePreviewImage.hidden = false;
@@ -1826,6 +1845,7 @@
 
       function renderManualImage(file) {
         clearManualImage(false);
+        state.manualImageFile = file;
         elements.manualImagePicker.hidden = true;
         elements.manualImagePreview.hidden = false;
         elements.manualImageName.textContent = file.name;
@@ -1837,6 +1857,24 @@
         } else {
           elements.manualImagePreviewImage.hidden = true;
         }
+      }
+
+      function acceptManualImage(file) {
+        if (!MANUAL_IMAGE_MIME_TYPES.has(file.type)) {
+          clearManualImage();
+          setManualImportStatus("报账图仅支持 JPG、PNG、WEBP、GIF、HEIC 或 HEIF。", true);
+          return false;
+        }
+
+        if (file.size > 20 * 1024 * 1024) {
+          clearManualImage();
+          setManualImportStatus("报账图不能超过 20MB。", true);
+          return false;
+        }
+
+        setManualImportStatus("");
+        renderManualImage(file);
+        return true;
       }
 
       function resetManualImportForm({ preserveSelections = false } = {}) {
@@ -2352,10 +2390,15 @@
           formData.set(name, String(formData.get(name) || "").trim());
         }
 
-        const image = elements.manualImage.files?.[0];
+        const image = state.manualImageFile ?? elements.manualImage.files?.[0];
         if (image && image.size > 20 * 1024 * 1024) {
           setManualImportStatus("报账图不能超过 20MB。", true);
           return;
+        }
+
+        formData.delete("image");
+        if (image) {
+          formData.set("image", image, image.name);
         }
 
         state.importing = true;
@@ -2489,14 +2532,42 @@
           return;
         }
 
-        if (file.size > 20 * 1024 * 1024) {
-          clearManualImage();
-          setManualImportStatus("报账图不能超过 20MB。", true);
+        acceptManualImage(file);
+      });
+
+      elements.manualImagePicker.addEventListener("dragenter", (event) => {
+        event.preventDefault();
+        state.manualImageDragDepth += 1;
+        elements.manualImagePicker.classList.add("is-dragover");
+      });
+
+      elements.manualImagePicker.addEventListener("dragover", (event) => {
+        event.preventDefault();
+        if (event.dataTransfer) {
+          event.dataTransfer.dropEffect = "copy";
+        }
+      });
+
+      elements.manualImagePicker.addEventListener("dragleave", (event) => {
+        event.preventDefault();
+        state.manualImageDragDepth = Math.max(0, state.manualImageDragDepth - 1);
+        if (state.manualImageDragDepth === 0) {
+          elements.manualImagePicker.classList.remove("is-dragover");
+        }
+      });
+
+      elements.manualImagePicker.addEventListener("drop", (event) => {
+        event.preventDefault();
+        state.manualImageDragDepth = 0;
+        elements.manualImagePicker.classList.remove("is-dragover");
+        const files = Array.from(event.dataTransfer?.files || []);
+
+        if (files.length !== 1) {
+          setManualImportStatus("每次只能拖入一张报账图。", true);
           return;
         }
 
-        setManualImportStatus("");
-        renderManualImage(file);
+        acceptManualImage(files[0]);
       });
 
       elements.manualImageRemove.addEventListener("click", () => {
