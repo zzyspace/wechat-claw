@@ -352,6 +352,20 @@
         min-width: 0;
       }
 
+      .batch-image-item {
+        display: grid;
+        gap: 8px;
+        min-width: 0;
+      }
+
+      .field .batch-image-note {
+        height: 38px;
+        min-height: 38px;
+        padding: 0 11px;
+        border-radius: 10px;
+        font-size: 13px;
+      }
+
       .batch-image-count {
         color: var(--ink-soft);
         font-size: 12px;
@@ -1498,10 +1512,6 @@
                   <div class="batch-image-list" id="batchImageList" hidden></div>
                   <span class="batch-image-count" id="batchImageCount">尚未添加报账图</span>
                 </div>
-                <div class="field field-wide">
-                  <label for="batchNote">备注（选填）</label>
-                  <textarea id="batchNote" name="note" maxlength="1000" placeholder="填写这批报账的用途或说明"></textarea>
-                </div>
               </div>
               <div class="manual-import-footer">
                 <span class="status" id="batchImportStatus" aria-live="polite"></span>
@@ -2009,6 +2019,8 @@
           : "尚未添加报账图";
 
         state.batchImageItems.forEach((item, index) => {
+          const itemContainer = document.createElement("div");
+          itemContainer.className = "batch-image-item";
           const row = document.createElement("div");
           row.className = "manual-image-preview";
           const image = document.createElement("img");
@@ -2033,7 +2045,16 @@
           remove.dataset.batchImageIndex = String(index);
           info.append(name, size);
           row.append(image, info, remove);
-          elements.batchImageList.append(row);
+          const note = document.createElement("input");
+          note.className = "batch-image-note";
+          note.type = "text";
+          note.maxLength = 300;
+          note.placeholder = "这张报账图的备注（选填）";
+          note.value = item.note;
+          note.dataset.batchImageNoteIndex = String(index);
+          note.setAttribute("aria-label", `${item.file.name} 的备注`);
+          itemContainer.append(row, note);
+          elements.batchImageList.append(itemContainer);
         });
       }
 
@@ -2071,6 +2092,7 @@
         for (const file of uniqueIncoming) {
           state.batchImageItems.push({
             file,
+            note: "",
             previewUrl: ["image/jpeg", "image/png", "image/webp", "image/gif"].includes(file.type)
               ? URL.createObjectURL(file)
               : null,
@@ -2684,9 +2706,10 @@
         }
 
         const formData = new FormData(elements.batchImportForm);
-        for (const name of ["channelCode", "reporter", "note", "sentAt"]) {
+        for (const name of ["channelCode", "reporter", "sentAt"]) {
           formData.set(name, String(formData.get(name) || "").trim());
         }
+        formData.set("notesJson", JSON.stringify(state.batchImageItems.map((item) => item.note.trim())));
         formData.delete("images");
         for (const item of state.batchImageItems) {
           formData.append("images", item.file, item.file.name);
@@ -2928,6 +2951,18 @@
         }
         renderBatchImages();
         setBatchImportStatus("");
+      });
+
+      elements.batchImageList.addEventListener("input", (event) => {
+        const input = event.target.closest("[data-batch-image-note-index]");
+        if (!input) {
+          return;
+        }
+
+        const index = Number(input.dataset.batchImageNoteIndex);
+        if (state.batchImageItems[index]) {
+          state.batchImageItems[index].note = input.value;
+        }
       });
 
       elements.resetFilters.addEventListener("click", () => {

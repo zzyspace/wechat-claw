@@ -304,6 +304,10 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     assert.match(pageHtml, /api\/batch-reports/);
     assert.doesNotMatch(pageHtml, /id="batchAmount"/);
     assert.doesNotMatch(pageHtml, /id="batchExpenseCategory"/);
+    assert.doesNotMatch(pageHtml, /id="batchNote"/);
+    assert.match(pageHtml, /这张报账图的备注（选填）/);
+    assert.match(pageHtml, /note\.dataset\.batchImageNoteIndex/);
+    assert.match(pageHtml, /formData\.set\("notesJson"/);
     assert.match(pageHtml, /elements\.batchImportOpen\.hidden = !state\.canWrite/);
     assert.match(pageHtml, /<label for="channelCode">门店<\/label>/);
     assert.match(pageHtml, /<option value="">全部<\/option>/);
@@ -434,7 +438,7 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     const batchImportForm = new FormData();
     batchImportForm.set("channelCode", "reimbursement_admin_test");
     batchImportForm.set("reporter", "批量补录测试人");
-    batchImportForm.set("note", "后台批量补录");
+    batchImportForm.set("notesJson", JSON.stringify(["第一张备注", "第二张备注"]));
     batchImportForm.set("sentAt", "2026-08-17T10:30");
     batchImportForm.append("images", new Blob(["batch-image-one"], { type: "image/png" }), "one.png");
     batchImportForm.append("images", new Blob(["batch-image-two"], { type: "image/jpeg" }), "two.jpg");
@@ -458,6 +462,10 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     assert.deepEqual(
       batchImportPayload.reports.map((report: { reporter: string }) => report.reporter),
       ["批量补录测试人", "批量补录测试人"],
+    );
+    assert.deepEqual(
+      batchImportPayload.reports.map((report: { note: string }) => report.note),
+      ["第一张备注", "第二张备注"],
     );
     for (const report of batchImportPayload.reports) {
       const detailResponse = await fetch(`${server.baseUrl}/reimbursement/api/reports/${report.id}`, {

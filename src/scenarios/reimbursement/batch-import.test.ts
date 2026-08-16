@@ -34,7 +34,7 @@ test("importBatchReimbursementReports runs extraction once per image and creates
         model: "test-model",
         apiKey: "test-key",
       },
-      note: "七夕花材",
+      notes: ["第一张花材", "第二张花材"],
       reporter: "小陈",
       sentAt: "2026-08-17T02:30:00.000Z",
       timeZone: "Asia/Shanghai",
@@ -75,13 +75,13 @@ test("importBatchReimbursementReports runs extraction once per image and creates
   assert.equal(results.length, 2);
   assert.deepEqual(results.map((item) => item.report.amount), [10, 20]);
   assert.deepEqual(results.map((item) => item.report.expenseCategory), ["food", "food"]);
-  assert.deepEqual(results.map((item) => item.report.note), ["七夕花材", "七夕花材"]);
+  assert.deepEqual(results.map((item) => item.report.note), ["第一张花材", "第二张花材"]);
 
   for (const result of results) {
     const detail = getAdminReimbursementReportDetail(result.report.id);
     assert.equal(detail?.sources.length, 1);
     assert.equal(detail?.sources[0]?.attachments.length, 1);
-    assert.equal(detail?.sources[0]?.textContent, "七夕花材");
+    assert.equal(detail?.sources[0]?.textContent, result.report.note);
     const extractions = listScenarioExtractionsByRawMessageId(result.rawMessageId);
     assert.equal(extractions.length, 1);
     assert.equal(extractions[0]?.extractorCode, "model-test-v1");

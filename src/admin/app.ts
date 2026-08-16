@@ -33,6 +33,7 @@ const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 1000;
 const MAX_MANUAL_IMPORT_IMAGE_BYTES = 20 * 1024 * 1024;
 const MAX_BATCH_IMPORT_IMAGES = 10;
+const MAX_BATCH_IMPORT_NOTE_LENGTH = 300;
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
 const defaultStaticDir = path.join(currentDir, "public");
 
@@ -228,6 +229,36 @@ function parseManualImportSentAt(value: unknown, timeZone: string) {
   return sentAt.toISOString();
 }
 
+function parseBatchImportNotes(value: unknown, imageCount: number) {
+  const normalized = trimString(value);
+
+  if (!normalized) {
+    return Array.from({ length: imageCount }, () => "");
+  }
+
+  let parsed: unknown;
+
+  try {
+    parsed = JSON.parse(normalized);
+  } catch {
+    throw new AdminValidationError("图片备注格式无效。", "notesJson");
+  }
+
+  if (!Array.isArray(parsed) || parsed.length !== imageCount || parsed.some((note) => typeof note !== "string")) {
+    throw new AdminValidationError("图片备注与报账图数量不一致。", "notesJson");
+  }
+
+  return parsed.map((note) => {
+    const trimmed = note.trim();
+
+    if (trimmed.length > MAX_BATCH_IMPORT_NOTE_LENGTH) {
+      throw new AdminValidationError(`每张报账图的备注不能超过 ${MAX_BATCH_IMPORT_NOTE_LENGTH} 个字符。`, "notesJson");
+    }
+
+    return trimmed;
+  });
+}
+
 function buildAttachmentDownloadName(localPath: string) {
   const fileName = path.basename(localPath);
   return fileName || "attachment.bin";
@@ -394,6 +425,8 @@ export function createApp(input?: {
           throw new AdminValidationError("请至少添加一张报账图。", "images");
         }
 
+        const notes = parseBatchImportNotes(request.body?.notesJson, files.length);
+
         const attachments = files.map((file) =>
           saveUploadedReimbursementImage({
             buffer: file.buffer,
@@ -405,7 +438,7 @@ export function createApp(input?: {
           channelCode: channel.code,
           channelName: channel.match.value,
           reporter,
-          note: trimString(request.body?.note),
+          notes,
           sentAt,
           timeZone: config.timeZone,
           attachments,

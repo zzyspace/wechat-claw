@@ -23,7 +23,7 @@ export interface BatchReimbursementImportInput {
   channelCode: string;
   channelName: string;
   modelConfig: ReimbursementModelProviderConfig;
-  note?: string;
+  notes?: string[];
   reporter: string;
   sentAt: string;
   timeZone?: string;
@@ -53,11 +53,11 @@ export async function importBatchReimbursementReports(
   extractor: ReimbursementExtractor = extractReimbursementReport,
 ): Promise<BatchReimbursementImportItemResult[]> {
   const timeZone = input.timeZone ?? DEFAULT_TIME_ZONE;
-  const note = input.note?.trim() ?? "";
-  const textContent = note || BATCH_IMPORT_FALLBACK_TEXT;
   const results: BatchReimbursementImportItemResult[] = [];
 
   for (const [index, attachment] of input.attachments.entries()) {
+    const note = input.notes?.[index]?.trim() ?? "";
+    const textContent = note || BATCH_IMPORT_FALLBACK_TEXT;
     const normalizedMessage = normalizeMessage({
       messageExternalId: buildBatchImportExternalId({
         channelCode: input.channelCode,
