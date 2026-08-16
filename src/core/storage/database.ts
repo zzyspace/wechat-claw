@@ -137,6 +137,51 @@ function migrate(db: Database.Database) {
 
     CREATE INDEX IF NOT EXISTS idx_reimbursement_receipt_deliveries_target_text_sent_at
       ON reimbursement_receipt_deliveries(target_type, target_value, receipt_text, sent_at);
+
+    CREATE TABLE IF NOT EXISTS reimbursement_batch_import_jobs (
+      id TEXT PRIMARY KEY,
+      channel_code TEXT NOT NULL,
+      channel_name TEXT NOT NULL,
+      reporter TEXT NOT NULL,
+      sent_at TEXT NOT NULL,
+      time_zone TEXT NOT NULL,
+      status TEXT NOT NULL,
+      total_count INTEGER NOT NULL,
+      completed_count INTEGER NOT NULL DEFAULT 0,
+      success_count INTEGER NOT NULL DEFAULT 0,
+      failed_count INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      started_at TEXT,
+      finished_at TEXT,
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS reimbursement_batch_import_items (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      job_id TEXT NOT NULL,
+      item_index INTEGER NOT NULL,
+      original_name TEXT NOT NULL,
+      attachment_type TEXT NOT NULL,
+      local_path TEXT NOT NULL,
+      sha256 TEXT NOT NULL,
+      mime_type TEXT,
+      note TEXT NOT NULL DEFAULT '',
+      status TEXT NOT NULL,
+      report_id INTEGER,
+      error_message TEXT,
+      started_at TEXT,
+      finished_at TEXT,
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY(job_id) REFERENCES reimbursement_batch_import_jobs(id) ON DELETE CASCADE,
+      FOREIGN KEY(report_id) REFERENCES reimbursement_reports(id) ON DELETE SET NULL,
+      UNIQUE(job_id, item_index)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_reimbursement_batch_import_jobs_status_created
+      ON reimbursement_batch_import_jobs(status, created_at);
+
+    CREATE INDEX IF NOT EXISTS idx_reimbursement_batch_import_items_job_status_index
+      ON reimbursement_batch_import_items(job_id, status, item_index);
   `);
 
   const columns = db.prepare(`PRAGMA table_info(raw_messages)`).all() as Array<{ name: string }>;

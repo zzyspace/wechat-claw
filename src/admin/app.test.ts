@@ -95,6 +95,24 @@ async function startServer() {
   };
 }
 
+async function waitForBatchImportTask(baseUrl: string, taskId: string) {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    const response = await fetch(`${baseUrl}/reimbursement/api/batch-reports/${taskId}`, {
+      headers: createAdminAuthHeaders(),
+    });
+    assert.equal(response.status, 200);
+    const payload = await response.json();
+
+    if (payload.task?.status === "completed") {
+      return payload.task;
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+
+  throw new Error(`Timed out waiting for batch import task ${taskId}`);
+}
+
 function seedReports() {
   const existingAttachmentPath = path.join(stateDir, "existing-attachment.jpg");
   const missingAttachmentPath = path.join(stateDir, "missing-attachment.jpg");
@@ -308,6 +326,11 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     assert.match(pageHtml, /这张报账图的备注（选填）/);
     assert.match(pageHtml, /note\.dataset\.batchImageNoteIndex/);
     assert.match(pageHtml, /formData\.set\("notesJson"/);
+    assert.match(pageHtml, /最多 20 张/);
+    assert.match(pageHtml, /id="batchTaskProgress" hidden/);
+    assert.match(pageHtml, /正在识别：已完成 \$\{task\.completedCount\}\/\$\{task\.totalCount\}/);
+    assert.match(pageHtml, /BATCH_TASK_STORAGE_KEY/);
+    assert.match(pageHtml, /pollBatchImportTask\(task\.id\)/);
     assert.match(pageHtml, /elements\.batchImportOpen\.hidden = !state\.canWrite/);
     assert.match(pageHtml, /<label for="channelCode">门店<\/label>/);
     assert.match(pageHtml, /<option value="">全部<\/option>/);
@@ -460,24 +483,39 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
       },
       body: batchImportForm,
     });
-    assert.equal(batchImportResponse.status, 201);
+    assert.equal(batchImportResponse.status, 202);
     const batchImportPayload = await batchImportResponse.json();
     assert.equal(batchImportPayload.success, true);
-    assert.equal(batchImportPayload.count, 2);
-    assert.equal(batchImportPayload.reports.length, 2);
+    assert.match(batchImportPayload.task.status, /^(queued|processing)$/);
+    assert.equal(batchImportPayload.task.totalCount, 2);
+    const completedBatchTask = await waitForBatchImportTask(server.baseUrl, batchImportPayload.task.id);
+    assert.equal(completedBatchTask.status, "completed");
+    assert.equal(completedBatchTask.completedCount, 2);
+    assert.equal(completedBatchTask.successCount, 2);
+    assert.equal(completedBatchTask.failedCount, 0);
+    assert.equal(completedBatchTask.items.length, 2);
+    assert.deepEqual(completedBatchTask.items.map((item: { status: string }) => item.status), ["succeeded", "succeeded"]);
+    const batchReports = await Promise.all(
+      completedBatchTask.items.map(async (item: { reportId: number }) => {
+        const response = await fetch(`${server.baseUrl}/reimbursement/api/reports/${item.reportId}`, {
+          headers: createAdminAuthHeaders(),
+        });
+        return (await response.json()).report;
+      }),
+    );
     assert.equal(
-      batchImportPayload.reports.every((report: { expenseCategory?: string }) => Boolean(report.expenseCategory)),
+      batchReports.every((report: { expenseCategory?: string }) => Boolean(report.expenseCategory)),
       true,
     );
     assert.deepEqual(
-      batchImportPayload.reports.map((report: { reporter: string }) => report.reporter),
+      batchReports.map((report: { reporter: string }) => report.reporter),
       ["批量补录测试人", "批量补录测试人"],
     );
     assert.deepEqual(
-      batchImportPayload.reports.map((report: { note: string }) => report.note),
+      batchReports.map((report: { note: string }) => report.note),
       ["第一张备注", "第二张备注"],
     );
-    for (const report of batchImportPayload.reports) {
+    for (const report of batchReports) {
       const detailResponse = await fetch(`${server.baseUrl}/reimbursement/api/reports/${report.id}`, {
         headers: createAdminAuthHeaders(),
       });
@@ -497,6 +535,26 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     });
     assert.equal(emptyBatchImportResponse.status, 400);
     assert.equal((await emptyBatchImportResponse.json()).error.field, "images");
+
+    const oversizedBatchCountForm = new FormData();
+    oversizedBatchCountForm.set("channelCode", "reimbursement_admin_test");
+    oversizedBatchCountForm.set("reporter", "超量图片测试人");
+    oversizedBatchCountForm.set("sentAt", "2026-08-17T10:30");
+    oversizedBatchCountForm.set("notesJson", JSON.stringify(Array.from({ length: 21 }, () => "")));
+    for (let index = 0; index < 21; index += 1) {
+      oversizedBatchCountForm.append(
+        "images",
+        new Blob([`batch-image-${index}`], { type: "image/png" }),
+        `${index}.png`,
+      );
+    }
+    const oversizedBatchCountResponse = await fetch(`${server.baseUrl}/reimbursement/api/batch-reports`, {
+      method: "POST",
+      headers: createAdminAuthHeaders(),
+      body: oversizedBatchCountForm,
+    });
+    assert.equal(oversizedBatchCountResponse.status, 400);
+    assert.match((await oversizedBatchCountResponse.json()).error.message, /最多添加 20 张/);
 
     const invalidManualImportResponse = await fetch(`${server.baseUrl}/reimbursement/api/reports`, {
       method: "POST",

@@ -1,3 +1,5 @@
+import crypto from "node:crypto";
+import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -8,13 +10,20 @@ import { getAppConfig, type AppConfig } from "../core/config/env.js";
 import {
   ADMIN_MANUAL_IMPORT_IMAGE_MIME_TYPES,
   saveUploadedReimbursementImage,
+  saveUploadedReimbursementImageFile,
 } from "../core/attachments/save-uploaded-image.js";
+import { getStateDirPath } from "../core/runtime/state-paths.js";
 import { getZonedDateParts, zonedDateTimeToUtc } from "../core/runtime/timezone.js";
 import {
   normalizeReimbursementExpenseCategory,
   REIMBURSEMENT_EXPENSE_CATEGORY_DEFINITIONS,
 } from "../scenarios/reimbursement/categories.js";
-import { importBatchReimbursementReports } from "../scenarios/reimbursement/batch-import.js";
+import { processBatchImportTask } from "../scenarios/reimbursement/batch-import-task-processor.js";
+import {
+  createBatchImportTask,
+  getBatchImportTask,
+  recoverInterruptedBatchImportTasks,
+} from "../scenarios/reimbursement/batch-import-task-repository.js";
 import { importManualReimbursementReport } from "../scenarios/reimbursement/manual-import.js";
 import {
   deleteReimbursementReport,
@@ -33,7 +42,7 @@ const ADMIN_BASE_PATH = "/reimbursement";
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 1000;
 const MAX_MANUAL_IMPORT_IMAGE_BYTES = 20 * 1024 * 1024;
-const MAX_BATCH_IMPORT_IMAGES = 10;
+const MAX_BATCH_IMPORT_IMAGES = 20;
 const MAX_BATCH_IMPORT_NOTE_LENGTH = 300;
 const MAX_ADMIN_EDIT_NOTE_LENGTH = 1000;
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
@@ -65,22 +74,6 @@ const manualImportImageUpload = multer({
   fileFilter: (_request, file, callback) => {
     if (!ADMIN_MANUAL_IMPORT_IMAGE_MIME_TYPES.has(file.mimetype)) {
       callback(new AdminValidationError("报账图仅支持 JPG、PNG、WEBP、GIF、HEIC 或 HEIF。", "image"));
-      return;
-    }
-
-    callback(null, true);
-  },
-});
-
-const batchImportImageUpload = multer({
-  storage: multer.memoryStorage(),
-  limits: {
-    fileSize: MAX_MANUAL_IMPORT_IMAGE_BYTES,
-    files: MAX_BATCH_IMPORT_IMAGES,
-  },
-  fileFilter: (_request, file, callback) => {
-    if (!ADMIN_MANUAL_IMPORT_IMAGE_MIME_TYPES.has(file.mimetype)) {
-      callback(new AdminValidationError("报账图仅支持 JPG、PNG、WEBP、GIF、HEIC 或 HEIF。", "images"));
       return;
     }
 
@@ -320,6 +313,26 @@ export function createApp(input?: {
 }) {
   const config = input?.config ?? getAppConfig();
   const staticDir = resolveStaticDir(input?.staticDir);
+  const batchUploadTempDir = path.join(getStateDirPath(config), "reimbursement", "batch-upload-temp");
+  fs.mkdirSync(batchUploadTempDir, { recursive: true });
+  const batchImportImageUpload = multer({
+    storage: multer.diskStorage({
+      destination: (_request, _file, callback) => callback(null, batchUploadTempDir),
+      filename: (_request, _file, callback) => callback(null, crypto.randomUUID()),
+    }),
+    limits: {
+      fileSize: MAX_MANUAL_IMPORT_IMAGE_BYTES,
+      files: MAX_BATCH_IMPORT_IMAGES,
+    },
+    fileFilter: (_request, file, callback) => {
+      if (!ADMIN_MANUAL_IMPORT_IMAGE_MIME_TYPES.has(file.mimetype)) {
+        callback(new AdminValidationError("报账图仅支持 JPG、PNG、WEBP、GIF、HEIC 或 HEIF。", "images"));
+        return;
+      }
+
+      callback(null, true);
+    },
+  });
   const adminAuth = createAdminAuthMiddleware({
     username: config.adminUsername,
     password: config.adminPassword,
@@ -327,6 +340,39 @@ export function createApp(input?: {
     guestPassword: config.adminGuestPassword,
   });
   const app = express();
+  const activeBatchImportTaskIds = new Set<string>();
+  const batchImportModelConfig = {
+    provider: config.reimbursementExtractionProvider,
+    model: config.reimbursementExtractionModel,
+    retryModel: config.reimbursementExtractionRetryModel,
+    apiKey: config.reimbursementExtractionApiKey,
+    baseUrl: config.reimbursementExtractionBaseUrl,
+    proxyUrl: config.reimbursementOpenAiProxyUrl,
+  };
+
+  function scheduleBatchImportTask(jobId: string) {
+    if (activeBatchImportTaskIds.has(jobId)) {
+      return;
+    }
+
+    activeBatchImportTaskIds.add(jobId);
+    setImmediate(() => {
+      void processBatchImportTask({
+        jobId,
+        modelConfig: batchImportModelConfig,
+      })
+        .catch((error) => {
+          console.error(`Unexpected batch reimbursement task error (${jobId}):`, error);
+        })
+        .finally(() => {
+          activeBatchImportTaskIds.delete(jobId);
+        });
+    });
+  }
+
+  for (const jobId of recoverInterruptedBatchImportTasks()) {
+    scheduleBatchImportTask(jobId);
+  }
 
   app.disable("x-powered-by");
   app.use(express.json({ limit: "32kb" }));
@@ -428,6 +474,8 @@ export function createApp(input?: {
     `${ADMIN_BASE_PATH}/api/batch-reports`,
     batchImportImageUpload.array("images", MAX_BATCH_IMPORT_IMAGES),
     async (request, response, next) => {
+      const uploadedFiles = Array.isArray(request.files) ? request.files : [];
+
       try {
         const channelCode = parseRequiredString(request.body?.channelCode, "channelCode", "门店");
         const channel = config.channels.find(
@@ -440,7 +488,7 @@ export function createApp(input?: {
 
         const reporter = parseRequiredString(request.body?.reporter, "reporter", "报账人");
         const sentAt = parseManualImportSentAt(request.body?.sentAt, config.timeZone);
-        const files = Array.isArray(request.files) ? request.files : [];
+        const files = uploadedFiles;
 
         if (files.length === 0) {
           throw new AdminValidationError("请至少添加一张报账图。", "images");
@@ -449,13 +497,13 @@ export function createApp(input?: {
         const notes = parseBatchImportNotes(request.body?.notesJson, files.length);
 
         const attachments = files.map((file) =>
-          saveUploadedReimbursementImage({
-            buffer: file.buffer,
+          saveUploadedReimbursementImageFile({
             config,
             mimeType: file.mimetype,
+            sourcePath: file.path,
           }),
         );
-        const results = await importBatchReimbursementReports({
+        const task = createBatchImportTask({
           channelCode: channel.code,
           channelName: channel.match.value,
           reporter,
@@ -463,26 +511,48 @@ export function createApp(input?: {
           sentAt,
           timeZone: config.timeZone,
           attachments,
-          modelConfig: {
-            provider: config.reimbursementExtractionProvider,
-            model: config.reimbursementExtractionModel,
-            retryModel: config.reimbursementExtractionRetryModel,
-            apiKey: config.reimbursementExtractionApiKey,
-            baseUrl: config.reimbursementExtractionBaseUrl,
-            proxyUrl: config.reimbursementOpenAiProxyUrl,
-          },
+          originalNames: files.map((file) => file.originalname),
         });
 
-        response.status(201).json({
+        response.status(202).json({
           success: true,
-          count: results.length,
-          reports: results.map((item) => item.report),
+          task,
         });
+        scheduleBatchImportTask(task.id);
       } catch (error) {
+        for (const file of uploadedFiles) {
+          if (file.path && fs.existsSync(file.path)) {
+            fs.unlinkSync(file.path);
+          }
+        }
         next(error);
       }
     },
   );
+
+  app.get(`${ADMIN_BASE_PATH}/api/batch-reports/:taskId`, (request, response, next) => {
+    try {
+      const taskId = parseRequiredString(request.params.taskId, "taskId", "批量补录任务");
+      const task = getBatchImportTask(taskId);
+
+      if (!task) {
+        response.status(404).json({
+          success: false,
+          error: {
+            message: "批量补录任务不存在。",
+          },
+        });
+        return;
+      }
+
+      response.status(200).json({
+        success: true,
+        task,
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
 
   app.get(`${ADMIN_BASE_PATH}/api/reports`, (request, response, next) => {
     try {

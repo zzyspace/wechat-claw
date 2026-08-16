@@ -55,3 +55,42 @@ export function saveUploadedReimbursementImage(input: {
     mimeType: input.mimeType,
   };
 }
+
+export function saveUploadedReimbursementImageFile(input: {
+  config: AppConfig;
+  mimeType: string;
+  sourcePath: string;
+  now?: Date;
+}): StoredAttachment {
+  const extension = IMAGE_EXTENSIONS_BY_MIME_TYPE[input.mimeType];
+
+  if (!extension) {
+    throw new Error(`Unsupported reimbursement image type: ${input.mimeType}`);
+  }
+
+  const buffer = fs.readFileSync(input.sourcePath);
+  const sha256 = crypto.createHash("sha256").update(buffer).digest("hex");
+  const zonedNow = getZonedDateParts(input.now ?? new Date(), input.config.timeZone);
+  const targetDir = path.join(
+    getReimbursementRawStorageDir(input.config),
+    String(zonedNow.year),
+    String(zonedNow.month).padStart(2, "0"),
+    String(zonedNow.day).padStart(2, "0"),
+  );
+  const localPath = path.join(targetDir, `${sha256}${extension}`);
+
+  fs.mkdirSync(targetDir, { recursive: true });
+
+  if (fs.existsSync(localPath)) {
+    fs.unlinkSync(input.sourcePath);
+  } else {
+    fs.renameSync(input.sourcePath, localPath);
+  }
+
+  return {
+    type: "image",
+    localPath,
+    sha256,
+    mimeType: input.mimeType,
+  };
+}

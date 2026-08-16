@@ -375,6 +375,56 @@
         font-weight: 600;
       }
 
+      .batch-task-progress {
+        display: grid;
+        gap: 10px;
+        padding: 14px;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        background: var(--surface-muted);
+      }
+
+      .batch-task-progress[hidden] {
+        display: none;
+      }
+
+      .batch-task-progress progress {
+        width: 100%;
+        height: 10px;
+        accent-color: var(--brand);
+      }
+
+      .batch-task-progress-list {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 6px 14px;
+        max-height: 150px;
+        overflow: auto;
+        color: var(--ink-soft);
+        font-size: 12px;
+      }
+
+      .batch-task-progress-item {
+        display: flex;
+        justify-content: space-between;
+        gap: 8px;
+        min-width: 0;
+      }
+
+      .batch-task-progress-name {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .batch-task-progress-status.is-failed {
+        color: var(--danger);
+      }
+
+      .batch-task-progress-status.is-succeeded {
+        color: var(--brand);
+      }
+
       .manual-import-footer {
         display: flex;
         align-items: center;
@@ -1532,11 +1582,16 @@
                     <span class="manual-upload-icon" aria-hidden="true">↑</span>
                     <span class="manual-upload-copy">
                       <strong>点击选择或拖拽多张报账图到这里</strong>
-                      <small>最多 10 张；每张支持 JPG、PNG、WEBP、GIF、HEIC、HEIF，最大 20MB</small>
+                      <small>最多 20 张；每张支持 JPG、PNG、WEBP、GIF、HEIC、HEIF，最大 20MB</small>
                     </span>
                   </label>
                   <div class="batch-image-list" id="batchImageList" hidden></div>
                   <span class="batch-image-count" id="batchImageCount">尚未添加报账图</span>
+                  <div class="batch-task-progress" id="batchTaskProgress" hidden>
+                    <strong id="batchTaskProgressText">等待开始</strong>
+                    <progress id="batchTaskProgressBar" value="0" max="1"></progress>
+                    <div class="batch-task-progress-list" id="batchTaskProgressList"></div>
+                  </div>
                 </div>
               </div>
               <div class="manual-import-footer">
@@ -1631,6 +1686,7 @@
       const BASE_PATH = "/reimbursement";
       const DEFAULT_TIME_ZONE = "Asia/Shanghai";
       const THEME_STORAGE_KEY = "reimbursement-admin-theme";
+      const BATCH_TASK_STORAGE_KEY = "reimbursement-admin-active-batch-task";
       const DETAIL_CLICK_DELAY_MS = 300;
       const MANUAL_IMAGE_MIME_TYPES = new Set([
         "image/jpeg",
@@ -1656,6 +1712,8 @@
         manualImagePreviewUrl: null,
         batchImageItems: [],
         batchImageDragDepth: 0,
+        batchTask: null,
+        batchTaskPollTimer: null,
         deletingIds: new Set(),
         editingReport: null,
         savingReport: false,
@@ -1692,6 +1750,10 @@
         batchImagePicker: document.getElementById("batchImagePicker"),
         batchImageList: document.getElementById("batchImageList"),
         batchImageCount: document.getElementById("batchImageCount"),
+        batchTaskProgress: document.getElementById("batchTaskProgress"),
+        batchTaskProgressText: document.getElementById("batchTaskProgressText"),
+        batchTaskProgressBar: document.getElementById("batchTaskProgressBar"),
+        batchTaskProgressList: document.getElementById("batchTaskProgressList"),
         batchImportSubmit: document.getElementById("batchImportSubmit"),
         batchImportCancel: document.getElementById("batchImportCancel"),
         batchImportStatus: document.getElementById("batchImportStatus"),
@@ -2096,6 +2158,127 @@
         renderBatchImages();
       }
 
+      function clearBatchTaskPollTimer() {
+        if (state.batchTaskPollTimer !== null) {
+          window.clearTimeout(state.batchTaskPollTimer);
+          state.batchTaskPollTimer = null;
+        }
+      }
+
+      function setBatchImportControlsDisabled(disabled) {
+        for (const control of elements.batchImportForm.querySelectorAll("input, select, textarea, button")) {
+          control.disabled = disabled;
+        }
+      }
+
+      function batchTaskStatusLabel(status) {
+        return {
+          queued: "等待中",
+          processing: "识别中",
+          succeeded: "已完成",
+          failed: "失败",
+        }[status] || status;
+      }
+
+      function renderBatchTask(task) {
+        state.batchTask = task;
+        elements.batchTaskProgress.hidden = !task;
+
+        if (!task) {
+          elements.batchTaskProgressText.textContent = "等待开始";
+          elements.batchTaskProgressBar.max = 1;
+          elements.batchTaskProgressBar.value = 0;
+          elements.batchTaskProgressList.replaceChildren();
+          return;
+        }
+
+        elements.batchTaskProgressText.textContent = task.status === "completed"
+          ? `处理完成：成功 ${task.successCount} 张，失败 ${task.failedCount} 张`
+          : `正在识别：已完成 ${task.completedCount}/${task.totalCount}`;
+        elements.batchTaskProgressBar.max = Math.max(1, task.totalCount);
+        elements.batchTaskProgressBar.value = task.completedCount;
+        elements.batchTaskProgressList.replaceChildren();
+
+        for (const item of task.items || []) {
+          const row = document.createElement("div");
+          row.className = "batch-task-progress-item";
+          const name = document.createElement("span");
+          name.className = "batch-task-progress-name";
+          name.textContent = item.originalName;
+          const status = document.createElement("span");
+          status.className = `batch-task-progress-status is-${item.status}`;
+          status.textContent = batchTaskStatusLabel(item.status);
+          if (item.errorMessage) {
+            status.title = item.errorMessage;
+          }
+          row.append(name, status);
+          elements.batchTaskProgressList.append(row);
+        }
+      }
+
+      async function readJsonResponse(response, fallbackMessage) {
+        const text = await response.text();
+
+        try {
+          return JSON.parse(text);
+        } catch {
+          throw new Error(response.ok ? fallbackMessage : `${fallbackMessage}（HTTP ${response.status}）`);
+        }
+      }
+
+      async function pollBatchImportTask(taskId) {
+        clearBatchTaskPollTimer();
+
+        try {
+          const response = await fetch(buildAuthFetchUrl(`${BASE_PATH}/api/batch-reports/${encodeURIComponent(taskId)}`), {
+            headers: { Accept: "application/json" },
+          });
+          const payload = await readJsonResponse(response, "批量补录进度加载失败");
+
+          if (!response.ok || !payload.success) {
+            if (response.status >= 400 && response.status < 500) {
+              state.importing = false;
+              window.localStorage.removeItem(BATCH_TASK_STORAGE_KEY);
+              setBatchImportControlsDisabled(false);
+            }
+            throw new Error(payload?.error?.message || "批量补录进度加载失败");
+          }
+
+          const task = payload.task;
+          renderBatchTask(task);
+
+          if (task.status === "completed") {
+            state.importing = false;
+            window.localStorage.removeItem(BATCH_TASK_STORAGE_KEY);
+            setBatchImportControlsDisabled(false);
+            elements.batchImportSubmit.disabled = true;
+            elements.batchImportCancel.disabled = false;
+            elements.batchImportCancel.textContent = "关闭";
+            setBatchImportStatus(
+              task.failedCount
+                ? `处理完成：成功 ${task.successCount} 张，失败 ${task.failedCount} 张。可查看失败项提示。`
+                : `批量补录成功，共生成 ${task.successCount} 条报账记录。`,
+              task.failedCount > 0,
+            );
+            await loadReports({ resetOffset: true });
+            return;
+          }
+
+          state.importing = true;
+          elements.batchImportModal.hidden = false;
+          setBatchImportControlsDisabled(true);
+          setBatchImportStatus(`后台处理中，已完成 ${task.completedCount}/${task.totalCount}...`);
+        } catch (error) {
+          setBatchImportStatus(error instanceof Error ? error.message : String(error), true);
+        }
+
+        if (state.importing) {
+          state.batchTaskPollTimer = window.setTimeout(() => {
+            void pollBatchImportTask(taskId);
+          }, 1500);
+        }
+      }
+
       function renderBatchImages() {
         elements.batchImageList.replaceChildren();
         elements.batchImageList.hidden = state.batchImageItems.length === 0;
@@ -2169,8 +2352,8 @@
           (file) => !existingKeys.has(`${file.name}:${file.size}:${file.lastModified}`),
         );
 
-        if (state.batchImageItems.length + uniqueIncoming.length > 10) {
-          setBatchImportStatus("批量补录每次最多添加 10 张报账图。", true);
+        if (state.batchImageItems.length + uniqueIncoming.length > 20) {
+          setBatchImportStatus("批量补录每次最多添加 20 张报账图。", true);
           return false;
         }
 
@@ -2222,6 +2405,8 @@
         clearBatchImages();
         elements.batchChannelCode.value = channelCode;
         elements.batchSentAt.value = formatLocalDateTimeInput();
+        elements.batchImportCancel.textContent = "取消";
+        renderBatchTask(null);
         setBatchImportStatus("");
       }
 
@@ -2237,8 +2422,26 @@
         }
 
         elements.batchImportModal.hidden = true;
+        clearBatchTaskPollTimer();
         clearBatchImages();
+        renderBatchTask(null);
+        elements.batchImportSubmit.disabled = false;
+        elements.batchImportCancel.textContent = "取消";
         setBatchImportStatus("");
+      }
+
+      function resumeStoredBatchImportTask() {
+        const taskId = window.localStorage.getItem(BATCH_TASK_STORAGE_KEY);
+
+        if (!taskId) {
+          return;
+        }
+
+        state.importing = true;
+        elements.batchImportModal.hidden = false;
+        setBatchImportControlsDisabled(true);
+        setBatchImportStatus("正在恢复批量补录进度...");
+        void pollBatchImportTask(taskId);
       }
 
       function buildAuthFetchUrl(pathname, params) {
@@ -2802,9 +3005,8 @@
         }
 
         state.importing = true;
-        elements.batchImportSubmit.disabled = true;
-        elements.batchImportCancel.disabled = true;
-        setBatchImportStatus(`正在逐张识别并补录，共 ${state.batchImageItems.length} 张...`);
+        setBatchImportControlsDisabled(true);
+        setBatchImportStatus(`正在上传并创建任务，共 ${state.batchImageItems.length} 张...`);
 
         try {
           const response = await fetch(buildAuthFetchUrl(`${BASE_PATH}/api/batch-reports`), {
@@ -2814,23 +3016,23 @@
             },
             body: formData,
           });
-          const payload = await response.json();
+          const payload = await readJsonResponse(response, "批量补录任务创建失败");
 
           if (!response.ok || !payload.success) {
-            throw new Error(payload?.error?.message || "批量补录失败");
+            throw new Error(payload?.error?.message || "批量补录任务创建失败");
           }
 
-          const count = Number(payload.count || payload.reports?.length || 0);
-          clearBatchImages();
-          elements.batchImportModal.hidden = true;
-          await loadReports({ resetOffset: true });
-          setStatus(`批量补录成功，共生成 ${count} 条报账记录`);
+          const task = payload.task;
+          window.localStorage.setItem(BATCH_TASK_STORAGE_KEY, task.id);
+          renderBatchTask(task);
+          setBatchImportStatus(`任务已创建，后台处理中，已完成 0/${task.totalCount}...`);
+          void pollBatchImportTask(task.id);
         } catch (error) {
-          setBatchImportStatus(error instanceof Error ? error.message : String(error), true);
-        } finally {
           state.importing = false;
+          setBatchImportControlsDisabled(false);
           elements.batchImportSubmit.disabled = false;
           elements.batchImportCancel.disabled = false;
+          setBatchImportStatus(error instanceof Error ? error.message : String(error), true);
         }
       }
 
@@ -3345,6 +3547,9 @@
             await loadManualImportOptions();
           }
           await loadReports();
+          if (state.canWrite) {
+            resumeStoredBatchImportTask();
+          }
         } catch (error) {
           setStatus(error instanceof Error ? error.message : String(error), true);
         }
