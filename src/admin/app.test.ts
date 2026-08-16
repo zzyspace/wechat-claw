@@ -349,8 +349,18 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     assert.match(pageHtml, /function scheduleDetail\(reportId\)/);
     assert.match(pageHtml, /elements\.tableBody\.addEventListener\("dblclick", \(\) => \{\s*cancelPendingDetail\(\);\s*\}\)/);
     assert.match(pageHtml, /id="accessPill" hidden/);
-    assert.match(pageHtml, /id="deleteColumnHeader" hidden/);
-    assert.match(pageHtml, /const deleteCell = state\.canWrite/);
+    assert.match(pageHtml, /id="operationColumnHeader" hidden>操作<\/th>/);
+    assert.match(pageHtml, /const operationCell = state\.canWrite/);
+    assert.match(pageHtml, /id="editReportModal" hidden/);
+    assert.match(pageHtml, /<h2 id="editReportModalTitle">编辑报账<\/h2>/);
+    assert.match(pageHtml, /id="editReportAmount" name="amount" type="number"/);
+    assert.match(pageHtml, /id="editReportExpenseCategory" name="expenseCategory"/);
+    assert.match(pageHtml, /id="editReportCurrentNote">暂无备注<\/div>/);
+    assert.match(pageHtml, /id="editReportNoteToAppend" name="noteToAppend"/);
+    assert.match(pageHtml, /data-edit-id="\$\{item\.id\}"/);
+    assert.match(pageHtml, /method: "PATCH"/);
+    assert.match(pageHtml, /body: JSON\.stringify\(payload\)/);
+    assert.match(pageHtml, /elements\.operationColumnHeader\.hidden = !state\.canWrite/);
     assert.match(pageHtml, /fetch\(buildAuthFetchUrl\(`\$\{BASE_PATH\}\/api\/session`\)/);
     assert.doesNotMatch(pageHtml, /<label for="needsReview">需复核<\/label>/);
 
@@ -569,6 +579,71 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     assert.equal(detailPayload.report.receiptDeliveries.length, 1);
     assert.equal(detailPayload.report.sources[0]?.attachments.length, 1);
     assert.equal(detailPayload.report.sources[0]?.attachments[0]?.exists, true);
+
+    const guestEditResponse = await fetch(`${server.baseUrl}/reimbursement/api/reports/${seeded.reportId}`, {
+      method: "PATCH",
+      headers: {
+        ...createAdminAuthHeaders("guest", "guest-secret-pass"),
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        amount: 99,
+        updatedAt: detailPayload.report.updatedAt,
+      }),
+    });
+    assert.equal(guestEditResponse.status, 403);
+
+    const editResponse = await fetch(`${server.baseUrl}/reimbursement/api/reports/${seeded.reportId}`, {
+      method: "PATCH",
+      headers: {
+        ...createAdminAuthHeaders(),
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        amount: -12.5,
+        expenseCategory: "flower",
+        noteToAppend: "后台调整",
+        updatedAt: detailPayload.report.updatedAt,
+      }),
+    });
+    assert.equal(editResponse.status, 200);
+    const editPayload = await editResponse.json();
+    assert.equal(editPayload.success, true);
+    assert.equal(editPayload.report.amount, -12.5);
+    assert.equal(editPayload.report.expenseCategory, "flower");
+    assert.equal(editPayload.report.note, "晚餐食材采购；后台调整");
+    assert.equal(editPayload.report.needsReview, false);
+    assert.equal(editPayload.report.createdAt, detailPayload.report.createdAt);
+    assert.notEqual(editPayload.report.updatedAt, detailPayload.report.updatedAt);
+
+    const staleEditResponse = await fetch(`${server.baseUrl}/reimbursement/api/reports/${seeded.reportId}`, {
+      method: "PATCH",
+      headers: {
+        ...createAdminAuthHeaders(),
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        amount: 66,
+        updatedAt: detailPayload.report.updatedAt,
+      }),
+    });
+    assert.equal(staleEditResponse.status, 409);
+    assert.match((await staleEditResponse.json()).error.message, /重新加载/);
+
+    const emptyEditResponse = await fetch(`${server.baseUrl}/reimbursement/api/reports/${seeded.reportId}`, {
+      method: "PATCH",
+      headers: {
+        ...createAdminAuthHeaders(),
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ updatedAt: editPayload.report.updatedAt }),
+    });
+    assert.equal(emptyEditResponse.status, 400);
+    assert.equal((await emptyEditResponse.json()).error.field, "report");
 
     assert.ok(seeded.existingAttachmentId);
     const attachmentResponse = await fetch(

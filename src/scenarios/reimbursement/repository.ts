@@ -725,6 +725,90 @@ export function updateReimbursementReportExpenseCategory(input: {
   return selectReportById(existing.id);
 }
 
+export type AdminReimbursementReportUpdateResult =
+  | { status: "conflict"; report: ReimbursementReportRecord }
+  | { status: "not_found" }
+  | { status: "updated"; report: ReimbursementReportRecord };
+
+export function updateAdminReimbursementReport(input: {
+  reimbursementReportId: number;
+  expectedUpdatedAt: string;
+  amount?: number;
+  expenseCategory?: ReimbursementExpenseCategory;
+  noteToAppend?: string;
+  timeZone?: string;
+  referenceDateTime?: string;
+}): AdminReimbursementReportUpdateResult {
+  const db = getDatabase();
+
+  return db.transaction(() => {
+    const existing = findReportById(input.reimbursementReportId);
+
+    if (!existing) {
+      return { status: "not_found" } as const;
+    }
+
+    if (existing.updatedAt !== input.expectedUpdatedAt) {
+      return { status: "conflict", report: existing } as const;
+    }
+
+    const hasAmount = input.amount !== undefined;
+    const hasExpenseCategory = input.expenseCategory !== undefined;
+    const hasNote = Boolean(input.noteToAppend);
+    const mergedNote = hasNote
+      ? mergeReportNotes(existing.note, input.noteToAppend ?? "")
+      : existing.note;
+    const createdAtOverride = hasNote
+      ? resolveMonthlyLedgerCreatedAtOverride({
+          note: mergedNote,
+          timeZone: input.timeZone,
+          referenceDateTime: input.referenceDateTime,
+        })
+      : null;
+
+    const result = db
+      .prepare(
+        `
+          UPDATE reimbursement_reports
+          SET
+            amount = ?,
+            expense_category = ?,
+            note = ?,
+            evidence_type = ?,
+            needs_review = ?,
+            created_at = COALESCE(?, created_at),
+            updated_at = strftime('%Y-%m-%d %H:%M:%f', 'now')
+          WHERE id = ?
+            AND updated_at = ?
+        `,
+      )
+      .run(
+        hasAmount ? input.amount : existing.amount,
+        hasExpenseCategory
+          ? input.expenseCategory || DEFAULT_REIMBURSEMENT_EXPENSE_CATEGORY
+          : existing.expenseCategory,
+        mergedNote,
+        hasNote ? "image+text" : existing.evidenceType,
+        hasAmount ? 0 : Number(existing.needsReview),
+        createdAtOverride,
+        existing.id,
+        input.expectedUpdatedAt,
+      );
+
+    if (result.changes === 0) {
+      const current = findReportById(existing.id);
+      return current
+        ? ({ status: "conflict", report: current } as const)
+        : ({ status: "not_found" } as const);
+    }
+
+    return {
+      status: "updated",
+      report: selectReportById(existing.id),
+    } as const;
+  })();
+}
+
 export function deleteReimbursementReport(reimbursementReportId: number): boolean {
   const existing = findReportById(reimbursementReportId);
 

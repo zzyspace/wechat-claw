@@ -16,6 +16,7 @@ import {
   mergePrimaryImageIntoTextOnlyReimbursementReport,
   saveReimbursementReceiptDelivery,
   saveReimbursementReport,
+  updateAdminReimbursementReport,
 } from "./repository.js";
 
 process.env.WECHATY_STATE_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "wechat-claw-reimbursement-repository-"));
@@ -25,6 +26,71 @@ function formatLocalTimestamp(value: string, timeZone: string) {
   const parts = getZonedDateParts(date, timeZone);
   return `${parts.year}-${String(parts.month).padStart(2, "0")}-${String(parts.day).padStart(2, "0")} ${String(parts.hour).padStart(2, "0")}:${String(parts.minute).padStart(2, "0")}:${String(parts.second).padStart(2, "0")}`;
 }
+
+test("updateAdminReimbursementReport applies bot-compatible edits and rejects stale writes", () => {
+  const primaryMessage = saveRawMessage({
+    messageExternalId: "reimbursement-repository-admin-edit",
+    channelCode: "reimbursement_repository_admin_edit",
+    channelName: "报账后台编辑测试群",
+    senderName: "小编",
+    messageType: "6",
+    textContent: "(非文本消息)",
+    eventReceivedAt: "2026-07-01T01:00:00.000Z",
+    dedupeKey: "reimbursement-repository-admin-edit",
+    attachments: [],
+  });
+  const report = saveReimbursementReport({
+    channelCode: "reimbursement_repository_admin_edit",
+    channelName: "报账后台编辑测试群",
+    reporter: "小编",
+    amount: null,
+    currency: "CNY",
+    expenseCategory: "other",
+    voucherDate: "2026-07-01",
+    voucherDateSource: "message",
+    note: "待复核",
+    evidenceType: "image",
+    merchant: null,
+    documentNo: null,
+    voucherType: null,
+    ocrText: null,
+    confidence: 0.45,
+    needsReview: true,
+    primaryRawMessageId: primaryMessage.rawMessageId,
+  });
+
+  const updated = updateAdminReimbursementReport({
+    reimbursementReportId: report.id,
+    expectedUpdatedAt: report.updatedAt,
+    amount: -16.46,
+    expenseCategory: "food",
+    noteToAppend: "8月账",
+    timeZone: "Asia/Shanghai",
+    referenceDateTime: "2026-08-17T10:00:00.000Z",
+  });
+
+  assert.equal(updated.status, "updated");
+  if (updated.status !== "updated") {
+    return;
+  }
+  assert.equal(updated.report.amount, -16.46);
+  assert.equal(updated.report.expenseCategory, "food");
+  assert.equal(updated.report.note, "待复核；8月账");
+  assert.equal(updated.report.needsReview, false);
+  assert.equal(updated.report.evidenceType, "image+text");
+  assert.equal(updated.report.createdAt, "2026-08-30 16:00:00");
+  assert.notEqual(updated.report.updatedAt, report.updatedAt);
+
+  const stale = updateAdminReimbursementReport({
+    reimbursementReportId: report.id,
+    expectedUpdatedAt: report.updatedAt,
+    amount: 99,
+  });
+  assert.equal(stale.status, "conflict");
+  if (stale.status === "conflict") {
+    assert.equal(stale.report.amount, -16.46);
+  }
+});
 
 test("findReimbursementReportByImageMessageExternalId matches an image source only in its room", () => {
   const messageExternalId = "reimbursement-repository-image-source-lookup";

@@ -199,14 +199,17 @@
       #manualImportForm .field input:not([type="file"]),
       #manualImportForm .field select,
       #batchImportForm .field input:not([type="file"]),
-      #batchImportForm .field select {
+      #batchImportForm .field select,
+      #editReportForm .field input,
+      #editReportForm .field select {
         height: 48px;
         min-height: 48px;
         border-radius: 14px;
       }
 
       #manualImportForm .field textarea,
-      #batchImportForm .field textarea {
+      #batchImportForm .field textarea,
+      #editReportForm .field textarea {
         min-height: 92px;
         border-radius: 14px;
       }
@@ -492,6 +495,29 @@
 
       .button-danger:hover:not([disabled]) {
         background: rgba(255, 59, 48, 0.14);
+      }
+
+      .operation-buttons {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        white-space: nowrap;
+      }
+
+      .operation-buttons button {
+        min-height: 34px;
+        padding: 7px 10px;
+      }
+
+      .edit-current-note {
+        min-height: 48px;
+        padding: 12px 14px;
+        border: 1px solid var(--subtle-border);
+        border-radius: 14px;
+        background: var(--surface-muted);
+        color: var(--ink-soft);
+        line-height: 1.65;
+        word-break: break-word;
       }
 
       .summary-row {
@@ -1381,7 +1407,7 @@
                   <th>需复核</th>
                   <th>更新时间</th>
                   <th>报账 ID</th>
-                  <th id="deleteColumnHeader" hidden>删除</th>
+                  <th id="operationColumnHeader" hidden>操作</th>
                 </tr>
               </thead>
               <tbody id="tableBody"></tbody>
@@ -1539,6 +1565,50 @@
         </div>
       </div>
 
+      <div class="modal" id="editReportModal" hidden>
+        <div class="modal-backdrop" id="editReportModalBackdrop"></div>
+        <div class="panel modal-dialog manual-import-dialog" role="dialog" aria-modal="true" aria-labelledby="editReportModalTitle">
+          <div class="modal-frame">
+            <div class="modal-topbar">
+              <div class="manual-import-heading">
+                <h2 id="editReportModalTitle">编辑报账</h2>
+                <p class="muted" id="editReportSummary"></p>
+              </div>
+              <button class="modal-close" id="editReportModalClose" type="button" aria-label="关闭编辑报账弹窗">×</button>
+            </div>
+            <form id="editReportForm" class="manual-import-form">
+              <div class="manual-import-grid">
+                <div class="field">
+                  <label for="editReportAmount">金额（元）</label>
+                  <input id="editReportAmount" name="amount" type="number" step="any" inputmode="decimal" placeholder="留空表示不修改" />
+                </div>
+                <div class="field">
+                  <label for="editReportExpenseCategory">类别</label>
+                  <select id="editReportExpenseCategory" name="expenseCategory" required>
+                    <option value="">请选择类别</option>
+                  </select>
+                </div>
+                <div class="field field-wide">
+                  <span class="field-label">当前备注（只读）</span>
+                  <div class="edit-current-note" id="editReportCurrentNote">暂无备注</div>
+                </div>
+                <div class="field field-wide">
+                  <label for="editReportNoteToAppend">追加备注（选填）</label>
+                  <textarea id="editReportNoteToAppend" name="noteToAppend" maxlength="1000" placeholder="仅追加，不覆盖已有备注；支持 1月账～12月账"></textarea>
+                </div>
+              </div>
+              <div class="manual-import-footer">
+                <span class="status" id="editReportStatus" aria-live="polite"></span>
+                <div class="manual-import-buttons">
+                  <button id="editReportCancel" type="button">取消</button>
+                  <button class="button-primary" id="editReportSubmit" type="submit">保存修改</button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+
       <div class="modal" id="attachmentPreviewModal" hidden>
         <div class="modal-backdrop" id="attachmentPreviewModalBackdrop"></div>
         <div class="panel modal-dialog attachment-preview-dialog" role="dialog" aria-modal="true" aria-labelledby="attachmentPreviewTitle">
@@ -1587,6 +1657,8 @@
         batchImageItems: [],
         batchImageDragDepth: 0,
         deletingIds: new Set(),
+        editingReport: null,
+        savingReport: false,
       };
 
       const elements = {
@@ -1631,7 +1703,7 @@
         accessPill: document.getElementById("accessPill"),
         statusText: document.getElementById("statusText"),
         tableBody: document.getElementById("tableBody"),
-        deleteColumnHeader: document.getElementById("deleteColumnHeader"),
+        operationColumnHeader: document.getElementById("operationColumnHeader"),
         emptyState: document.getElementById("emptyState"),
         rangeText: document.getElementById("rangeText"),
         prevPage: document.getElementById("prevPage"),
@@ -1641,6 +1713,19 @@
         detailModalClose: document.getElementById("detailModalClose"),
         detailEmpty: document.getElementById("detailEmpty"),
         detailContent: document.getElementById("detailContent"),
+        editReportModal: document.getElementById("editReportModal"),
+        editReportModalBackdrop: document.getElementById("editReportModalBackdrop"),
+        editReportModalClose: document.getElementById("editReportModalClose"),
+        editReportModalTitle: document.getElementById("editReportModalTitle"),
+        editReportSummary: document.getElementById("editReportSummary"),
+        editReportForm: document.getElementById("editReportForm"),
+        editReportAmount: document.getElementById("editReportAmount"),
+        editReportExpenseCategory: document.getElementById("editReportExpenseCategory"),
+        editReportCurrentNote: document.getElementById("editReportCurrentNote"),
+        editReportNoteToAppend: document.getElementById("editReportNoteToAppend"),
+        editReportStatus: document.getElementById("editReportStatus"),
+        editReportSubmit: document.getElementById("editReportSubmit"),
+        editReportCancel: document.getElementById("editReportCancel"),
         attachmentPreviewModal: document.getElementById("attachmentPreviewModal"),
         attachmentPreviewModalBackdrop: document.getElementById("attachmentPreviewModalBackdrop"),
         attachmentPreviewClose: document.getElementById("attachmentPreviewClose"),
@@ -2260,8 +2345,8 @@
           row.setAttribute("data-report-id", String(item.id));
           row.classList.toggle("is-selected", item.id === state.selectedReportId);
           const isDeleting = state.deletingIds.has(item.id);
-          const deleteCell = state.canWrite
-            ? `<td><button class="button-danger" type="button" data-delete-id="${item.id}" ${isDeleting ? "disabled" : ""}>${isDeleting ? "删除中" : "删除"}</button></td>`
+          const operationCell = state.canWrite
+            ? `<td><div class="operation-buttons"><button type="button" data-edit-id="${item.id}">编辑</button><button class="button-danger" type="button" data-delete-id="${item.id}" ${isDeleting ? "disabled" : ""}>${isDeleting ? "删除中" : "删除"}</button></div></td>`
             : "";
           row.innerHTML = `
             <td>${renderStoreCell(item)}</td>
@@ -2274,7 +2359,7 @@
             <td><span class="tag ${item.needsReview ? "warn" : "ok"}">${item.needsReview ? "需复核" : "已确认"}</span></td>
             <td>${escapeHtml(formatTimestamp(item.updatedAt))}</td>
             <td><button type="button" data-report-id="${item.id}">#${item.id}</button></td>
-            ${deleteCell}
+            ${operationCell}
           `;
           fragment.appendChild(row);
         }
@@ -2591,7 +2676,7 @@
         }
 
         state.canWrite = payload.permissions?.canWrite === true;
-        elements.deleteColumnHeader.hidden = !state.canWrite;
+        elements.operationColumnHeader.hidden = !state.canWrite;
         elements.accessPill.hidden = false;
         elements.accessPill.textContent = state.canWrite
           ? `管理员 ${payload.account?.username || ""}`.trim()
@@ -2625,6 +2710,7 @@
             `<option value="${escapeHtml(category.code)}">${escapeHtml(category.label)}</option>`,
           ),
         ].join("");
+        elements.editReportExpenseCategory.innerHTML = elements.manualExpenseCategory.innerHTML;
         elements.batchChannelCode.innerHTML = elements.manualChannelCode.innerHTML;
         resetManualImportForm();
         resetBatchImportForm();
@@ -2745,6 +2831,126 @@
           state.importing = false;
           elements.batchImportSubmit.disabled = false;
           elements.batchImportCancel.disabled = false;
+        }
+      }
+
+      function setEditReportStatus(message, isError = false) {
+        elements.editReportStatus.textContent = message;
+        elements.editReportStatus.classList.toggle("error", isError);
+      }
+
+      function openEditReportModal(reportId) {
+        if (!state.canWrite || state.savingReport) {
+          return;
+        }
+
+        const report = state.items.find((item) => item.id === reportId);
+        if (!report) {
+          setStatus(`未找到报账 #${reportId}，请重新加载列表。`, true);
+          return;
+        }
+
+        state.editingReport = { ...report };
+        elements.editReportForm.reset();
+        elements.editReportModalTitle.textContent = `编辑报账 #${report.id}`;
+        elements.editReportSummary.textContent = `${report.channelName} · ${report.reporter}`;
+        elements.editReportAmount.value = report.amount === null || report.amount === undefined
+          ? ""
+          : String(report.amount);
+        elements.editReportExpenseCategory.value = report.expenseCategory || "";
+        elements.editReportCurrentNote.textContent = String(report.note || "").trim() || "暂无备注";
+        elements.editReportNoteToAppend.value = "";
+        setEditReportStatus("");
+        elements.editReportModal.hidden = false;
+        window.setTimeout(() => elements.editReportAmount.focus(), 0);
+      }
+
+      function closeEditReportModal() {
+        if (state.savingReport) {
+          return;
+        }
+
+        elements.editReportModal.hidden = true;
+        state.editingReport = null;
+        elements.editReportForm.reset();
+        setEditReportStatus("");
+      }
+
+      async function submitEditReport() {
+        const original = state.editingReport;
+        if (!state.canWrite || state.savingReport || !original) {
+          return;
+        }
+
+        const amountText = elements.editReportAmount.value.trim();
+        const expenseCategory = elements.editReportExpenseCategory.value.trim();
+        const noteToAppend = elements.editReportNoteToAppend.value.trim();
+        const payload = { updatedAt: original.updatedAt };
+        const changes = [];
+
+        if (amountText) {
+          const amount = Number(amountText);
+          if (!Number.isFinite(amount)) {
+            setEditReportStatus("金额必须是有效数字。", true);
+            return;
+          }
+          if (original.amount === null || original.amount === undefined || amount !== Number(original.amount)) {
+            payload.amount = amount;
+            changes.push(`金额 ${amount.toFixed(2)} 元`);
+          }
+        }
+
+        if (expenseCategory && expenseCategory !== original.expenseCategory) {
+          payload.expenseCategory = expenseCategory;
+          const selectedOption = elements.editReportExpenseCategory.selectedOptions[0];
+          changes.push(`分类 ${selectedOption?.textContent || expenseCategory}`);
+        }
+
+        if (noteToAppend) {
+          payload.noteToAppend = noteToAppend;
+          changes.push("备注已添加");
+        }
+
+        if (changes.length === 0) {
+          setEditReportStatus("没有需要保存的修改。", true);
+          return;
+        }
+
+        state.savingReport = true;
+        elements.editReportSubmit.disabled = true;
+        elements.editReportCancel.disabled = true;
+        setEditReportStatus("正在保存修改...");
+
+        try {
+          const response = await fetch(buildAuthFetchUrl(`${BASE_PATH}/api/reports/${original.id}`), {
+            method: "PATCH",
+            headers: {
+              Accept: "application/json",
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(payload),
+          });
+          const result = await response.json();
+
+          if (!response.ok || !result.success) {
+            throw new Error(result?.error?.message || "报账修改失败");
+          }
+
+          elements.editReportModal.hidden = true;
+          state.editingReport = null;
+          await loadReports();
+
+          if (state.selectedReportId === original.id && !elements.detailModal.hidden) {
+            await loadDetail(original.id);
+          }
+
+          setStatus(`报账 #${original.id} 已更新：${changes.join("，")}`);
+        } catch (error) {
+          setEditReportStatus(error instanceof Error ? error.message : String(error), true);
+        } finally {
+          state.savingReport = false;
+          elements.editReportSubmit.disabled = false;
+          elements.editReportCancel.disabled = false;
         }
       }
 
@@ -2965,6 +3171,23 @@
         }
       });
 
+      elements.editReportModalBackdrop.addEventListener("click", () => {
+        closeEditReportModal();
+      });
+
+      elements.editReportModalClose.addEventListener("click", () => {
+        closeEditReportModal();
+      });
+
+      elements.editReportCancel.addEventListener("click", () => {
+        closeEditReportModal();
+      });
+
+      elements.editReportForm.addEventListener("submit", (event) => {
+        event.preventDefault();
+        void submitEditReport();
+      });
+
       elements.resetFilters.addEventListener("click", () => {
         elements.filters.reset();
         state.offset = 0;
@@ -3006,6 +3229,15 @@
           const reportId = Number.parseInt(previewButton.getAttribute("data-attachment-preview-report-id") || "", 10);
           if (Number.isFinite(reportId) && reportId > 0) {
             openAttachmentPreviewModal(reportId);
+          }
+          return;
+        }
+
+        const editButton = target.closest("button[data-edit-id]");
+        if (editButton) {
+          const reportId = Number.parseInt(editButton.getAttribute("data-edit-id") || "", 10);
+          if (state.canWrite && Number.isFinite(reportId) && reportId > 0) {
+            openEditReportModal(reportId);
           }
           return;
         }
@@ -3093,6 +3325,11 @@
 
         if (event.key === "Escape" && !elements.batchImportModal.hidden) {
           closeBatchImportModal();
+          return;
+        }
+
+        if (event.key === "Escape" && !elements.editReportModal.hidden) {
+          closeEditReportModal();
           return;
         }
 

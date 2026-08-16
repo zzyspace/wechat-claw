@@ -21,6 +21,7 @@ import {
   findAdminReimbursementAttachment,
   getAdminReimbursementReportDetail,
   listAdminReimbursementReports,
+  updateAdminReimbursementReport,
 } from "../scenarios/reimbursement/repository.js";
 import {
   createAdminAuthMiddleware,
@@ -34,6 +35,7 @@ const MAX_LIMIT = 1000;
 const MAX_MANUAL_IMPORT_IMAGE_BYTES = 20 * 1024 * 1024;
 const MAX_BATCH_IMPORT_IMAGES = 10;
 const MAX_BATCH_IMPORT_NOTE_LENGTH = 300;
+const MAX_ADMIN_EDIT_NOTE_LENGTH = 1000;
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
 const defaultStaticDir = path.join(currentDir, "public");
 
@@ -44,6 +46,13 @@ class AdminValidationError extends Error {
     super(message);
     this.name = "AdminValidationError";
     this.field = field;
+  }
+}
+
+class AdminConflictError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "AdminConflictError";
   }
 }
 
@@ -180,6 +189,18 @@ function parseManualImportAmount(value: unknown) {
   }
 
   return amount;
+}
+
+function parseAdminEditAmount(value: unknown) {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    throw new AdminValidationError("金额必须是有效数字。", "amount");
+  }
+
+  return value;
+}
+
+function hasOwnField(value: unknown, field: string) {
+  return Boolean(value && typeof value === "object" && Object.prototype.hasOwnProperty.call(value, field));
 }
 
 function parseManualImportSentAt(value: unknown, timeZone: string) {
@@ -506,6 +527,65 @@ export function createApp(input?: {
     }
   });
 
+  app.patch(`${ADMIN_BASE_PATH}/api/reports/:id`, (request, response, next) => {
+    try {
+      const reportId = parsePositiveInteger(request.params.id, "id");
+      const expectedUpdatedAt = parseRequiredString(request.body?.updatedAt, "updatedAt", "更新时间");
+      const hasAmount = hasOwnField(request.body, "amount");
+      const hasExpenseCategory = hasOwnField(request.body, "expenseCategory");
+      const hasNoteToAppend = hasOwnField(request.body, "noteToAppend");
+      const amount = hasAmount ? parseAdminEditAmount(request.body.amount) : undefined;
+      const expenseCategory = hasExpenseCategory
+        ? parseExpenseCategory(request.body.expenseCategory)
+        : undefined;
+      const noteToAppend = hasNoteToAppend ? trimString(request.body.noteToAppend) : "";
+
+      if (hasExpenseCategory && !expenseCategory) {
+        throw new AdminValidationError("请选择报账类别。", "expenseCategory");
+      }
+
+      if (noteToAppend.length > MAX_ADMIN_EDIT_NOTE_LENGTH) {
+        throw new AdminValidationError(
+          `追加备注不能超过 ${MAX_ADMIN_EDIT_NOTE_LENGTH} 个字符。`,
+          "noteToAppend",
+        );
+      }
+
+      if (!hasAmount && !hasExpenseCategory && !noteToAppend) {
+        throw new AdminValidationError("请至少修改金额、类别或追加一条备注。", "report");
+      }
+
+      const result = updateAdminReimbursementReport({
+        reimbursementReportId: reportId,
+        expectedUpdatedAt,
+        amount,
+        expenseCategory,
+        noteToAppend: noteToAppend || undefined,
+        timeZone: config.timeZone,
+        referenceDateTime: new Date().toISOString(),
+      });
+
+      if (result.status === "not_found") {
+        response.status(404).json({
+          success: false,
+          error: { message: "报账记录不存在。" },
+        });
+        return;
+      }
+
+      if (result.status === "conflict") {
+        throw new AdminConflictError("这条报账已被其他操作更新，请重新加载后再编辑。");
+      }
+
+      response.status(200).json({
+        success: true,
+        report: result.report,
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
   app.delete(`${ADMIN_BASE_PATH}/api/reports/:id`, (request, response, next) => {
     try {
       const reportId = parsePositiveInteger(request.params.id, "id");
@@ -588,6 +668,16 @@ export function createApp(input?: {
         success: false,
         error: {
           field: error.field,
+          message: error.message,
+        },
+      });
+      return;
+    }
+
+    if (error instanceof AdminConflictError) {
+      response.status(409).json({
+        success: false,
+        error: {
           message: error.message,
         },
       });
