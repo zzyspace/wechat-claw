@@ -19,6 +19,8 @@ const managedEnvKeys = [
   "WECHATY_ADMIN_GUEST_USERNAME",
   "WECHATY_CHANNELS_JSON",
   "WECHATY_PUPPET",
+  "WECHATY_REIMBURSEMENT_EXTRACTION_API_KEY",
+  "WECHATY_REIMBURSEMENT_EXTRACTION_PROVIDER",
   "WECHATY_STATE_DIR",
   "WECHATY_TIMEZONE",
 ];
@@ -290,6 +292,19 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     assert.match(pageHtml, /method: "POST"/);
     assert.match(pageHtml, /body: formData/);
     assert.match(pageHtml, /elements\.manualImportOpen\.hidden = !state\.canWrite/);
+    assert.match(pageHtml, /id="batchImportOpen"[^>]*hidden>批量补录<\/button>/);
+    assert.match(pageHtml, /<h2 id="batchImportModalTitle">批量补录<\/h2>/);
+    assert.match(pageHtml, /每张报账图将分别调用原有模型识别，并各自生成一条报账记录/);
+    assert.match(pageHtml, /id="batchImportForm"/);
+    assert.match(pageHtml, /id="batchImages" name="images" type="file"[^>]*multiple/);
+    assert.match(pageHtml, /点击选择或拖拽多张报账图到这里/);
+    assert.match(pageHtml, /function acceptBatchImages\(files\)/);
+    assert.match(pageHtml, /batchImagePicker\.addEventListener\("drop"/);
+    assert.match(pageHtml, /formData\.append\("images", item\.file, item\.file\.name\)/);
+    assert.match(pageHtml, /api\/batch-reports/);
+    assert.doesNotMatch(pageHtml, /id="batchAmount"/);
+    assert.doesNotMatch(pageHtml, /id="batchExpenseCategory"/);
+    assert.match(pageHtml, /elements\.batchImportOpen\.hidden = !state\.canWrite/);
     assert.match(pageHtml, /<label for="channelCode">门店<\/label>/);
     assert.match(pageHtml, /<option value="">全部<\/option>/);
     assert.match(pageHtml, /<option value="reimbursement_fuzzy">Fuzzy<\/option>/);
@@ -415,6 +430,55 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     );
     assert.equal(manualAttachmentResponse.status, 200);
     assert.equal(await manualAttachmentResponse.text(), "manual-receipt-image");
+
+    const batchImportForm = new FormData();
+    batchImportForm.set("channelCode", "reimbursement_admin_test");
+    batchImportForm.set("reporter", "批量补录测试人");
+    batchImportForm.set("note", "后台批量补录");
+    batchImportForm.set("sentAt", "2026-08-17T10:30");
+    batchImportForm.append("images", new Blob(["batch-image-one"], { type: "image/png" }), "one.png");
+    batchImportForm.append("images", new Blob(["batch-image-two"], { type: "image/jpeg" }), "two.jpg");
+    const batchImportResponse = await fetch(`${server.baseUrl}/reimbursement/api/batch-reports`, {
+      method: "POST",
+      headers: {
+        ...createAdminAuthHeaders(),
+        Accept: "application/json",
+      },
+      body: batchImportForm,
+    });
+    assert.equal(batchImportResponse.status, 201);
+    const batchImportPayload = await batchImportResponse.json();
+    assert.equal(batchImportPayload.success, true);
+    assert.equal(batchImportPayload.count, 2);
+    assert.equal(batchImportPayload.reports.length, 2);
+    assert.equal(
+      batchImportPayload.reports.every((report: { expenseCategory?: string }) => Boolean(report.expenseCategory)),
+      true,
+    );
+    assert.deepEqual(
+      batchImportPayload.reports.map((report: { reporter: string }) => report.reporter),
+      ["批量补录测试人", "批量补录测试人"],
+    );
+    for (const report of batchImportPayload.reports) {
+      const detailResponse = await fetch(`${server.baseUrl}/reimbursement/api/reports/${report.id}`, {
+        headers: createAdminAuthHeaders(),
+      });
+      const detail = (await detailResponse.json()).report;
+      assert.equal(detail.sources.length, 1);
+      assert.equal(detail.sources[0]?.attachments.length, 1);
+    }
+
+    const emptyBatchImportForm = new FormData();
+    emptyBatchImportForm.set("channelCode", "reimbursement_admin_test");
+    emptyBatchImportForm.set("reporter", "无图片测试人");
+    emptyBatchImportForm.set("sentAt", "2026-08-17T10:30");
+    const emptyBatchImportResponse = await fetch(`${server.baseUrl}/reimbursement/api/batch-reports`, {
+      method: "POST",
+      headers: createAdminAuthHeaders(),
+      body: emptyBatchImportForm,
+    });
+    assert.equal(emptyBatchImportResponse.status, 400);
+    assert.equal((await emptyBatchImportResponse.json()).error.field, "images");
 
     const invalidManualImportResponse = await fetch(`${server.baseUrl}/reimbursement/api/reports`, {
       method: "POST",

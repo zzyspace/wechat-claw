@@ -197,13 +197,16 @@
       }
 
       #manualImportForm .field input:not([type="file"]),
-      #manualImportForm .field select {
+      #manualImportForm .field select,
+      #batchImportForm .field input:not([type="file"]),
+      #batchImportForm .field select {
         height: 48px;
         min-height: 48px;
         border-radius: 14px;
       }
 
-      #manualImportForm .field textarea {
+      #manualImportForm .field textarea,
+      #batchImportForm .field textarea {
         min-height: 92px;
         border-radius: 14px;
       }
@@ -332,6 +335,27 @@
         border-radius: 10px;
         color: var(--danger);
         white-space: nowrap;
+      }
+
+      .batch-image-list {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+        margin-top: 10px;
+      }
+
+      .batch-image-list[hidden] {
+        display: none;
+      }
+
+      .batch-image-list .manual-image-preview {
+        min-width: 0;
+      }
+
+      .batch-image-count {
+        color: var(--ink-soft);
+        font-size: 12px;
+        font-weight: 600;
       }
 
       .manual-import-footer {
@@ -932,6 +956,10 @@
         border-radius: 32px;
       }
 
+      .modal-dialog.manual-import-dialog {
+        width: min(760px, calc(100vw - 32px));
+      }
+
       .modal-frame {
         display: grid;
         gap: 18px;
@@ -1232,6 +1260,10 @@
           padding: 16px;
           border-radius: 22px;
         }
+
+        .modal-dialog.manual-import-dialog {
+          width: calc(100vw - 16px);
+        }
       }
     </style>
   </head>
@@ -1243,6 +1275,7 @@
           <h1>报账查看后台</h1>
           <div class="hero-actions">
             <button class="button-primary" id="manualImportOpen" type="button" hidden>手工补录</button>
+            <button class="button-primary" id="batchImportOpen" type="button" hidden>批量补录</button>
             <button class="theme-toggle" id="themeToggle" type="button">切换主题</button>
           </div>
         </div>
@@ -1425,6 +1458,63 @@
         </div>
       </div>
 
+      <div class="modal" id="batchImportModal" hidden>
+        <div class="modal-backdrop" id="batchImportModalBackdrop"></div>
+        <div class="panel modal-dialog manual-import-dialog" role="dialog" aria-modal="true" aria-labelledby="batchImportModalTitle">
+          <div class="modal-frame">
+            <div class="modal-topbar">
+              <div class="manual-import-heading">
+                <h2 id="batchImportModalTitle">批量补录</h2>
+                <p class="muted">每张报账图将分别调用原有模型识别，并各自生成一条报账记录。</p>
+              </div>
+              <button class="modal-close" id="batchImportModalClose" type="button" aria-label="关闭批量补录弹窗">×</button>
+            </div>
+            <form id="batchImportForm" class="manual-import-form">
+              <div class="manual-import-grid">
+                <div class="field">
+                  <label for="batchChannelCode">门店</label>
+                  <select id="batchChannelCode" name="channelCode" required>
+                    <option value="">请选择门店</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label for="batchReporter">报账人</label>
+                  <input id="batchReporter" name="reporter" required autocomplete="off" placeholder="请输入报账人姓名" />
+                </div>
+                <div class="field field-wide">
+                  <label for="batchSentAt">报账时间</label>
+                  <input id="batchSentAt" name="sentAt" type="datetime-local" step="60" required />
+                </div>
+                <div class="field field-wide">
+                  <span class="field-label">报账图（必填）</span>
+                  <input class="visually-hidden" id="batchImages" name="images" type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif" multiple />
+                  <label class="manual-upload" id="batchImagePicker" for="batchImages">
+                    <span class="manual-upload-icon" aria-hidden="true">↑</span>
+                    <span class="manual-upload-copy">
+                      <strong>点击选择或拖拽多张报账图到这里</strong>
+                      <small>最多 10 张；每张支持 JPG、PNG、WEBP、GIF、HEIC、HEIF，最大 20MB</small>
+                    </span>
+                  </label>
+                  <div class="batch-image-list" id="batchImageList" hidden></div>
+                  <span class="batch-image-count" id="batchImageCount">尚未添加报账图</span>
+                </div>
+                <div class="field field-wide">
+                  <label for="batchNote">备注（选填）</label>
+                  <textarea id="batchNote" name="note" maxlength="1000" placeholder="填写这批报账的用途或说明"></textarea>
+                </div>
+              </div>
+              <div class="manual-import-footer">
+                <span class="status" id="batchImportStatus" aria-live="polite"></span>
+                <div class="manual-import-buttons">
+                  <button id="batchImportCancel" type="button">取消</button>
+                  <button class="button-primary" id="batchImportSubmit" type="submit">开始识别并补录</button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+
       <div class="modal" id="detailModal" hidden>
         <div class="modal-backdrop" id="detailModalBackdrop"></div>
         <div class="panel modal-dialog" role="dialog" aria-modal="true" aria-labelledby="detailModalTitle">
@@ -1484,6 +1574,8 @@
         manualImageFile: null,
         manualImageDragDepth: 0,
         manualImagePreviewUrl: null,
+        batchImageItems: [],
+        batchImageDragDepth: 0,
         deletingIds: new Set(),
       };
 
@@ -1507,6 +1599,20 @@
         manualImportSubmit: document.getElementById("manualImportSubmit"),
         manualImportCancel: document.getElementById("manualImportCancel"),
         manualImportStatus: document.getElementById("manualImportStatus"),
+        batchImportOpen: document.getElementById("batchImportOpen"),
+        batchImportModal: document.getElementById("batchImportModal"),
+        batchImportModalBackdrop: document.getElementById("batchImportModalBackdrop"),
+        batchImportModalClose: document.getElementById("batchImportModalClose"),
+        batchImportForm: document.getElementById("batchImportForm"),
+        batchChannelCode: document.getElementById("batchChannelCode"),
+        batchSentAt: document.getElementById("batchSentAt"),
+        batchImages: document.getElementById("batchImages"),
+        batchImagePicker: document.getElementById("batchImagePicker"),
+        batchImageList: document.getElementById("batchImageList"),
+        batchImageCount: document.getElementById("batchImageCount"),
+        batchImportSubmit: document.getElementById("batchImportSubmit"),
+        batchImportCancel: document.getElementById("batchImportCancel"),
+        batchImportStatus: document.getElementById("batchImportStatus"),
         themeToggle: document.getElementById("themeToggle"),
         resetFilters: document.getElementById("resetFilters"),
         totalPill: document.getElementById("totalPill"),
@@ -1801,6 +1907,11 @@
         elements.manualImportStatus.classList.toggle("error", isError);
       }
 
+      function setBatchImportStatus(text, isError = false) {
+        elements.batchImportStatus.textContent = text;
+        elements.batchImportStatus.classList.toggle("error", isError);
+      }
+
       function formatLocalDateTimeInput(date = new Date()) {
         const parts = new Intl.DateTimeFormat("en-CA", {
           timeZone: state.timeZone || DEFAULT_TIME_ZONE,
@@ -1877,6 +1988,100 @@
         return true;
       }
 
+      function clearBatchImages() {
+        for (const item of state.batchImageItems) {
+          if (item.previewUrl) {
+            URL.revokeObjectURL(item.previewUrl);
+          }
+        }
+        state.batchImageItems = [];
+        state.batchImageDragDepth = 0;
+        elements.batchImages.value = "";
+        elements.batchImagePicker.classList.remove("is-dragover");
+        renderBatchImages();
+      }
+
+      function renderBatchImages() {
+        elements.batchImageList.replaceChildren();
+        elements.batchImageList.hidden = state.batchImageItems.length === 0;
+        elements.batchImageCount.textContent = state.batchImageItems.length
+          ? `已添加 ${state.batchImageItems.length} 张报账图，提交后将生成 ${state.batchImageItems.length} 条记录`
+          : "尚未添加报账图";
+
+        state.batchImageItems.forEach((item, index) => {
+          const row = document.createElement("div");
+          row.className = "manual-image-preview";
+          const image = document.createElement("img");
+          image.alt = `${item.file.name} 预览`;
+          if (item.previewUrl) {
+            image.src = item.previewUrl;
+          } else {
+            image.hidden = true;
+          }
+          const info = document.createElement("div");
+          info.className = "manual-image-info";
+          const name = document.createElement("span");
+          name.className = "manual-image-name";
+          name.textContent = item.file.name;
+          const size = document.createElement("span");
+          size.className = "manual-image-size";
+          size.textContent = formatFileSize(item.file.size);
+          const remove = document.createElement("button");
+          remove.className = "manual-image-remove";
+          remove.type = "button";
+          remove.textContent = "移除";
+          remove.dataset.batchImageIndex = String(index);
+          info.append(name, size);
+          row.append(image, info, remove);
+          elements.batchImageList.append(row);
+        });
+      }
+
+      function acceptBatchImages(files) {
+        const incoming = Array.from(files || []);
+
+        if (!incoming.length) {
+          return false;
+        }
+
+        const unsupported = incoming.find((file) => !MANUAL_IMAGE_MIME_TYPES.has(file.type));
+        if (unsupported) {
+          setBatchImportStatus(`${unsupported.name} 不是支持的报账图格式。`, true);
+          return false;
+        }
+
+        const oversized = incoming.find((file) => file.size > 20 * 1024 * 1024);
+        if (oversized) {
+          setBatchImportStatus(`${oversized.name} 超过 20MB。`, true);
+          return false;
+        }
+
+        const existingKeys = new Set(
+          state.batchImageItems.map((item) => `${item.file.name}:${item.file.size}:${item.file.lastModified}`),
+        );
+        const uniqueIncoming = incoming.filter(
+          (file) => !existingKeys.has(`${file.name}:${file.size}:${file.lastModified}`),
+        );
+
+        if (state.batchImageItems.length + uniqueIncoming.length > 10) {
+          setBatchImportStatus("批量补录每次最多添加 10 张报账图。", true);
+          return false;
+        }
+
+        for (const file of uniqueIncoming) {
+          state.batchImageItems.push({
+            file,
+            previewUrl: ["image/jpeg", "image/png", "image/webp", "image/gif"].includes(file.type)
+              ? URL.createObjectURL(file)
+              : null,
+          });
+        }
+
+        setBatchImportStatus("");
+        renderBatchImages();
+        return true;
+      }
+
       function resetManualImportForm({ preserveSelections = false } = {}) {
         const channelCode = preserveSelections ? elements.manualChannelCode.value : "";
         const expenseCategory = preserveSelections ? elements.manualExpenseCategory.value : "";
@@ -1902,6 +2107,31 @@
         elements.manualImportModal.hidden = true;
         clearManualImage();
         setManualImportStatus("");
+      }
+
+      function resetBatchImportForm({ preserveSelections = false } = {}) {
+        const channelCode = preserveSelections ? elements.batchChannelCode.value : "";
+        elements.batchImportForm.reset();
+        clearBatchImages();
+        elements.batchChannelCode.value = channelCode;
+        elements.batchSentAt.value = formatLocalDateTimeInput();
+        setBatchImportStatus("");
+      }
+
+      function openBatchImportModal() {
+        resetBatchImportForm();
+        elements.batchImportModal.hidden = false;
+        window.setTimeout(() => elements.batchChannelCode.focus(), 0);
+      }
+
+      function closeBatchImportModal() {
+        if (state.importing) {
+          return;
+        }
+
+        elements.batchImportModal.hidden = true;
+        clearBatchImages();
+        setBatchImportStatus("");
       }
 
       function buildAuthFetchUrl(pathname, params) {
@@ -2345,6 +2575,7 @@
           ? `管理员 ${payload.account?.username || ""}`.trim()
           : `只读账号 ${payload.account?.username || ""}`.trim();
         elements.manualImportOpen.hidden = !state.canWrite;
+        elements.batchImportOpen.hidden = !state.canWrite;
       }
 
       async function loadManualImportOptions() {
@@ -2372,11 +2603,15 @@
             `<option value="${escapeHtml(category.code)}">${escapeHtml(category.label)}</option>`,
           ),
         ].join("");
+        elements.batchChannelCode.innerHTML = elements.manualChannelCode.innerHTML;
         resetManualImportForm();
+        resetBatchImportForm();
 
         if (!(payload.channels || []).length) {
           elements.manualImportSubmit.disabled = true;
+          elements.batchImportSubmit.disabled = true;
           setManualImportStatus("当前没有已启用的报账门店，请先检查 WECHATY_CHANNELS_JSON。", true);
+          setBatchImportStatus("当前没有已启用的报账门店，请先检查 WECHATY_CHANNELS_JSON。", true);
         }
       }
 
@@ -2435,6 +2670,58 @@
           state.importing = false;
           elements.manualImportSubmit.disabled = false;
           elements.manualImportCancel.disabled = false;
+        }
+      }
+
+      async function submitBatchImport() {
+        if (!state.canWrite || state.importing) {
+          return;
+        }
+
+        if (!state.batchImageItems.length) {
+          setBatchImportStatus("请至少添加一张报账图。", true);
+          return;
+        }
+
+        const formData = new FormData(elements.batchImportForm);
+        for (const name of ["channelCode", "reporter", "note", "sentAt"]) {
+          formData.set(name, String(formData.get(name) || "").trim());
+        }
+        formData.delete("images");
+        for (const item of state.batchImageItems) {
+          formData.append("images", item.file, item.file.name);
+        }
+
+        state.importing = true;
+        elements.batchImportSubmit.disabled = true;
+        elements.batchImportCancel.disabled = true;
+        setBatchImportStatus(`正在逐张识别并补录，共 ${state.batchImageItems.length} 张...`);
+
+        try {
+          const response = await fetch(buildAuthFetchUrl(`${BASE_PATH}/api/batch-reports`), {
+            method: "POST",
+            headers: {
+              Accept: "application/json",
+            },
+            body: formData,
+          });
+          const payload = await response.json();
+
+          if (!response.ok || !payload.success) {
+            throw new Error(payload?.error?.message || "批量补录失败");
+          }
+
+          const count = Number(payload.count || payload.reports?.length || 0);
+          clearBatchImages();
+          elements.batchImportModal.hidden = true;
+          await loadReports({ resetOffset: true });
+          setStatus(`批量补录成功，共生成 ${count} 条报账记录`);
+        } catch (error) {
+          setBatchImportStatus(error instanceof Error ? error.message : String(error), true);
+        } finally {
+          state.importing = false;
+          elements.batchImportSubmit.disabled = false;
+          elements.batchImportCancel.disabled = false;
         }
       }
 
@@ -2574,6 +2861,75 @@
         clearManualImage();
       });
 
+      elements.batchImportOpen.addEventListener("click", () => {
+        openBatchImportModal();
+      });
+
+      elements.batchImportModalBackdrop.addEventListener("click", () => {
+        closeBatchImportModal();
+      });
+
+      elements.batchImportModalClose.addEventListener("click", () => {
+        closeBatchImportModal();
+      });
+
+      elements.batchImportForm.addEventListener("submit", (event) => {
+        event.preventDefault();
+        void submitBatchImport();
+      });
+
+      elements.batchImportCancel.addEventListener("click", () => {
+        closeBatchImportModal();
+      });
+
+      elements.batchImages.addEventListener("change", () => {
+        acceptBatchImages(elements.batchImages.files);
+        elements.batchImages.value = "";
+      });
+
+      elements.batchImagePicker.addEventListener("dragenter", (event) => {
+        event.preventDefault();
+        state.batchImageDragDepth += 1;
+        elements.batchImagePicker.classList.add("is-dragover");
+      });
+
+      elements.batchImagePicker.addEventListener("dragover", (event) => {
+        event.preventDefault();
+        if (event.dataTransfer) {
+          event.dataTransfer.dropEffect = "copy";
+        }
+      });
+
+      elements.batchImagePicker.addEventListener("dragleave", (event) => {
+        event.preventDefault();
+        state.batchImageDragDepth = Math.max(0, state.batchImageDragDepth - 1);
+        if (state.batchImageDragDepth === 0) {
+          elements.batchImagePicker.classList.remove("is-dragover");
+        }
+      });
+
+      elements.batchImagePicker.addEventListener("drop", (event) => {
+        event.preventDefault();
+        state.batchImageDragDepth = 0;
+        elements.batchImagePicker.classList.remove("is-dragover");
+        acceptBatchImages(event.dataTransfer?.files);
+      });
+
+      elements.batchImageList.addEventListener("click", (event) => {
+        const button = event.target.closest("[data-batch-image-index]");
+        if (!button) {
+          return;
+        }
+
+        const index = Number(button.dataset.batchImageIndex);
+        const [removed] = state.batchImageItems.splice(index, 1);
+        if (removed?.previewUrl) {
+          URL.revokeObjectURL(removed.previewUrl);
+        }
+        renderBatchImages();
+        setBatchImportStatus("");
+      });
+
       elements.resetFilters.addEventListener("click", () => {
         elements.filters.reset();
         state.offset = 0;
@@ -2697,6 +3053,11 @@
 
         if (event.key === "Escape" && !elements.manualImportModal.hidden) {
           closeManualImportModal();
+          return;
+        }
+
+        if (event.key === "Escape" && !elements.batchImportModal.hidden) {
+          closeBatchImportModal();
           return;
         }
 

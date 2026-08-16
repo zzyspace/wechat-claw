@@ -14,6 +14,7 @@ import {
   normalizeReimbursementExpenseCategory,
   REIMBURSEMENT_EXPENSE_CATEGORY_DEFINITIONS,
 } from "../scenarios/reimbursement/categories.js";
+import { importBatchReimbursementReports } from "../scenarios/reimbursement/batch-import.js";
 import { importManualReimbursementReport } from "../scenarios/reimbursement/manual-import.js";
 import {
   deleteReimbursementReport,
@@ -31,6 +32,7 @@ const ADMIN_BASE_PATH = "/reimbursement";
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 1000;
 const MAX_MANUAL_IMPORT_IMAGE_BYTES = 20 * 1024 * 1024;
+const MAX_BATCH_IMPORT_IMAGES = 10;
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
 const defaultStaticDir = path.join(currentDir, "public");
 
@@ -53,6 +55,22 @@ const manualImportImageUpload = multer({
   fileFilter: (_request, file, callback) => {
     if (!ADMIN_MANUAL_IMPORT_IMAGE_MIME_TYPES.has(file.mimetype)) {
       callback(new AdminValidationError("报账图仅支持 JPG、PNG、WEBP、GIF、HEIC 或 HEIF。", "image"));
+      return;
+    }
+
+    callback(null, true);
+  },
+});
+
+const batchImportImageUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: MAX_MANUAL_IMPORT_IMAGE_BYTES,
+    files: MAX_BATCH_IMPORT_IMAGES,
+  },
+  fileFilter: (_request, file, callback) => {
+    if (!ADMIN_MANUAL_IMPORT_IMAGE_MIME_TYPES.has(file.mimetype)) {
+      callback(new AdminValidationError("报账图仅支持 JPG、PNG、WEBP、GIF、HEIC 或 HEIF。", "images"));
       return;
     }
 
@@ -354,6 +372,64 @@ export function createApp(input?: {
     }
   });
 
+  app.post(
+    `${ADMIN_BASE_PATH}/api/batch-reports`,
+    batchImportImageUpload.array("images", MAX_BATCH_IMPORT_IMAGES),
+    async (request, response, next) => {
+      try {
+        const channelCode = parseRequiredString(request.body?.channelCode, "channelCode", "门店");
+        const channel = config.channels.find(
+          (item) => item.enabled && item.scenario === "reimbursement" && item.code === channelCode,
+        );
+
+        if (!channel) {
+          throw new AdminValidationError("请选择有效的报账门店。", "channelCode");
+        }
+
+        const reporter = parseRequiredString(request.body?.reporter, "reporter", "报账人");
+        const sentAt = parseManualImportSentAt(request.body?.sentAt, config.timeZone);
+        const files = Array.isArray(request.files) ? request.files : [];
+
+        if (files.length === 0) {
+          throw new AdminValidationError("请至少添加一张报账图。", "images");
+        }
+
+        const attachments = files.map((file) =>
+          saveUploadedReimbursementImage({
+            buffer: file.buffer,
+            config,
+            mimeType: file.mimetype,
+          }),
+        );
+        const results = await importBatchReimbursementReports({
+          channelCode: channel.code,
+          channelName: channel.match.value,
+          reporter,
+          note: trimString(request.body?.note),
+          sentAt,
+          timeZone: config.timeZone,
+          attachments,
+          modelConfig: {
+            provider: config.reimbursementExtractionProvider,
+            model: config.reimbursementExtractionModel,
+            retryModel: config.reimbursementExtractionRetryModel,
+            apiKey: config.reimbursementExtractionApiKey,
+            baseUrl: config.reimbursementExtractionBaseUrl,
+            proxyUrl: config.reimbursementOpenAiProxyUrl,
+          },
+        });
+
+        response.status(201).json({
+          success: true,
+          count: results.length,
+          reports: results.map((item) => item.report),
+        });
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
   app.get(`${ADMIN_BASE_PATH}/api/reports`, (request, response, next) => {
     try {
       const result = listAdminReimbursementReports(
@@ -454,11 +530,21 @@ export function createApp(input?: {
 
   app.use((error: unknown, request: express.Request, response: express.Response, _next: express.NextFunction) => {
     if (error instanceof multer.MulterError) {
+      const isBatchImport = request.path.endsWith("/batch-reports");
+      const message =
+        error.code === "LIMIT_FILE_SIZE"
+          ? isBatchImport
+            ? "每张报账图不能超过 20MB。"
+            : "报账图不能超过 20MB。"
+          : isBatchImport &&
+              (error.code === "LIMIT_FILE_COUNT" || error.code === "LIMIT_UNEXPECTED_FILE")
+            ? `批量补录每次最多添加 ${MAX_BATCH_IMPORT_IMAGES} 张报账图。`
+            : "报账图上传失败。";
       response.status(400).json({
         success: false,
         error: {
-          field: "image",
-          message: error.code === "LIMIT_FILE_SIZE" ? "报账图不能超过 20MB。" : "报账图上传失败。",
+          field: isBatchImport ? "images" : "image",
+          message,
         },
       });
       return;
@@ -493,4 +579,4 @@ export function createApp(input?: {
   return app;
 }
 
-export { ADMIN_BASE_PATH, DEFAULT_LIMIT, MAX_LIMIT };
+export { ADMIN_BASE_PATH, DEFAULT_LIMIT, MAX_BATCH_IMPORT_IMAGES, MAX_LIMIT };
