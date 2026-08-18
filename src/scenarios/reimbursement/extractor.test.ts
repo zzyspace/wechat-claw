@@ -120,7 +120,7 @@ test("extractReimbursementReport calls qwen3.5-flash and normalizes amount, date
     assert.match(promptText, /只要明确包含“店长报账”字样一律输出 manager_reimbursement/);
     assert.match(promptText, /当前常用 code 包括 food、flower、salary/);
     assert.match(promptText, /报账图片中的商品是鲜花、花卉、绿植、花材、花束、菊花、百合等花卉类型，或报账图片中出现“宏程下单号”字样，一律输出 flower/);
-    assert.match(promptText, /如果报账图片中出现“金辉”字样，或商户名称包含“泉州市丰泽区喜相逢百货商行”，一律输出 food/);
+    assert.match(promptText, /如果报账图片中出现“金辉”或“刘以琼”字样，或商户名称包含“泉州市丰泽区喜相逢百货商行”，一律输出 food/);
     assert.equal(result.extractorCode, "model-qwen-qwen3.5-flash");
     assert.equal(result.resultJson.amount, 128.5);
     assert.equal(result.resultJson.currency, "CNY");
