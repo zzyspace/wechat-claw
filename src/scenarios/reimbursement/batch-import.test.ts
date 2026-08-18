@@ -139,6 +139,44 @@ test("processBatchImportTask isolates failed images and completes the remaining 
   assert.match(completed.items[1]?.errorMessage ?? "", /第二张模拟失败/);
 });
 
+test("processBatchImportTask processes at most four images concurrently", async () => {
+  const attachments = Array.from({ length: 8 }, (_, index) => ({
+    type: "image",
+    localPath: path.join(process.env.WECHATY_STATE_DIR ?? os.tmpdir(), `concurrent-task-${index}.png`),
+    sha256: `concurrent-task-image-${index}`,
+    mimeType: "image/png",
+  }));
+  attachments.forEach((attachment) => fs.writeFileSync(attachment.localPath, attachment.sha256, "utf8"));
+  const task = createBatchImportTask({
+    attachments,
+    channelCode: "reimbursement_fuzzy",
+    channelName: "模糊报账群",
+    originalNames: attachments.map((attachment) => path.basename(attachment.localPath)),
+    notes: attachments.map(() => "并发测试"),
+    reporter: "并发测试人",
+    sentAt: "2026-08-17T03:30:00.000Z",
+    timeZone: "Asia/Shanghai",
+  });
+  let activeCount = 0;
+  let maximumActiveCount = 0;
+
+  const completed = await processBatchImportTask({
+    jobId: task.id,
+    modelConfig: {},
+    extractor: async (input) => {
+      activeCount += 1;
+      maximumActiveCount = Math.max(maximumActiveCount, activeCount);
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      activeCount -= 1;
+      return createModelExtraction(input, 40);
+    },
+  });
+
+  assert.equal(maximumActiveCount, 4);
+  assert.equal(completed?.successCount, 8);
+  assert.equal(completed?.failedCount, 0);
+});
+
 test("recoverInterruptedBatchImportTasks requeues processing work without duplicate reports", async () => {
   const attachment = {
     type: "image",

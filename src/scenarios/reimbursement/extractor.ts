@@ -90,6 +90,8 @@ const PLANNED_EXPENSE_OCR_NAME = "李晨晨";
 const PLANNED_EXPENSE_OCR_MIN_OCCURRENCES = 3;
 const MANAGER_REIMBURSEMENT_OCR_MARKERS = ["店长报账群"];
 const EMPTY_STRUCTURED_RESULT_MAX_RETRIES = 1;
+const RATE_LIMIT_MAX_RETRIES = 3;
+const RATE_LIMIT_INITIAL_DELAY_MS = 1_000;
 const DEFAULT_QWEN_EMPTY_STRUCTURED_RESULT_RETRY_MODEL = "qwen3.5-plus";
 const MODEL_RESPONSE_PREVIEW_LIMIT = 240;
 const openAiProxyDispatchers = new Map<string, Dispatcher>();
@@ -392,10 +394,33 @@ function resolveAttemptModel(baseModel: string, retryModel: string, attempt: num
   return attempt <= 1 ? baseModel : retryModel;
 }
 
+function resolveRateLimitRetryDelayMs(response: Response, retryNumber: number): number {
+  const retryAfter = response.headers.get("retry-after")?.trim();
+
+  if (retryAfter) {
+    const seconds = Number(retryAfter);
+    if (Number.isFinite(seconds) && seconds >= 0) {
+      return seconds * 1_000;
+    }
+
+    const retryAt = Date.parse(retryAfter);
+    if (Number.isFinite(retryAt)) {
+      return Math.max(0, retryAt - Date.now());
+    }
+  }
+
+  return RATE_LIMIT_INITIAL_DELAY_MS * 2 ** (retryNumber - 1);
+}
+
+function delay(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
 async function callChatCompletionReimbursementExtraction(
   input: ReimbursementExtractionInput,
   config: ReimbursementModelProviderConfig,
   provider: "openai" | "qwen",
+  logger?: Logger,
 ): Promise<ReimbursementModelAttemptResult> {
   const firstAttachment = input.attachments[0];
   const imageDataUrl = firstAttachment ? buildDataUrl(firstAttachment) : null;
@@ -461,7 +486,28 @@ async function callChatCompletionReimbursementExtraction(
     requestInit.dispatcher = dispatcher;
   }
 
-  const response = await fetch(`${baseUrl}/chat/completions`, requestInit);
+  let response: Response;
+  let rateLimitRetryCount = 0;
+
+  while (true) {
+    response = await fetch(`${baseUrl}/chat/completions`, requestInit);
+
+    if (response.status !== 429 || rateLimitRetryCount >= RATE_LIMIT_MAX_RETRIES) {
+      break;
+    }
+
+    rateLimitRetryCount += 1;
+    const retryDelayMs = resolveRateLimitRetryDelayMs(response, rateLimitRetryCount);
+    logger?.warn("Reimbursement model rate limited, retrying with backoff", {
+      delayMs: retryDelayMs,
+      model: config.model,
+      provider,
+      rawMessageId: input.rawMessageId,
+      retry: rateLimitRetryCount,
+    });
+    await response.text();
+    await delay(retryDelayMs);
+  }
 
   if (!response.ok) {
     const errorText = await response.text();
@@ -500,11 +546,12 @@ async function callChatCompletionReimbursementExtraction(
 function callReimbursementModel(
   input: ReimbursementExtractionInput,
   config: ReimbursementModelProviderConfig,
+  logger?: Logger,
 ): Promise<ReimbursementModelAttemptResult> {
   const provider = config.provider?.trim().toLowerCase();
 
   if (provider === "openai" || provider === "qwen") {
-    return callChatCompletionReimbursementExtraction(input, config, provider);
+    return callChatCompletionReimbursementExtraction(input, config, provider, logger);
   }
 
   throw new Error(`Unsupported reimbursement extraction provider: ${config.provider}`);
@@ -593,11 +640,15 @@ export async function extractReimbursementReport(
       let attemptResult: ReimbursementModelAttemptResult;
 
       try {
-        attemptResult = await callReimbursementModel(input, {
-          ...config,
-          provider,
-          model: effectiveModel,
-        });
+        attemptResult = await callReimbursementModel(
+          input,
+          {
+            ...config,
+            provider,
+            model: effectiveModel,
+          },
+          logger,
+        );
       } catch (error) {
         if (attempt <= EMPTY_STRUCTURED_RESULT_MAX_RETRIES) {
           logger?.warn("Reimbursement model extraction failed, retrying once", {

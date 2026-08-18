@@ -10,39 +10,47 @@ import {
   markBatchImportItemSucceeded,
 } from "./batch-import-task-repository.js";
 
+export const BATCH_IMPORT_CONCURRENCY = 4;
+
 export async function processBatchImportTask(input: {
   extractor?: ReimbursementExtractor;
   jobId: string;
   modelConfig: ReimbursementModelProviderConfig;
 }) {
-  while (true) {
-    const item = claimNextBatchImportWorkItem(input.jobId);
+  async function processNextItems() {
+    while (true) {
+      const item = claimNextBatchImportWorkItem(input.jobId);
 
-    if (!item) {
-      break;
-    }
+      if (!item) {
+        break;
+      }
 
-    try {
-      const result = await importBatchReimbursementReport(
-        {
-          attachment: item.attachment,
-          channelCode: item.channelCode,
-          channelName: item.channelName,
-          messageExternalId: `batch-import-task:${item.jobId}:${item.index}`,
-          modelConfig: input.modelConfig,
-          note: item.note,
-          reporter: item.reporter,
-          sentAt: item.sentAt,
-          timeZone: item.timeZone,
-        },
-        input.extractor,
-      );
-      markBatchImportItemSucceeded(item.jobId, item.index, result.report.id);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      markBatchImportItemFailed(item.jobId, item.index, message || "识别失败");
+      try {
+        const result = await importBatchReimbursementReport(
+          {
+            attachment: item.attachment,
+            channelCode: item.channelCode,
+            channelName: item.channelName,
+            messageExternalId: `batch-import-task:${item.jobId}:${item.index}`,
+            modelConfig: input.modelConfig,
+            note: item.note,
+            reporter: item.reporter,
+            sentAt: item.sentAt,
+            timeZone: item.timeZone,
+          },
+          input.extractor,
+        );
+        markBatchImportItemSucceeded(item.jobId, item.index, result.report.id);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        markBatchImportItemFailed(item.jobId, item.index, message || "识别失败");
+      }
     }
   }
+
+  await Promise.all(
+    Array.from({ length: BATCH_IMPORT_CONCURRENCY }, () => processNextItems()),
+  );
 
   return finalizeBatchImportTask(input.jobId);
 }

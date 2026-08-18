@@ -226,6 +226,91 @@ test("extractReimbursementReport calls OpenAI Luna with non-reasoning image extr
   }
 });
 
+test("extractReimbursementReport retries HTTP 429 with exponential backoff before succeeding", async () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "wechat-claw-reimbursement-rate-limit-"));
+  const imagePath = path.join(tempDir, "receipt.jpg");
+  let requestCount = 0;
+  const logs: Array<{ level: string; message: string; context?: Record<string, unknown> }> = [];
+
+  try {
+    fs.writeFileSync(imagePath, Buffer.from([0xff, 0xd8, 0xff, 0xd9]));
+    globalThis.fetch = (async () => {
+      requestCount += 1;
+
+      if (requestCount <= 2) {
+        return new Response("rate limited", {
+          status: 429,
+          headers: {
+            "Retry-After": "0",
+          },
+        });
+      }
+
+      return new Response(
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  amount: 28,
+                  currency: "CNY",
+                  expense_category: "food",
+                  voucher_date: "2026-08-19",
+                  confidence: 0.95,
+                }),
+              },
+            },
+          ],
+        }),
+        {
+          status: 200,
+          headers: {
+            "Content-Type": "application/json",
+          },
+        },
+      );
+    }) as typeof fetch;
+
+    const result = await extractReimbursementReport(
+      {
+        rawMessageId: 7,
+        channelCode: "reimbursement_a",
+        channelName: "AI报账群",
+        reporter: "小王",
+        textContent: "食材采购",
+        sentAt: "2026-08-19T02:00:00.000Z",
+        timeZone: "Asia/Shanghai",
+        attachments: [
+          {
+            type: "image",
+            localPath: imagePath,
+            sha256: "rate-limit-retry",
+            mimeType: "image/jpeg",
+          },
+        ],
+      },
+      {
+        provider: "qwen",
+        model: "qwen3.5-flash",
+        apiKey: "test-key",
+        baseUrl: "https://example.com",
+      },
+      createLogger(logs),
+    );
+
+    assert.equal(requestCount, 3);
+    assert.equal(result.extractorCode, "model-qwen-qwen3.5-flash");
+    assert.equal(result.resultJson.amount, 28);
+    const retryLogs = logs.filter(
+      (entry) => entry.message === "Reimbursement model rate limited, retrying with backoff",
+    );
+    assert.equal(retryLogs.length, 2);
+    assert.deepEqual(retryLogs.map((entry) => entry.context?.retry), [1, 2]);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
 test("detectExpenseCategoryFromText classifies flower purchases as flower", () => {
   assert.equal(normalizeReimbursementExpenseCategory("flower"), "flower");
   assert.equal(normalizeReimbursementExpenseCategory("花"), "flower");
