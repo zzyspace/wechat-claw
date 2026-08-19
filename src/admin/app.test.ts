@@ -349,7 +349,8 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     assert.match(pageHtml, /id="attachmentPreviewNext"[^>]+aria-label="下一个报账的附件"/);
     assert.match(pageHtml, /function navigateAttachmentPreview\(direction\)/);
     assert.match(pageHtml, /Number\(item\.amount\)\.toFixed\(2\)\} 元/);
-    assert.match(pageHtml, /报账 #\$\{item\.id\} 附件预览 \(\$\{previewAmount\}\)/);
+    assert.match(pageHtml, /const previewCategory = item\.expenseCategoryLabel \|\| item\.expenseCategory \|\| "其他"/);
+    assert.match(pageHtml, /报账 #\$\{item\.id\} 附件预览 \(\$\{previewAmount\} \| \$\{previewCategory\}\)/);
     assert.match(pageHtml, /<th>金额<\/th>\s*<th>类别<\/th>\s*<th>备注<\/th>/);
     assert.match(pageHtml, /<meta name="color-scheme" content="light dark"/);
     assert.match(pageHtml, /id="themeToggle"/);
