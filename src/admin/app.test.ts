@@ -370,7 +370,7 @@ test("shortcut reimbursement API recognizes, persists, receipts, and deduplicate
       extractorCalls += 1;
     }),
   );
-  const requestId = "20000000-0000-4000-8000-000000000001";
+  const requestId = "2026-08-19T22:30:00+08:00";
   const headers = {
     Authorization: "Bearer shortcut-secret",
     "Idempotency-Key": requestId,

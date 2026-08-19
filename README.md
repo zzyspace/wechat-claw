@@ -434,7 +434,7 @@ npm run admin:dev
 - `/reimbursement` 使用 Basic Auth；未配置 `WECHATY_ADMIN_USERNAME/WECHATY_ADMIN_PASSWORD` 时会返回 `503`
 - 可选配置 `WECHATY_ADMIN_GUEST_USERNAME/WECHATY_ADMIN_GUEST_PASSWORD` 增加只读账号；服务端会拒绝该账号的所有删除和其他写请求
 - 修改管理员或 guest 凭据后，执行 `sudo systemctl restart wechat-claw-reimbursement-admin.service` 使新配置生效
-- 快捷指令接口使用独立 Bearer Token，不接受后台 Basic Auth；请求体为 `multipart/form-data`，包含 `image`、`note`、`channelCode`、`reporter`，并要求 UUID 格式的 `Idempotency-Key` 请求头
+- 快捷指令接口使用独立 Bearer Token，不接受后台 Basic Auth；请求体为 `multipart/form-data`，包含 `image`、`note`、`channelCode`、`reporter`，并要求 8 至 256 个可打印 ASCII 字符的 `Idempotency-Key` 请求头
 - 快捷指令接口会同步调用现有报账模型并写入正式报账链路；成功响应中的 `receipt` 可直接交给“显示结果”动作
 - `deploy/deploy-wechat-claw.sh` 现在会自动：
   - 安装 [deploy/wechat-claw-reimbursement-admin.service](/Users/ryan/DataDisk/Work/AI/wechat-claw/deploy/wechat-claw-reimbursement-admin.service)

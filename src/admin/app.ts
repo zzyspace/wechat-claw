@@ -58,7 +58,7 @@ const MAX_ADMIN_EDIT_NOTE_LENGTH = 1000;
 const MAX_SHORTCUT_REPORTER_LENGTH = 100;
 const SHORTCUT_API_PATH = `${ADMIN_BASE_PATH}/api/shortcut/reports`;
 const SHORTCUT_MESSAGE_TYPE = "shortcut_api";
-const IDEMPOTENCY_KEY_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const IDEMPOTENCY_KEY_PATTERN = /^[\x20-\x7e]{8,256}$/;
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
 const defaultStaticDir = path.join(currentDir, "public");
 
@@ -213,14 +213,18 @@ function parseShortcutIdempotencyKey(value: string | undefined) {
   const normalized = value?.trim() ?? "";
 
   if (!IDEMPOTENCY_KEY_PATTERN.test(normalized)) {
-    throw new AdminValidationError("Idempotency-Key 必须是有效的 UUID。", "Idempotency-Key");
+    throw new AdminValidationError(
+      "Idempotency-Key 必须是 8 至 256 个可打印 ASCII 字符。",
+      "Idempotency-Key",
+    );
   }
 
-  return normalized.toLowerCase();
+  return normalized;
 }
 
 function buildShortcutMessageExternalId(idempotencyKey: string) {
-  return `shortcut-reimbursement:${idempotencyKey}`;
+  const digest = crypto.createHash("sha256").update(idempotencyKey).digest("hex");
+  return `shortcut-reimbursement:${digest}`;
 }
 
 function isSameShortcutRequest(
