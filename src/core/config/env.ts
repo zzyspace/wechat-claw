@@ -84,6 +84,7 @@ export interface AppConfig {
   adminPassword?: string;
   adminGuestUsername?: string;
   adminGuestPassword?: string;
+  reimbursementShortcutApiToken?: string;
 }
 
 export interface SelfCanaryConfig {
@@ -538,6 +539,7 @@ export function getAppConfig(): AppConfig {
     adminPassword: readOptionalEnv("WECHATY_ADMIN_PASSWORD"),
     adminGuestUsername: readOptionalEnv("WECHATY_ADMIN_GUEST_USERNAME"),
     adminGuestPassword: readOptionalEnv("WECHATY_ADMIN_GUEST_PASSWORD"),
+    reimbursementShortcutApiToken: readOptionalEnv("WECHATY_REIMBURSEMENT_SHORTCUT_API_TOKEN"),
   };
 }
 

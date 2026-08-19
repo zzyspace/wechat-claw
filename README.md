@@ -156,6 +156,7 @@ WECHATY_CHANNELS_JSON=[{"code":"loss_a","enabled":true,"scenario":"loss-report",
 - `WECHATY_ADMIN_PORT`: 报账后台监听端口，默认 `8788`
 - `WECHATY_ADMIN_USERNAME/WECHATY_ADMIN_PASSWORD`: 报账后台 Basic Auth 账号密码；未配置时 `/reimbursement` 会返回 `503`
 - `WECHATY_ADMIN_GUEST_USERNAME/WECHATY_ADMIN_GUEST_PASSWORD`: 可选的只读 Basic Auth 账号密码；guest 可以查看列表、详情和附件，但不能删除或执行其他写操作
+- `WECHATY_REIMBURSEMENT_SHORTCUT_API_TOKEN`: 快捷指令单图报账接口的独立 Bearer Token；未配置时该接口返回 `503`
 - `WECHATY_ADMIN_NGINX_SITE_NAME`: 仅 deploy 脚本使用；表示把 `/reimbursement` 自动挂到哪个现有 Nginx site，默认 `invoice-submit`
 - `WECHATY_ADMIN_NGINX_HEALTHZ_URL`: 仅 deploy 脚本使用；deploy 完成后用于校验 Nginx 外网入口，默认 `http://127.0.0.1:8080/reimbursement/healthz`
 - `WECHATY_DEBUG_RECEIVED_ROOM_MESSAGE_ENABLED`: 是否发送 `"[wechat-claw] 已收到群消息"` 这类调试摘要，默认 `false`
@@ -424,6 +425,7 @@ npm run admin:dev
 - 页面：`/reimbursement`
 - 健康检查：`/reimbursement/healthz`
 - 列表接口：`/reimbursement/api/reports`
+- 快捷指令单图报账接口：`POST /reimbursement/api/shortcut/reports`
 
 说明：
 
@@ -432,6 +434,8 @@ npm run admin:dev
 - `/reimbursement` 使用 Basic Auth；未配置 `WECHATY_ADMIN_USERNAME/WECHATY_ADMIN_PASSWORD` 时会返回 `503`
 - 可选配置 `WECHATY_ADMIN_GUEST_USERNAME/WECHATY_ADMIN_GUEST_PASSWORD` 增加只读账号；服务端会拒绝该账号的所有删除和其他写请求
 - 修改管理员或 guest 凭据后，执行 `sudo systemctl restart wechat-claw-reimbursement-admin.service` 使新配置生效
+- 快捷指令接口使用独立 Bearer Token，不接受后台 Basic Auth；请求体为 `multipart/form-data`，包含 `image`、`note`、`channelCode`、`reporter`，并要求 UUID 格式的 `Idempotency-Key` 请求头
+- 快捷指令接口会同步调用现有报账模型并写入正式报账链路；成功响应中的 `receipt` 可直接交给“显示结果”动作
 - `deploy/deploy-wechat-claw.sh` 现在会自动：
   - 安装 [deploy/wechat-claw-reimbursement-admin.service](/Users/ryan/DataDisk/Work/AI/wechat-claw/deploy/wechat-claw-reimbursement-admin.service)
   - 把 [deploy/nginx/reimbursement-admin.locations.conf](/Users/ryan/DataDisk/Work/AI/wechat-claw/deploy/nginx/reimbursement-admin.locations.conf) 渲染成服务器上的 Nginx snippet

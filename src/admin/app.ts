@@ -17,7 +17,13 @@ import { getZonedDateParts, zonedDateTimeToUtc } from "../core/runtime/timezone.
 import {
   normalizeReimbursementExpenseCategory,
   REIMBURSEMENT_EXPENSE_CATEGORY_DEFINITIONS,
+  getReimbursementExpenseCategoryLabel,
 } from "../scenarios/reimbursement/categories.js";
+import {
+  importBatchReimbursementReport,
+  REIMBURSEMENT_IMAGE_IMPORT_FALLBACK_TEXT,
+  type ReimbursementExtractor,
+} from "../scenarios/reimbursement/batch-import.js";
 import { processBatchImportTask } from "../scenarios/reimbursement/batch-import-task-processor.js";
 import {
   createBatchImportTask,
@@ -29,11 +35,15 @@ import {
   deleteReimbursementReport,
   findAdminReimbursementAttachment,
   getAdminReimbursementReportDetail,
+  getReimbursementReportByRawMessageId,
   listAdminReimbursementReports,
   updateAdminReimbursementReport,
 } from "../scenarios/reimbursement/repository.js";
+import { buildReimbursementReceiptText } from "../scenarios/reimbursement/receipt.js";
+import { getRawMessageByMessageExternalId } from "../core/storage/raw-message-repository.js";
 import {
   createAdminAuthMiddleware,
+  createShortcutApiAuthMiddleware,
   enforceAdminWriteAccess,
   getAdminSession,
 } from "./auth.js";
@@ -45,6 +55,10 @@ const MAX_MANUAL_IMPORT_IMAGE_BYTES = 20 * 1024 * 1024;
 const MAX_BATCH_IMPORT_IMAGES = 20;
 const MAX_BATCH_IMPORT_NOTE_LENGTH = 300;
 const MAX_ADMIN_EDIT_NOTE_LENGTH = 1000;
+const MAX_SHORTCUT_REPORTER_LENGTH = 100;
+const SHORTCUT_API_PATH = `${ADMIN_BASE_PATH}/api/shortcut/reports`;
+const SHORTCUT_MESSAGE_TYPE = "shortcut_api";
+const IDEMPOTENCY_KEY_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
 const defaultStaticDir = path.join(currentDir, "public");
 
@@ -171,6 +185,85 @@ function parseRequiredString(value: unknown, field: string, label: string) {
   }
 
   return normalized;
+}
+
+function parseShortcutText(value: unknown, input: {
+  field: string;
+  label: string;
+  maxLength: number;
+  required?: boolean;
+}) {
+  const normalized = trimString(value);
+
+  if (input.required && !normalized) {
+    throw new AdminValidationError(`${input.label}不能为空。`, input.field);
+  }
+
+  if (normalized.length > input.maxLength) {
+    throw new AdminValidationError(
+      `${input.label}不能超过 ${input.maxLength} 个字符。`,
+      input.field,
+    );
+  }
+
+  return normalized;
+}
+
+function parseShortcutIdempotencyKey(value: string | undefined) {
+  const normalized = value?.trim() ?? "";
+
+  if (!IDEMPOTENCY_KEY_PATTERN.test(normalized)) {
+    throw new AdminValidationError("Idempotency-Key 必须是有效的 UUID。", "Idempotency-Key");
+  }
+
+  return normalized.toLowerCase();
+}
+
+function buildShortcutMessageExternalId(idempotencyKey: string) {
+  return `shortcut-reimbursement:${idempotencyKey}`;
+}
+
+function isSameShortcutRequest(
+  rawMessage: NonNullable<ReturnType<typeof getRawMessageByMessageExternalId>>,
+  input: {
+    channelCode: string;
+    imageSha256: string;
+    note: string;
+    reporter: string;
+  },
+) {
+  const expectedText = input.note || REIMBURSEMENT_IMAGE_IMPORT_FALLBACK_TEXT;
+  return (
+    rawMessage.channelCode === input.channelCode &&
+    rawMessage.senderName === input.reporter &&
+    rawMessage.textContent === expectedText &&
+    rawMessage.attachments.length === 1 &&
+    rawMessage.attachments[0]?.type === "image" &&
+    rawMessage.attachments[0]?.sha256 === input.imageSha256
+  );
+}
+
+function buildShortcutReportResponse(input: {
+  duplicate: boolean;
+  idempotencyKey: string;
+  report: NonNullable<ReturnType<typeof getReimbursementReportByRawMessageId>>;
+}) {
+  return {
+    success: true,
+    duplicate: input.duplicate,
+    requestId: input.idempotencyKey,
+    receipt: buildReimbursementReceiptText(input.report),
+    report: {
+      id: input.report.id,
+      amount: input.report.amount,
+      currency: input.report.currency,
+      expenseCategory: input.report.expenseCategory,
+      expenseCategoryLabel: getReimbursementExpenseCategoryLabel(input.report.expenseCategory),
+      voucherDate: input.report.voucherDate,
+      note: input.report.note,
+      needsReview: input.report.needsReview,
+    },
+  };
 }
 
 function parseManualImportAmount(value: unknown) {
@@ -309,6 +402,7 @@ function sendNotFound(_request: express.Request, response: express.Response) {
 
 export function createApp(input?: {
   config?: AppConfig;
+  reimbursementExtractor?: ReimbursementExtractor;
   staticDir?: string;
 }) {
   const config = input?.config ?? getAppConfig();
@@ -339,8 +433,12 @@ export function createApp(input?: {
     guestUsername: config.adminGuestUsername,
     guestPassword: config.adminGuestPassword,
   });
+  const shortcutApiAuth = createShortcutApiAuthMiddleware({
+    token: config.reimbursementShortcutApiToken,
+  });
   const app = express();
   const activeBatchImportTaskIds = new Set<string>();
+  const activeShortcutRequestKeys = new Set<string>();
   const batchImportModelConfig = {
     provider: config.reimbursementExtractionProvider,
     model: config.reimbursementExtractionModel,
@@ -384,6 +482,120 @@ export function createApp(input?: {
   app.get([`${ADMIN_BASE_PATH}`, `${ADMIN_BASE_PATH}/`], adminAuth, (_request, response) => {
     response.sendFile(path.join(staticDir, "admin.html"));
   });
+
+  app.post(
+    SHORTCUT_API_PATH,
+    shortcutApiAuth,
+    manualImportImageUpload.single("image"),
+    async (request, response, next) => {
+      let idempotencyKey: string | undefined;
+      let ownsActiveShortcutKey = false;
+
+      try {
+        idempotencyKey = parseShortcutIdempotencyKey(request.get("Idempotency-Key"));
+        const channelCode = parseRequiredString(request.body?.channelCode, "channelCode", "门店");
+        const channel = config.channels.find(
+          (item) => item.enabled && item.scenario === "reimbursement" && item.code === channelCode,
+        );
+
+        if (!channel) {
+          throw new AdminValidationError("请选择有效的报账门店。", "channelCode");
+        }
+
+        const reporter = parseShortcutText(request.body?.reporter, {
+          field: "reporter",
+          label: "报账人",
+          maxLength: MAX_SHORTCUT_REPORTER_LENGTH,
+          required: true,
+        });
+        const note = parseShortcutText(request.body?.note, {
+          field: "note",
+          label: "备注",
+          maxLength: MAX_BATCH_IMPORT_NOTE_LENGTH,
+        });
+
+        if (!request.file) {
+          throw new AdminValidationError("请添加一张报账图。", "image");
+        }
+
+        const imageSha256 = crypto.createHash("sha256").update(request.file.buffer).digest("hex");
+        const messageExternalId = buildShortcutMessageExternalId(idempotencyKey);
+        const existingRawMessage = getRawMessageByMessageExternalId(messageExternalId);
+
+        if (
+          existingRawMessage &&
+          !isSameShortcutRequest(existingRawMessage, {
+            channelCode: channel.code,
+            imageSha256,
+            note,
+            reporter,
+          })
+        ) {
+          throw new AdminConflictError("Idempotency-Key 已被另一份报账内容使用。");
+        }
+
+        const existingReport = existingRawMessage
+          ? getReimbursementReportByRawMessageId(existingRawMessage.id)
+          : null;
+
+        if (existingReport) {
+          response.status(200).json(
+            buildShortcutReportResponse({
+              duplicate: true,
+              idempotencyKey,
+              report: existingReport,
+            }),
+          );
+          return;
+        }
+
+        if (activeShortcutRequestKeys.has(idempotencyKey)) {
+          throw new AdminConflictError("这份报账正在处理中，请稍后重试。");
+        }
+
+        activeShortcutRequestKeys.add(idempotencyKey);
+        ownsActiveShortcutKey = true;
+
+        const attachment = existingRawMessage?.attachments[0] ??
+          saveUploadedReimbursementImage({
+            buffer: request.file.buffer,
+            config,
+            mimeType: request.file.mimetype,
+          });
+        const sentAt = existingRawMessage?.eventReceivedAt ?? new Date().toISOString();
+        const result = await importBatchReimbursementReport(
+          {
+            attachment,
+            channelCode: channel.code,
+            channelName: channel.match.value,
+            messageExternalId,
+            messageType: SHORTCUT_MESSAGE_TYPE,
+            modelConfig: batchImportModelConfig,
+            note,
+            reporter,
+            sentAt,
+            source: "shortcut_api",
+            timeZone: config.timeZone,
+          },
+          input?.reimbursementExtractor,
+        );
+
+        response.status(existingRawMessage ? 200 : 201).json(
+          buildShortcutReportResponse({
+            duplicate: Boolean(existingRawMessage),
+            idempotencyKey,
+            report: result.report,
+          }),
+        );
+      } catch (error) {
+        next(error);
+      } finally {
+        if (idempotencyKey && ownsActiveShortcutKey) {
+          activeShortcutRequestKeys.delete(idempotencyKey);
+        }
+      }
+    },
+  );
 
   app.use(`${ADMIN_BASE_PATH}/api`, adminAuth, enforceAdminWriteAccess);
 
@@ -772,4 +984,10 @@ export function createApp(input?: {
   return app;
 }
 
-export { ADMIN_BASE_PATH, DEFAULT_LIMIT, MAX_BATCH_IMPORT_IMAGES, MAX_LIMIT };
+export {
+  ADMIN_BASE_PATH,
+  DEFAULT_LIMIT,
+  MAX_BATCH_IMPORT_IMAGES,
+  MAX_LIMIT,
+  SHORTCUT_API_PATH,
+};

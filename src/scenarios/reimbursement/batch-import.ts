@@ -15,7 +15,7 @@ import type {
 } from "./types.js";
 
 const BATCH_IMPORT_MESSAGE_TYPE = "batch_import";
-const BATCH_IMPORT_FALLBACK_TEXT = "(非文本消息)";
+export const REIMBURSEMENT_IMAGE_IMPORT_FALLBACK_TEXT = "(非文本消息)";
 const DEFAULT_TIME_ZONE = "Asia/Shanghai";
 
 export interface BatchReimbursementImportInput {
@@ -34,10 +34,12 @@ export interface BatchReimbursementItemImportInput {
   channelCode: string;
   channelName: string;
   messageExternalId: string;
+  messageType?: string;
   modelConfig: ReimbursementModelProviderConfig;
   note?: string;
   reporter: string;
   sentAt: string;
+  source?: string;
   timeZone?: string;
 }
 
@@ -100,13 +102,13 @@ export async function importBatchReimbursementReport(
 ): Promise<BatchReimbursementImportItemResult> {
   const timeZone = input.timeZone ?? DEFAULT_TIME_ZONE;
   const note = input.note?.trim() ?? "";
-  const textContent = note || BATCH_IMPORT_FALLBACK_TEXT;
+  const textContent = note || REIMBURSEMENT_IMAGE_IMPORT_FALLBACK_TEXT;
   const normalizedMessage = normalizeMessage({
     messageExternalId: input.messageExternalId,
     channelCode: input.channelCode,
     channelName: input.channelName,
     senderName: input.reporter,
-    messageType: BATCH_IMPORT_MESSAGE_TYPE,
+    messageType: input.messageType ?? BATCH_IMPORT_MESSAGE_TYPE,
     textContent,
     messageSentAt: input.sentAt,
     eventReceivedAt: input.sentAt,
@@ -161,7 +163,7 @@ export async function importBatchReimbursementReport(
     resultJson: {
       ...resultJson,
       reimbursementReportId: report.id,
-      source: "batch_import",
+      source: input.source ?? "batch_import",
     },
   });
 

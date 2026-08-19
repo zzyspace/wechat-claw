@@ -40,13 +40,17 @@ import {
   getReimbursementExpenseCategoryLabel,
   normalizeReimbursementExpenseCategory,
 } from "../scenarios/reimbursement/categories.js";
+import {
+  buildReimbursementReceiptText,
+  formatReimbursementReceiptAmount,
+  REIMBURSEMENT_RECEIPT_PENDING_TEXT,
+} from "../scenarios/reimbursement/receipt.js";
 import type {
   ReimbursementExpenseCategory,
   ReimbursementReportRecord,
 } from "../scenarios/reimbursement/types.js";
 import { resolveMessageSentAt } from "./cold-start-filter.js";
 import { countSuccessfulDeliveries, sendTextToTarget, sendTextToTargets } from "./delivery-contact.js";
-const REIMBURSEMENT_RECEIPT_PENDING_TEXT = "此次报账待核验";
 const REIMBURSEMENT_COMMAND_PROCESSED_TEXT = "已处理";
 const REIMBURSEMENT_COMMAND_NOT_FOUND_TEXT = "未找到对应报账";
 const REIMBURSEMENT_COMMAND_UNSUPPORTED_TEXT = "不支持的指令";
@@ -1992,19 +1996,6 @@ function cryptoRandomId() {
   return `generated_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
 }
 
-function buildReimbursementReceiptText(report: {
-  amount: number | null;
-  expenseCategory?: string | null;
-  merchant?: string | null;
-  ocrText?: string | null;
-}) {
-  if (report.amount === null) {
-    return `${REIMBURSEMENT_RECEIPT_PENDING_TEXT}${buildPendingReceiptSuffix(report)}`;
-  }
-
-  return `报账${formatReimbursementReceiptAmount(report.amount)}元已录入${buildRecordedReceiptSuffix(report)}`;
-}
-
 function isReimbursementReceiptText(text: string) {
   return (
     /^此次报账待核验(?:\((?:商户|OCR): [\s\S]+?\))?$/.test(text) ||
@@ -2038,48 +2029,6 @@ function buildReimbursementCommandProcessedText(command: ReimbursementReceiptCom
     case "set_monthly_ledger_note":
       return `已归入 ${command.note}`;
   }
-}
-
-function formatReimbursementReceiptAmount(amount: number) {
-  return amount.toFixed(2).replace(/\.?0+$/, "");
-}
-
-function buildPendingReceiptSuffix(report: {
-  merchant?: string | null;
-  ocrText?: string | null;
-}) {
-  const merchant = normalizeReceiptSummaryText(report.merchant);
-
-  if (merchant) {
-    return `(商户: ${merchant})`;
-  }
-
-  const ocrText = normalizeReceiptSummaryText(report.ocrText);
-
-  if (ocrText) {
-    return `(OCR: ${ocrText})`;
-  }
-
-  return "";
-}
-
-function buildRecordedReceiptSuffix(report: {
-  expenseCategory?: string | null;
-}) {
-  const expenseCategory = normalizeReceiptSummaryText(
-    report.expenseCategory ? getReimbursementExpenseCategoryLabel(report.expenseCategory) : null,
-  );
-
-  if (!expenseCategory) {
-    return "";
-  }
-
-  return `(分类: ${expenseCategory})`;
-}
-
-function normalizeReceiptSummaryText(value: string | null | undefined) {
-  const normalized = value?.replace(/\s+/g, " ").trim();
-  return normalized ? normalized : null;
 }
 
 function isImageLikeMessage(typeValue: unknown, normalizedText: string) {

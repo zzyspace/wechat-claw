@@ -31,6 +31,15 @@ function secureCompare(left: string, right: string) {
   return timingSafeEqual(leftBuffer, rightBuffer);
 }
 
+function parseBearerAuthHeader(header: string | undefined) {
+  if (typeof header !== "string" || !header.startsWith("Bearer ")) {
+    return null;
+  }
+
+  const token = header.slice("Bearer ".length).trim();
+  return token || null;
+}
+
 function parseBasicAuthHeader(header: string | undefined) {
   if (typeof header !== "string" || !header.startsWith("Basic ")) {
     return null;
@@ -154,6 +163,38 @@ export function createAdminAuthMiddleware(input?: {
       role: account.role,
       canWrite: account.role === "admin",
     } satisfies AdminSession;
+    next();
+  };
+}
+
+export function createShortcutApiAuthMiddleware(input?: { token?: string }) {
+  const configuredToken = input?.token?.trim();
+
+  return (request: Request, response: Response, next: NextFunction) => {
+    setNoStore(response);
+
+    if (!configuredToken) {
+      response.status(503).json({
+        success: false,
+        error: {
+          message: "快捷指令报账接口尚未配置。",
+        },
+      });
+      return;
+    }
+
+    const suppliedToken = parseBearerAuthHeader(request.headers.authorization);
+
+    if (!suppliedToken || !secureCompare(suppliedToken, configuredToken)) {
+      response.status(401).json({
+        success: false,
+        error: {
+          message: "快捷指令报账接口身份验证失败。",
+        },
+      });
+      return;
+    }
+
     next();
   };
 }

@@ -5,7 +5,9 @@ import path from "node:path";
 import { once } from "node:events";
 import { after, test } from "node:test";
 
+import { listScenarioExtractionsByRawMessageId } from "../core/scenarios/scenario-extraction-repository.js";
 import { getAdminReimbursementReportDetail, saveReimbursementReceiptDelivery, saveReimbursementReport } from "../scenarios/reimbursement/repository.js";
+import type { ReimbursementExtractor } from "../scenarios/reimbursement/batch-import.js";
 import { saveRawMessage } from "../core/storage/raw-message-repository.js";
 import { createApp } from "./app.js";
 
@@ -21,6 +23,7 @@ const managedEnvKeys = [
   "WECHATY_PUPPET",
   "WECHATY_REIMBURSEMENT_EXTRACTION_API_KEY",
   "WECHATY_REIMBURSEMENT_EXTRACTION_PROVIDER",
+  "WECHATY_REIMBURSEMENT_SHORTCUT_API_TOKEN",
   "WECHATY_STATE_DIR",
   "WECHATY_TIMEZONE",
 ];
@@ -69,8 +72,8 @@ function createAdminAuthHeaders(username = "admin", password = "secret-pass") {
   };
 }
 
-async function startServer() {
-  const app = createApp();
+async function startServer(reimbursementExtractor?: ReimbursementExtractor) {
+  const app = createApp({ reimbursementExtractor });
   const server = app.listen(0, "127.0.0.1");
   await once(server, "listening");
 
@@ -92,6 +95,54 @@ async function startServer() {
           resolve();
         });
       }),
+  };
+}
+
+function createShortcutForm(input?: {
+  image?: string;
+  note?: string;
+  reporter?: string;
+}) {
+  const form = new FormData();
+  form.set("channelCode", "reimbursement_admin_test");
+  form.set("reporter", input?.reporter ?? "张三");
+  form.set("note", input?.note ?? "午餐采购");
+  form.set(
+    "image",
+    new Blob([input?.image ?? "shortcut-image"], { type: "image/png" }),
+    "screenshot.png",
+  );
+  return form;
+}
+
+function createShortcutTestExtractor(onCall: () => void): ReimbursementExtractor {
+  return async (input) => {
+    onCall();
+    return {
+      scenarioCode: "reimbursement",
+      extractorCode: "shortcut-api-test-v1",
+      status: "extracted",
+      confidence: 0.93,
+      needsReview: false,
+      resultJson: {
+        eventType: "reimbursement_report",
+        rawMessageId: input.rawMessageId,
+        channelName: input.channelName,
+        reporter: input.reporter,
+        reportedAt: input.sentAt,
+        amount: 36.5,
+        currency: "CNY",
+        expenseCategory: "food",
+        voucherDate: "2026-08-19",
+        voucherDateSource: "model",
+        note: input.textContent,
+        evidenceType: "image+text",
+        merchant: "测试菜场",
+        documentNo: null,
+        voucherType: "付款截图",
+        ocrText: "合计 36.50",
+      },
+    };
   };
 }
 
@@ -256,6 +307,132 @@ test("createApp returns 503 on admin routes when credentials are not configured"
     const apiResponse = await fetch(`${server.baseUrl}/reimbursement/api/reports`);
     assert.equal(apiResponse.status, 503);
     assert.equal((await apiResponse.json()).success, false);
+  } finally {
+    await server.close();
+  }
+});
+
+test("shortcut reimbursement API requires its dedicated bearer token", async () => {
+  applyEnv({
+    WECHATY_REIMBURSEMENT_SHORTCUT_API_TOKEN: undefined,
+  });
+  const unconfiguredServer = await startServer();
+
+  try {
+    const response = await fetch(
+      `${unconfiguredServer.baseUrl}/reimbursement/api/shortcut/reports`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer any-token",
+          "Idempotency-Key": "10000000-0000-4000-8000-000000000001",
+        },
+        body: createShortcutForm(),
+      },
+    );
+    assert.equal(response.status, 503);
+    assert.match((await response.json()).error.message, /尚未配置/);
+  } finally {
+    await unconfiguredServer.close();
+  }
+
+  applyEnv({
+    WECHATY_REIMBURSEMENT_SHORTCUT_API_TOKEN: "shortcut-secret",
+  });
+  const configuredServer = await startServer();
+
+  try {
+    const response = await fetch(
+      `${configuredServer.baseUrl}/reimbursement/api/shortcut/reports`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer wrong-token",
+          "Idempotency-Key": "10000000-0000-4000-8000-000000000002",
+        },
+        body: createShortcutForm(),
+      },
+    );
+    assert.equal(response.status, 401);
+    assert.match((await response.json()).error.message, /身份验证失败/);
+  } finally {
+    await configuredServer.close();
+  }
+});
+
+test("shortcut reimbursement API recognizes, persists, receipts, and deduplicates one image", async () => {
+  applyEnv({
+    WECHATY_REIMBURSEMENT_SHORTCUT_API_TOKEN: "shortcut-secret",
+  });
+  let extractorCalls = 0;
+  const server = await startServer(
+    createShortcutTestExtractor(() => {
+      extractorCalls += 1;
+    }),
+  );
+  const requestId = "20000000-0000-4000-8000-000000000001";
+  const headers = {
+    Authorization: "Bearer shortcut-secret",
+    "Idempotency-Key": requestId,
+  };
+
+  try {
+    const firstResponse = await fetch(
+      `${server.baseUrl}/reimbursement/api/shortcut/reports`,
+      {
+        method: "POST",
+        headers,
+        body: createShortcutForm(),
+      },
+    );
+    assert.equal(firstResponse.status, 201);
+    const firstPayload = await firstResponse.json();
+    assert.equal(firstPayload.success, true);
+    assert.equal(firstPayload.duplicate, false);
+    assert.equal(firstPayload.requestId, requestId);
+    assert.equal(firstPayload.receipt, "报账36.5元已录入(分类: 食材)");
+    assert.equal(firstPayload.report.amount, 36.5);
+    assert.equal(firstPayload.report.expenseCategory, "food");
+    assert.equal(firstPayload.report.expenseCategoryLabel, "食材");
+    assert.equal(firstPayload.report.note, "午餐采购");
+    assert.equal(extractorCalls, 1);
+
+    const reportDetail = getAdminReimbursementReportDetail(firstPayload.report.id);
+    assert(reportDetail);
+    assert.equal(reportDetail.reporter, "张三");
+    assert.equal(reportDetail.channelCode, "reimbursement_admin_test");
+    assert.equal(reportDetail.sources[0]?.attachments[0]?.mimeType, "image/png");
+    const extraction = listScenarioExtractionsByRawMessageId(
+      reportDetail.sources[0]!.rawMessageId,
+    )[0];
+    assert.equal((extraction?.resultJson as { source?: string }).source, "shortcut_api");
+
+    const duplicateResponse = await fetch(
+      `${server.baseUrl}/reimbursement/api/shortcut/reports`,
+      {
+        method: "POST",
+        headers,
+        body: createShortcutForm(),
+      },
+    );
+    assert.equal(duplicateResponse.status, 200);
+    const duplicatePayload = await duplicateResponse.json();
+    assert.equal(duplicatePayload.duplicate, true);
+    assert.equal(duplicatePayload.report.id, firstPayload.report.id);
+    assert.equal(duplicatePayload.receipt, firstPayload.receipt);
+    assert.equal(extractorCalls, 1);
+
+    const conflictResponse = await fetch(
+      `${server.baseUrl}/reimbursement/api/shortcut/reports`,
+      {
+        method: "POST",
+        headers,
+        body: createShortcutForm({ reporter: "李四" }),
+      },
+    );
+    assert.equal(conflictResponse.status, 409);
+    assert.match((await conflictResponse.json()).error.message, /另一份报账内容/);
+    assert.equal(extractorCalls, 1);
   } finally {
     await server.close();
   }

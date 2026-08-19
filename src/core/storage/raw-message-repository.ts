@@ -254,3 +254,55 @@ export function listRecentRawMessages(limit = 10): RecentRawMessageRecord[] {
     scenarioExtractions: listScenarioExtractionsByRawMessageId(row.id),
   }));
 }
+
+export function getRawMessageByMessageExternalId(
+  messageExternalId: string,
+): RecentRawMessageRecord | null {
+  const db = getDatabase();
+  const row = db
+    .prepare(`
+      SELECT
+        id,
+        message_external_id as messageExternalId,
+        channel_code as channelCode,
+        channel_external_id as channelExternalId,
+        channel_name as channelName,
+        sender_external_id as senderExternalId,
+        sender_name as senderName,
+        message_type as messageType,
+        text_content as textContent,
+        event_received_at as eventReceivedAt,
+        dedupe_key as dedupeKey,
+        ingested_at as ingestedAt
+      FROM raw_messages
+      WHERE message_external_id = ?
+    `)
+    .get(messageExternalId) as
+    | Omit<RecentRawMessageRecord, "attachments" | "scenarioExtractions">
+    | undefined;
+
+  if (!row) {
+    return null;
+  }
+
+  const attachments = db
+    .prepare(`
+      SELECT
+        id,
+        attachment_type as type,
+        local_path as localPath,
+        sha256,
+        mime_type as mimeType,
+        created_at as createdAt
+      FROM message_attachments
+      WHERE raw_message_id = ?
+      ORDER BY id ASC
+    `)
+    .all(row.id) as RecentRawMessageRecord["attachments"];
+
+  return {
+    ...row,
+    attachments,
+    scenarioExtractions: listScenarioExtractionsByRawMessageId(row.id),
+  };
+}
