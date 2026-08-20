@@ -120,6 +120,10 @@
         justify-content: flex-end;
       }
 
+      .hero-actions form {
+        margin: 0;
+      }
+
       .theme-toggle {
         flex: 0 0 auto;
         min-height: 40px;
@@ -1367,6 +1371,10 @@
             <button class="button-primary" id="manualImportOpen" type="button" hidden>手工补录</button>
             <button class="button-primary" id="batchImportOpen" type="button" hidden>批量补录</button>
             <button class="theme-toggle" id="themeToggle" type="button">切换主题</button>
+            <form method="post" action="/admin-logout">
+              <input type="hidden" name="returnTo" value="/reimbursement" />
+              <button class="theme-toggle" type="submit">退出登录</button>
+            </form>
           </div>
         </div>
         <p>查看已入库的报账记录，按门店、报账人、类别、日期和备注文字筛选，并展开详情查看 OCR、原始消息、附件和回执记录。</p>

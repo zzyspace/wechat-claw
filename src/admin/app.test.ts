@@ -11,6 +11,34 @@ import type { ReimbursementExtractor } from "../scenarios/reimbursement/batch-im
 import { saveRawMessage } from "../core/storage/raw-message-repository.js";
 import { createApp } from "./app.js";
 
+test("reimbursement nginx keeps shortcut Bearer auth public and protects admin routes", () => {
+  const nginx = fs.readFileSync(
+    path.resolve(process.cwd(), "deploy/nginx/reimbursement-admin.locations.conf"),
+    "utf8",
+  );
+  const shortcutIndex = nginx.indexOf("location = /reimbursement/api/shortcut/reports");
+  const protectedApiIndex = nginx.indexOf("location ^~ /reimbursement/api/");
+  assert.ok(shortcutIndex >= 0);
+  assert.ok(protectedApiIndex > shortcutIndex);
+  assert.match(
+    nginx,
+    /location \^~ \/reimbursement\/api\/ \{[\s\S]*?admin-auth-reimbursement\.inc;/,
+  );
+  assert.match(
+    nginx,
+    /location = \/reimbursement \{[\s\S]*?admin-auth-reimbursement\.inc;/,
+  );
+});
+
+test("reimbursement admin exposes a POST logout action", () => {
+  const html = fs.readFileSync(
+    path.resolve(process.cwd(), "src/admin/public/admin.html"),
+    "utf8",
+  );
+  assert.match(html, /<form method="post" action="\/admin-logout">/);
+  assert.match(html, /name="returnTo" value="\/reimbursement"/);
+});
+
 const stateDir = fs.mkdtempSync(path.join(os.tmpdir(), "wechat-claw-reimbursement-admin-"));
 const managedEnvKeys = [
   "WECHATY_ADMIN_HOST",
