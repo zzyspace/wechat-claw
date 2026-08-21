@@ -622,6 +622,7 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     assert.match(submissionPageHtml, /<h1>批量报账<\/h1>/);
     assert.match(submissionPageHtml, /id="reporter" type="text" readonly aria-readonly="true"/);
     assert.doesNotMatch(submissionPageHtml, /name="reporter"/);
+    assert.match(submissionPageHtml, /const reporter = elements\.reporter\.value;[\s\S]*?elements\.form\.reset\(\);[\s\S]*?elements\.reporter\.value = reporter;/);
     assert.match(submissionPageHtml, /点击选择或拖拽多张报账图到这里/);
     assert.match(submissionPageHtml, /这张报账图的备注（选填）/);
     assert.match(submissionPageHtml, /api\/submissions\/\$\{encodeURIComponent\(SUBMISSION_PAGE\)\}\/batch-reports/);

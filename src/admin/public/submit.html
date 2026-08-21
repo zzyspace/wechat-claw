@@ -651,8 +651,10 @@
       function resetForm() {
         if (state.importing) return;
         const channelCode = elements.channelCode.value;
+        const reporter = elements.reporter.value;
         elements.form.reset();
         elements.channelCode.value = channelCode;
+        elements.reporter.value = reporter;
         elements.sentAt.value = formatLocalDateTimeInput();
         clearImages();
         renderTask(null);
