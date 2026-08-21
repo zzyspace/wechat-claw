@@ -28,6 +28,12 @@ test("reimbursement nginx keeps shortcut Bearer auth public and protects admin r
     nginx,
     /location = \/reimbursement \{[\s\S]*?admin-auth-reimbursement\.inc;/,
   );
+  for (const route of ["submit", "submit_fuzzy", "submit_peanut", "submit_fuzzyqz"]) {
+    assert.match(
+      nginx,
+      new RegExp(`location = \\/reimbursement\\/${route} \\{[\\s\\S]*?admin-auth-reimbursement\\.inc;`),
+    );
+  }
 });
 
 test("reimbursement admin exposes a POST logout action", () => {
@@ -75,6 +81,21 @@ function applyEnv(values: Record<string, string | undefined>) {
       deliveryTargets: [],
       summarySchedule: "",
     },
+    ...[
+      ["reimbursement_fuzzy", "Fuzzy报账群"],
+      ["reimbursement_peanut", "Peanut报账群"],
+      ["reimbursement_fuzzyqz", "Fuzzy泉州报账群"],
+      ["reimbursement_fuzzy_manager", "Fuzzy店长报账群"],
+      ["reimbursement_peanut_manager", "Peanut店长报账群"],
+      ["reimbursement_fuzzy_qz_manager", "Fuzzy泉州店长报账群"],
+    ].map(([code, value]) => ({
+      code,
+      enabled: true,
+      scenario: "reimbursement",
+      match: { type: "room_topic", value },
+      deliveryTargets: [],
+      summarySchedule: "",
+    })),
     {
       code: "loss_admin_test",
       enabled: true,
@@ -593,6 +614,30 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     assert.match(pageHtml, /fetch\(buildAuthFetchUrl\(`\$\{BASE_PATH\}\/api\/session`\)/);
     assert.doesNotMatch(pageHtml, /<label for="needsReview">需复核<\/label>/);
 
+    const submissionPageResponse = await fetch(`${server.baseUrl}/reimbursement/submit`, {
+      headers: createAdminAuthHeaders(),
+    });
+    assert.equal(submissionPageResponse.status, 200);
+    const submissionPageHtml = await submissionPageResponse.text();
+    assert.match(submissionPageHtml, /<h1>批量报账<\/h1>/);
+    assert.match(submissionPageHtml, /id="reporter" type="text" readonly aria-readonly="true"/);
+    assert.doesNotMatch(submissionPageHtml, /name="reporter"/);
+    assert.match(submissionPageHtml, /点击选择或拖拽多张报账图到这里/);
+    assert.match(submissionPageHtml, /这张报账图的备注（选填）/);
+    assert.match(submissionPageHtml, /api\/submissions\/\$\{encodeURIComponent\(SUBMISSION_PAGE\)\}\/batch-reports/);
+    assert.match(submissionPageHtml, /api\/batch-reports\/\$\{encodeURIComponent\(taskId\)\}/);
+
+    for (const route of ["submit_fuzzy", "submit_peanut", "submit_fuzzyqz"]) {
+      const response = await fetch(`${server.baseUrl}/reimbursement/${route}`, {
+        headers: createAdminAuthHeaders(),
+      });
+      assert.equal(response.status, 200);
+      assert.match(await response.text(), /<h1>批量报账<\/h1>/);
+    }
+
+    const unauthorizedSubmissionPage = await fetch(`${server.baseUrl}/reimbursement/submit`);
+    assert.equal(unauthorizedSubmissionPage.status, 401);
+
     const adminSessionResponse = await fetch(`${server.baseUrl}/reimbursement/api/session`, {
       headers: createAdminAuthHeaders(),
     });
@@ -623,6 +668,34 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
       },
     });
 
+    const expectedSubmissionChannels = new Map([
+      ["submit", [
+        { code: "reimbursement_fuzzy", name: "Fuzzy" },
+        { code: "reimbursement_peanut", name: "Peanut" },
+        { code: "reimbursement_fuzzyqz", name: "Fuzzy泉州店" },
+      ]],
+      ["submit_fuzzy", [
+        { code: "reimbursement_fuzzy_manager", name: "Fuzzy店长报账" },
+      ]],
+      ["submit_peanut", [
+        { code: "reimbursement_peanut_manager", name: "Peanut店长报账" },
+      ]],
+      ["submit_fuzzyqz", [
+        { code: "reimbursement_fuzzy_qz_manager", name: "Fuzzy泉州店长报账" },
+      ]],
+    ]);
+    for (const [route, channels] of expectedSubmissionChannels) {
+      const response = await fetch(
+        `${server.baseUrl}/reimbursement/api/submissions/${route}/options`,
+        { headers: createAdminAuthHeaders() },
+      );
+      assert.equal(response.status, 200);
+      const payload = await response.json();
+      assert.equal(payload.account.username, "admin");
+      assert.equal(payload.permissions.canWrite, true);
+      assert.deepEqual(payload.channels, channels);
+    }
+
     const manualImportOptionsResponse = await fetch(
       `${server.baseUrl}/reimbursement/api/manual-import-options`,
       { headers: createAdminAuthHeaders() },
@@ -631,6 +704,12 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     const manualImportOptions = await manualImportOptionsResponse.json();
     assert.deepEqual(manualImportOptions.channels, [
       { code: "reimbursement_admin_test", name: "报账后台测试群" },
+      { code: "reimbursement_fuzzy", name: "Fuzzy报账群" },
+      { code: "reimbursement_peanut", name: "Peanut报账群" },
+      { code: "reimbursement_fuzzyqz", name: "Fuzzy泉州报账群" },
+      { code: "reimbursement_fuzzy_manager", name: "Fuzzy店长报账群" },
+      { code: "reimbursement_peanut_manager", name: "Peanut店长报账群" },
+      { code: "reimbursement_fuzzy_qz_manager", name: "Fuzzy泉州店长报账群" },
     ]);
     assert.equal(manualImportOptions.categories.some((item: { code: string }) => item.code === "flower"), true);
 
@@ -729,6 +808,49 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
       assert.equal(detail.sources.length, 1);
       assert.equal(detail.sources[0]?.attachments.length, 1);
     }
+
+    const submissionForm = new FormData();
+    submissionForm.set("channelCode", "reimbursement_fuzzy_manager");
+    submissionForm.set("reporter", "不能覆盖登录用户名");
+    submissionForm.set("sentAt", "2026-08-22T10:30");
+    submissionForm.set("notesJson", JSON.stringify(["店长页面报账"]));
+    submissionForm.append("images", new Blob(["manager-image"], { type: "image/png" }), "manager.png");
+    const submissionResponse = await fetch(
+      `${server.baseUrl}/reimbursement/api/submissions/submit_fuzzy/batch-reports`,
+      {
+        method: "POST",
+        headers: createAdminAuthHeaders(),
+        body: submissionForm,
+      },
+    );
+    assert.equal(submissionResponse.status, 202);
+    const submissionTask = await waitForBatchImportTask(
+      server.baseUrl,
+      (await submissionResponse.json()).task.id,
+    );
+    const submissionReportResponse = await fetch(
+      `${server.baseUrl}/reimbursement/api/reports/${submissionTask.items[0].reportId}`,
+      { headers: createAdminAuthHeaders() },
+    );
+    const submissionReport = (await submissionReportResponse.json()).report;
+    assert.equal(submissionReport.reporter, "admin");
+    assert.equal(submissionReport.channelCode, "reimbursement_fuzzy_manager");
+
+    const wrongStoreSubmissionForm = new FormData();
+    wrongStoreSubmissionForm.set("channelCode", "reimbursement_peanut_manager");
+    wrongStoreSubmissionForm.set("sentAt", "2026-08-22T10:30");
+    wrongStoreSubmissionForm.set("notesJson", JSON.stringify([""]));
+    wrongStoreSubmissionForm.append("images", new Blob(["wrong-store"], { type: "image/png" }), "wrong.png");
+    const wrongStoreSubmissionResponse = await fetch(
+      `${server.baseUrl}/reimbursement/api/submissions/submit_fuzzy/batch-reports`,
+      {
+        method: "POST",
+        headers: createAdminAuthHeaders(),
+        body: wrongStoreSubmissionForm,
+      },
+    );
+    assert.equal(wrongStoreSubmissionResponse.status, 400);
+    assert.equal((await wrongStoreSubmissionResponse.json()).error.field, "channelCode");
 
     const emptyBatchImportForm = new FormData();
     emptyBatchImportForm.set("channelCode", "reimbursement_admin_test");

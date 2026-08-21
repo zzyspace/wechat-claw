@@ -1,0 +1,817 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
+    <title>批量报账</title>
+    <script>
+      (() => {
+        let savedTheme = null;
+        try {
+          savedTheme = window.localStorage.getItem("reimbursement-admin-theme");
+        } catch {
+          // Storage may be unavailable in privacy-restricted browser contexts.
+        }
+        const theme = savedTheme === "light" || savedTheme === "dark"
+          ? savedTheme
+          : (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+        document.documentElement.dataset.theme = theme;
+        document.documentElement.style.colorScheme = theme;
+      })();
+    </script>
+    <style>
+      :root {
+        --bg: #f2f2f7;
+        --bg-accent: #e9edf7;
+        --surface: rgba(255, 255, 255, 0.86);
+        --surface-muted: rgba(255, 255, 255, 0.72);
+        --surface-input: rgba(255, 255, 255, 0.94);
+        --line: rgba(60, 60, 67, 0.16);
+        --line-strong: rgba(60, 60, 67, 0.25);
+        --ink: #1c1c1e;
+        --ink-soft: #6e6e73;
+        --brand: #007aff;
+        --brand-soft: rgba(0, 122, 255, 0.12);
+        --danger: #ff3b30;
+        --success: #16843f;
+        --shadow: 0 24px 60px rgba(28, 28, 30, 0.1);
+        --glow-start: rgba(0, 122, 255, 0.16);
+        --glow-end: rgba(90, 200, 250, 0.18);
+      }
+
+      :root[data-theme="dark"] {
+        --bg: #0d1117;
+        --bg-accent: #151b25;
+        --surface: rgba(27, 34, 45, 0.9);
+        --surface-muted: rgba(41, 51, 66, 0.82);
+        --surface-input: rgba(17, 23, 32, 0.92);
+        --line: rgba(235, 242, 255, 0.14);
+        --line-strong: rgba(235, 242, 255, 0.28);
+        --ink: #f2f5f9;
+        --ink-soft: #aab4c3;
+        --brand: #5aa7ff;
+        --brand-soft: rgba(90, 167, 255, 0.18);
+        --danger: #ff6961;
+        --success: #57ca7b;
+        --shadow: 0 24px 60px rgba(0, 0, 0, 0.34);
+        --glow-start: rgba(32, 110, 210, 0.22);
+        --glow-end: rgba(50, 170, 210, 0.14);
+      }
+
+      * { box-sizing: border-box; }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        color: var(--ink);
+        font-family: "SF Pro Text", "PingFang SC", "Noto Sans SC", sans-serif;
+        background:
+          radial-gradient(circle at top left, var(--glow-start), transparent 32%),
+          radial-gradient(circle at top right, var(--glow-end), transparent 28%),
+          linear-gradient(180deg, var(--bg), var(--bg-accent));
+      }
+
+      button, input, select { font: inherit; }
+
+      button, .link-button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 42px;
+        padding: 0 15px;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        color: var(--ink);
+        background: var(--surface-muted);
+        cursor: pointer;
+        text-decoration: none;
+      }
+
+      button:hover, .link-button:hover { border-color: var(--line-strong); }
+      button:disabled { cursor: not-allowed; opacity: 0.55; }
+
+      .button-primary {
+        border-color: transparent;
+        color: white;
+        background: var(--brand);
+        font-weight: 700;
+      }
+
+      .page {
+        width: min(920px, calc(100vw - 28px));
+        margin: 0 auto;
+        padding: 30px 0 52px;
+      }
+
+      .hero { display: grid; gap: 14px; margin-bottom: 20px; }
+
+      .eyebrow {
+        width: fit-content;
+        padding: 8px 12px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        color: var(--ink-soft);
+        background: var(--surface-muted);
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+      }
+
+      .hero-heading {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 18px;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: clamp(34px, 6vw, 50px);
+        line-height: 1;
+        letter-spacing: -0.05em;
+      }
+
+      .hero-actions { display: flex; gap: 9px; flex-wrap: wrap; justify-content: flex-end; }
+      .hero-actions form { margin: 0; }
+      .hero p { max-width: 680px; margin: 0; color: var(--ink-soft); line-height: 1.7; }
+
+      .panel {
+        padding: clamp(20px, 4vw, 32px);
+        border: 1px solid var(--line);
+        border-radius: 26px;
+        background: var(--surface);
+        box-shadow: var(--shadow);
+        backdrop-filter: blur(20px);
+      }
+
+      .form-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 16px;
+      }
+
+      .field { display: grid; gap: 8px; min-width: 0; }
+      .field-wide { grid-column: 1 / -1; }
+
+      .field label, .field-label {
+        color: var(--ink-soft);
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+
+      .field input, .field select {
+        width: 100%;
+        min-width: 0;
+        height: 48px;
+        padding: 0 14px;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        color: var(--ink);
+        background: var(--surface-input);
+        outline: none;
+      }
+
+      .field input:focus, .field select:focus {
+        border-color: var(--brand);
+        box-shadow: 0 0 0 3px var(--brand-soft);
+      }
+
+      .field input[readonly] {
+        color: var(--ink-soft);
+        cursor: default;
+      }
+
+      .visually-hidden {
+        position: absolute !important;
+        width: 1px !important;
+        height: 1px !important;
+        padding: 0 !important;
+        margin: -1px !important;
+        overflow: hidden !important;
+        clip: rect(0, 0, 0, 0) !important;
+        white-space: nowrap !important;
+        border: 0 !important;
+      }
+
+      .upload {
+        display: flex;
+        align-items: center;
+        gap: 15px;
+        min-height: 98px;
+        padding: 18px;
+        border: 1px dashed var(--line-strong);
+        border-radius: 17px;
+        background: var(--surface-input);
+        cursor: pointer;
+        transition: border-color 0.16s ease, background 0.16s ease;
+      }
+
+      .upload:hover, .upload.is-dragover {
+        border-color: var(--brand);
+        background: var(--brand-soft);
+      }
+
+      .upload.is-dragover { box-shadow: 0 0 0 3px var(--brand-soft); }
+
+      .upload-icon {
+        display: grid;
+        place-items: center;
+        width: 46px;
+        height: 46px;
+        flex: 0 0 46px;
+        border-radius: 13px;
+        color: var(--brand);
+        background: var(--brand-soft);
+        font-size: 24px;
+      }
+
+      .upload-copy { display: grid; gap: 4px; }
+      .upload-copy strong { font-size: 15px; }
+      .upload-copy small { color: var(--ink-soft); line-height: 1.45; }
+
+      .image-count { color: var(--ink-soft); font-size: 12px; font-weight: 600; }
+
+      .image-list {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+        margin-top: 12px;
+      }
+
+      .image-list[hidden], .task-progress[hidden] { display: none; }
+      .image-item { display: grid; gap: 8px; min-width: 0; }
+
+      .image-preview {
+        display: flex;
+        align-items: center;
+        gap: 11px;
+        min-width: 0;
+        min-height: 74px;
+        padding: 10px;
+        border: 1px solid var(--line);
+        border-radius: 15px;
+        background: var(--surface-muted);
+      }
+
+      .image-preview img {
+        width: 52px;
+        height: 52px;
+        flex: 0 0 52px;
+        border-radius: 11px;
+        object-fit: cover;
+      }
+
+      .image-info { display: grid; gap: 3px; min-width: 0; flex: 1; }
+      .image-name { overflow: hidden; font-size: 13px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+      .image-size { color: var(--ink-soft); font-size: 12px; }
+
+      .image-remove {
+        min-width: 62px;
+        min-height: 36px;
+        padding: 0 11px;
+        color: var(--danger);
+        white-space: nowrap;
+      }
+
+      .image-note { height: 40px !important; border-radius: 11px !important; font-size: 13px; }
+
+      .task-progress {
+        display: grid;
+        gap: 10px;
+        margin-top: 14px;
+        padding: 15px;
+        border: 1px solid var(--line);
+        border-radius: 15px;
+        background: var(--surface-muted);
+      }
+
+      .task-progress progress { width: 100%; height: 10px; accent-color: var(--brand); }
+
+      .task-list {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 7px 16px;
+        max-height: 168px;
+        overflow: auto;
+        color: var(--ink-soft);
+        font-size: 12px;
+      }
+
+      .task-item { display: flex; justify-content: space-between; gap: 8px; min-width: 0; }
+      .task-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .is-failed { color: var(--danger); }
+      .is-succeeded { color: var(--success); }
+
+      .footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        margin-top: 24px;
+      }
+
+      .status { min-height: 20px; color: var(--ink-soft); font-size: 13px; line-height: 1.5; }
+      .status.error { color: var(--danger); }
+      .footer-actions { display: flex; gap: 10px; margin-left: auto; }
+      .footer-actions button { min-width: 112px; }
+
+      @media (max-width: 680px) {
+        .page { width: min(100% - 20px, 920px); padding-top: 18px; }
+        .hero-heading { align-items: flex-start; flex-direction: column; }
+        .hero-actions { width: 100%; justify-content: flex-start; }
+        .form-grid, .image-list, .task-list { grid-template-columns: 1fr; }
+        .footer { align-items: stretch; flex-direction: column; }
+        .footer-actions { width: 100%; margin: 0; }
+        .footer-actions button { flex: 1; }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <header class="hero">
+        <span class="eyebrow">WECHAT CLAW / REIMBURSEMENT</span>
+        <div class="hero-heading">
+          <h1>批量报账</h1>
+          <div class="hero-actions">
+            <a class="link-button" href="/reimbursement">查看报账后台</a>
+            <button id="themeToggle" type="button">切换主题</button>
+            <form method="post" action="/admin-logout">
+              <input id="logoutReturnTo" type="hidden" name="returnTo" value="/reimbursement/submit" />
+              <button type="submit">退出登录</button>
+            </form>
+          </div>
+        </div>
+        <p>一次添加多张报账图，系统会逐张识别并生成独立报账记录。每张图片都可以填写自己的备注。</p>
+      </header>
+
+      <section class="panel">
+        <form id="submissionForm">
+          <div class="form-grid">
+            <div class="field">
+              <label for="channelCode">门店</label>
+              <select id="channelCode" name="channelCode" required>
+                <option value="">正在加载门店...</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="reporter">报账人</label>
+              <input id="reporter" type="text" readonly aria-readonly="true" value="正在加载..." />
+            </div>
+            <div class="field field-wide">
+              <label for="sentAt">报账时间</label>
+              <input id="sentAt" name="sentAt" type="datetime-local" step="60" required />
+            </div>
+            <div class="field field-wide">
+              <span class="field-label">报账图（必填）</span>
+              <input class="visually-hidden" id="images" name="images" type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif" multiple />
+              <label class="upload" id="imagePicker" for="images">
+                <span class="upload-icon" aria-hidden="true">↑</span>
+                <span class="upload-copy">
+                  <strong>点击选择或拖拽多张报账图到这里</strong>
+                  <small>最多 20 张；每张支持 JPG、PNG、WEBP、GIF、HEIC、HEIF，最大 20MB</small>
+                </span>
+              </label>
+              <div class="image-list" id="imageList" hidden></div>
+              <span class="image-count" id="imageCount">尚未添加报账图</span>
+              <div class="task-progress" id="taskProgress" hidden>
+                <strong id="taskProgressText">等待开始</strong>
+                <progress id="taskProgressBar" value="0" max="1"></progress>
+                <div class="task-list" id="taskList"></div>
+              </div>
+            </div>
+          </div>
+          <div class="footer">
+            <span class="status" id="status" aria-live="polite"></span>
+            <div class="footer-actions">
+              <button id="resetButton" type="button">清空</button>
+              <button class="button-primary" id="submitButton" type="submit">开始识别并报账</button>
+            </div>
+          </div>
+        </form>
+      </section>
+    </main>
+
+    <script>
+      const BASE_PATH = "/reimbursement";
+      const SUBMISSION_PAGE = location.pathname.replace(/\/$/, "").split("/").pop();
+      const SUPPORTED_SUBMISSION_PAGES = new Set(["submit", "submit_fuzzy", "submit_peanut", "submit_fuzzyqz"]);
+      const TASK_STORAGE_KEY = `reimbursement-active-submission-task:${SUBMISSION_PAGE}`;
+      const THEME_STORAGE_KEY = "reimbursement-admin-theme";
+      const IMAGE_MIME_TYPES = new Set([
+        "image/jpeg", "image/png", "image/webp", "image/gif", "image/heic", "image/heif",
+      ]);
+
+      const state = {
+        canWrite: false,
+        imageItems: [],
+        imageDragDepth: 0,
+        importing: false,
+        taskPollTimer: null,
+      };
+
+      const elements = {
+        form: document.getElementById("submissionForm"),
+        channelCode: document.getElementById("channelCode"),
+        reporter: document.getElementById("reporter"),
+        sentAt: document.getElementById("sentAt"),
+        images: document.getElementById("images"),
+        imagePicker: document.getElementById("imagePicker"),
+        imageList: document.getElementById("imageList"),
+        imageCount: document.getElementById("imageCount"),
+        taskProgress: document.getElementById("taskProgress"),
+        taskProgressText: document.getElementById("taskProgressText"),
+        taskProgressBar: document.getElementById("taskProgressBar"),
+        taskList: document.getElementById("taskList"),
+        status: document.getElementById("status"),
+        resetButton: document.getElementById("resetButton"),
+        submitButton: document.getElementById("submitButton"),
+        themeToggle: document.getElementById("themeToggle"),
+        logoutReturnTo: document.getElementById("logoutReturnTo"),
+      };
+
+      function setStatus(message, isError = false) {
+        elements.status.textContent = message;
+        elements.status.classList.toggle("error", isError);
+      }
+
+      function formatLocalDateTimeInput(date = new Date()) {
+        const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+        return local.toISOString().slice(0, 16);
+      }
+
+      function formatFileSize(bytes) {
+        if (bytes < 1024) return `${bytes} B`;
+        if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+        return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+      }
+
+      function readJsonResponse(response, fallbackMessage) {
+        return response.text().then((text) => {
+          try {
+            return JSON.parse(text);
+          } catch {
+            throw new Error(response.ok ? fallbackMessage : `${fallbackMessage}（HTTP ${response.status}）`);
+          }
+        });
+      }
+
+      function clearTaskPollTimer() {
+        if (state.taskPollTimer !== null) {
+          window.clearTimeout(state.taskPollTimer);
+          state.taskPollTimer = null;
+        }
+      }
+
+      function clearImages() {
+        for (const item of state.imageItems) {
+          if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
+        }
+        state.imageItems = [];
+        state.imageDragDepth = 0;
+        elements.images.value = "";
+        elements.imagePicker.classList.remove("is-dragover");
+        renderImages();
+      }
+
+      function setControlsDisabled(disabled) {
+        for (const control of elements.form.querySelectorAll("input, select, button")) {
+          control.disabled = disabled;
+        }
+        elements.reporter.disabled = false;
+      }
+
+      function renderImages() {
+        elements.imageList.replaceChildren();
+        elements.imageList.hidden = state.imageItems.length === 0;
+        elements.imageCount.textContent = state.imageItems.length
+          ? `已添加 ${state.imageItems.length} 张报账图，提交后将生成 ${state.imageItems.length} 条记录`
+          : "尚未添加报账图";
+
+        state.imageItems.forEach((item, index) => {
+          const container = document.createElement("div");
+          container.className = "image-item";
+          const preview = document.createElement("div");
+          preview.className = "image-preview";
+          const image = document.createElement("img");
+          image.alt = `${item.file.name} 预览`;
+          if (item.previewUrl) image.src = item.previewUrl;
+          else image.hidden = true;
+          const info = document.createElement("div");
+          info.className = "image-info";
+          const name = document.createElement("span");
+          name.className = "image-name";
+          name.textContent = item.file.name;
+          const size = document.createElement("span");
+          size.className = "image-size";
+          size.textContent = formatFileSize(item.file.size);
+          const remove = document.createElement("button");
+          remove.className = "image-remove";
+          remove.type = "button";
+          remove.textContent = "移除";
+          remove.dataset.imageIndex = String(index);
+          info.append(name, size);
+          preview.append(image, info, remove);
+          const note = document.createElement("input");
+          note.className = "image-note";
+          note.type = "text";
+          note.maxLength = 300;
+          note.placeholder = "这张报账图的备注（选填）";
+          note.value = item.note;
+          note.dataset.noteIndex = String(index);
+          note.setAttribute("aria-label", `${item.file.name} 的备注`);
+          container.append(preview, note);
+          elements.imageList.append(container);
+        });
+      }
+
+      function acceptImages(files) {
+        const incoming = Array.from(files || []);
+        if (!incoming.length) return false;
+
+        const unsupported = incoming.find((file) => !IMAGE_MIME_TYPES.has(file.type));
+        if (unsupported) {
+          setStatus(`${unsupported.name} 不是支持的报账图格式。`, true);
+          return false;
+        }
+        const oversized = incoming.find((file) => file.size > 20 * 1024 * 1024);
+        if (oversized) {
+          setStatus(`${oversized.name} 超过 20MB。`, true);
+          return false;
+        }
+
+        const existingKeys = new Set(
+          state.imageItems.map((item) => `${item.file.name}:${item.file.size}:${item.file.lastModified}`),
+        );
+        const uniqueIncoming = incoming.filter(
+          (file) => !existingKeys.has(`${file.name}:${file.size}:${file.lastModified}`),
+        );
+        if (state.imageItems.length + uniqueIncoming.length > 20) {
+          setStatus("每次最多添加 20 张报账图。", true);
+          return false;
+        }
+
+        for (const file of uniqueIncoming) {
+          state.imageItems.push({
+            file,
+            note: "",
+            previewUrl: ["image/jpeg", "image/png", "image/webp", "image/gif"].includes(file.type)
+              ? URL.createObjectURL(file)
+              : null,
+          });
+        }
+        setStatus("");
+        renderImages();
+        return true;
+      }
+
+      function taskStatusLabel(status) {
+        return ({ queued: "等待中", processing: "识别中", succeeded: "成功", failed: "失败" })[status] || status;
+      }
+
+      function renderTask(task) {
+        elements.taskProgress.hidden = !task;
+        if (!task) {
+          elements.taskProgressText.textContent = "等待开始";
+          elements.taskProgressBar.max = 1;
+          elements.taskProgressBar.value = 0;
+          elements.taskList.replaceChildren();
+          return;
+        }
+
+        elements.taskProgressText.textContent = task.status === "completed"
+          ? `处理完成：成功 ${task.successCount}，失败 ${task.failedCount}`
+          : `正在识别：已完成 ${task.completedCount}/${task.totalCount}`;
+        elements.taskProgressBar.max = Math.max(1, task.totalCount);
+        elements.taskProgressBar.value = task.completedCount;
+        elements.taskList.replaceChildren();
+
+        for (const item of task.items || []) {
+          const row = document.createElement("div");
+          row.className = "task-item";
+          const name = document.createElement("span");
+          name.className = "task-name";
+          name.textContent = item.originalName;
+          const status = document.createElement("span");
+          status.className = `is-${item.status}`;
+          status.textContent = taskStatusLabel(item.status);
+          if (item.errorMessage) status.title = item.errorMessage;
+          row.append(name, status);
+          elements.taskList.append(row);
+        }
+      }
+
+      async function pollTask(taskId) {
+        clearTaskPollTimer();
+        try {
+          const response = await fetch(`${BASE_PATH}/api/batch-reports/${encodeURIComponent(taskId)}`, {
+            headers: { Accept: "application/json" },
+          });
+          const payload = await readJsonResponse(response, "批量报账进度加载失败");
+          if (!response.ok || !payload.success) {
+            if (response.status >= 400 && response.status < 500) {
+              state.importing = false;
+              window.localStorage.removeItem(TASK_STORAGE_KEY);
+              setControlsDisabled(false);
+            }
+            throw new Error(payload?.error?.message || "批量报账进度加载失败");
+          }
+
+          const task = payload.task;
+          renderTask(task);
+          if (task.status === "completed") {
+            state.importing = false;
+            window.localStorage.removeItem(TASK_STORAGE_KEY);
+            setControlsDisabled(false);
+            elements.submitButton.disabled = true;
+            elements.resetButton.textContent = "继续报账";
+            setStatus(
+              task.failedCount
+                ? `处理完成：成功 ${task.successCount} 张，失败 ${task.failedCount} 张。可查看失败项提示。`
+                : `批量报账成功，共生成 ${task.successCount} 条报账记录。`,
+              task.failedCount > 0,
+            );
+            return;
+          }
+
+          state.importing = true;
+          setControlsDisabled(true);
+          setStatus(`后台处理中，已完成 ${task.completedCount}/${task.totalCount}...`);
+        } catch (error) {
+          setStatus(error instanceof Error ? error.message : String(error), true);
+        }
+
+        if (state.importing) {
+          state.taskPollTimer = window.setTimeout(() => void pollTask(taskId), 1500);
+        }
+      }
+
+      function resetForm() {
+        if (state.importing) return;
+        const channelCode = elements.channelCode.value;
+        elements.form.reset();
+        elements.channelCode.value = channelCode;
+        elements.sentAt.value = formatLocalDateTimeInput();
+        clearImages();
+        renderTask(null);
+        elements.submitButton.disabled = !state.canWrite;
+        elements.resetButton.textContent = "清空";
+        setStatus("");
+      }
+
+      async function loadOptions() {
+        if (!SUPPORTED_SUBMISSION_PAGES.has(SUBMISSION_PAGE)) {
+          throw new Error("当前批量报账页面地址无效。");
+        }
+        const response = await fetch(`${BASE_PATH}/api/submissions/${encodeURIComponent(SUBMISSION_PAGE)}/options`, {
+          headers: { Accept: "application/json" },
+        });
+        const payload = await readJsonResponse(response, "批量报账信息加载失败");
+        if (!response.ok || !payload.success) {
+          throw new Error(payload?.error?.message || "批量报账信息加载失败");
+        }
+
+        state.canWrite = payload.permissions?.canWrite === true;
+        elements.reporter.value = payload.account?.username || "";
+        elements.channelCode.replaceChildren();
+        const placeholder = document.createElement("option");
+        placeholder.value = "";
+        placeholder.textContent = "请选择门店";
+        elements.channelCode.append(placeholder);
+        for (const channel of payload.channels || []) {
+          const option = document.createElement("option");
+          option.value = channel.code;
+          option.textContent = channel.name;
+          elements.channelCode.append(option);
+        }
+        if ((payload.channels || []).length === 1) {
+          elements.channelCode.value = payload.channels[0].code;
+        }
+
+        if (!state.canWrite) {
+          elements.submitButton.disabled = true;
+          setStatus("当前账号为只读账号，无法提交报账。", true);
+        } else if (!(payload.channels || []).length) {
+          elements.submitButton.disabled = true;
+          setStatus("当前页面对应的报账门店尚未启用，请联系管理员。", true);
+        }
+      }
+
+      async function submitForm() {
+        if (!state.canWrite || state.importing) return;
+        if (!state.imageItems.length) {
+          setStatus("请至少添加一张报账图。", true);
+          return;
+        }
+
+        const formData = new FormData();
+        formData.set("channelCode", elements.channelCode.value.trim());
+        formData.set("sentAt", elements.sentAt.value.trim());
+        formData.set("notesJson", JSON.stringify(state.imageItems.map((item) => item.note.trim())));
+        for (const item of state.imageItems) {
+          formData.append("images", item.file, item.file.name);
+        }
+
+        state.importing = true;
+        setControlsDisabled(true);
+        setStatus(`正在上传并创建任务，共 ${state.imageItems.length} 张...`);
+        try {
+          const response = await fetch(
+            `${BASE_PATH}/api/submissions/${encodeURIComponent(SUBMISSION_PAGE)}/batch-reports`,
+            { method: "POST", headers: { Accept: "application/json" }, body: formData },
+          );
+          const payload = await readJsonResponse(response, "批量报账任务创建失败");
+          if (!response.ok || !payload.success) {
+            throw new Error(payload?.error?.message || "批量报账任务创建失败");
+          }
+          window.localStorage.setItem(TASK_STORAGE_KEY, payload.task.id);
+          renderTask(payload.task);
+          setStatus(`任务已创建，后台处理中，已完成 0/${payload.task.totalCount}...`);
+          void pollTask(payload.task.id);
+        } catch (error) {
+          state.importing = false;
+          setControlsDisabled(false);
+          setStatus(error instanceof Error ? error.message : String(error), true);
+        }
+      }
+
+      function applyTheme(theme, persist = true) {
+        const normalized = theme === "dark" ? "dark" : "light";
+        document.documentElement.dataset.theme = normalized;
+        document.documentElement.style.colorScheme = normalized;
+        if (persist) {
+          try { window.localStorage.setItem(THEME_STORAGE_KEY, normalized); } catch { /* Ignore. */ }
+        }
+      }
+
+      elements.form.addEventListener("submit", (event) => {
+        event.preventDefault();
+        void submitForm();
+      });
+      elements.resetButton.addEventListener("click", resetForm);
+      elements.images.addEventListener("change", () => {
+        acceptImages(elements.images.files);
+        elements.images.value = "";
+      });
+      elements.imagePicker.addEventListener("dragenter", (event) => {
+        event.preventDefault();
+        state.imageDragDepth += 1;
+        elements.imagePicker.classList.add("is-dragover");
+      });
+      elements.imagePicker.addEventListener("dragover", (event) => {
+        event.preventDefault();
+        if (event.dataTransfer) event.dataTransfer.dropEffect = "copy";
+      });
+      elements.imagePicker.addEventListener("dragleave", (event) => {
+        event.preventDefault();
+        state.imageDragDepth = Math.max(0, state.imageDragDepth - 1);
+        if (state.imageDragDepth === 0) elements.imagePicker.classList.remove("is-dragover");
+      });
+      elements.imagePicker.addEventListener("drop", (event) => {
+        event.preventDefault();
+        state.imageDragDepth = 0;
+        elements.imagePicker.classList.remove("is-dragover");
+        acceptImages(event.dataTransfer?.files);
+      });
+      elements.imageList.addEventListener("click", (event) => {
+        const button = event.target.closest("[data-image-index]");
+        if (!button || state.importing) return;
+        const [removed] = state.imageItems.splice(Number(button.dataset.imageIndex), 1);
+        if (removed?.previewUrl) URL.revokeObjectURL(removed.previewUrl);
+        renderImages();
+        setStatus("");
+      });
+      elements.imageList.addEventListener("input", (event) => {
+        const input = event.target.closest("[data-note-index]");
+        if (!input) return;
+        const item = state.imageItems[Number(input.dataset.noteIndex)];
+        if (item) item.note = input.value;
+      });
+      elements.themeToggle.addEventListener("click", () => {
+        applyTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark");
+      });
+
+      async function initialize() {
+        elements.sentAt.value = formatLocalDateTimeInput();
+        elements.logoutReturnTo.value = location.pathname;
+        try {
+          await loadOptions();
+          const taskId = window.localStorage.getItem(TASK_STORAGE_KEY);
+          if (taskId) {
+            state.importing = true;
+            setControlsDisabled(true);
+            setStatus("正在恢复批量报账进度...");
+            void pollTask(taskId);
+          }
+        } catch (error) {
+          elements.submitButton.disabled = true;
+          setStatus(error instanceof Error ? error.message : String(error), true);
+        }
+      }
+
+      void initialize();
+    </script>
+  </body>
+</html>

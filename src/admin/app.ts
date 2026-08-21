@@ -59,6 +59,23 @@ const MAX_SHORTCUT_REPORTER_LENGTH = 100;
 const SHORTCUT_API_PATH = `${ADMIN_BASE_PATH}/api/shortcut/reports`;
 const SHORTCUT_MESSAGE_TYPE = "shortcut_api";
 const IDEMPOTENCY_KEY_PATTERN = /^[\x20-\x7e]{8,256}$/;
+const REIMBURSEMENT_SUBMISSION_PAGES = {
+  submit: [
+    { code: "reimbursement_fuzzy", name: "Fuzzy" },
+    { code: "reimbursement_peanut", name: "Peanut" },
+    { code: "reimbursement_fuzzyqz", name: "Fuzzy泉州店" },
+  ],
+  submit_fuzzy: [
+    { code: "reimbursement_fuzzy_manager", name: "Fuzzy店长报账" },
+  ],
+  submit_peanut: [
+    { code: "reimbursement_peanut_manager", name: "Peanut店长报账" },
+  ],
+  submit_fuzzyqz: [
+    { code: "reimbursement_fuzzy_qz_manager", name: "Fuzzy泉州店长报账" },
+  ],
+} as const;
+type ReimbursementSubmissionPage = keyof typeof REIMBURSEMENT_SUBMISSION_PAGES;
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
 const defaultStaticDir = path.join(currentDir, "public");
 
@@ -97,6 +114,13 @@ const manualImportImageUpload = multer({
 
 function trimString(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function getReimbursementSubmissionPage(value: unknown): ReimbursementSubmissionPage | null {
+  const normalized = trimString(value);
+  return Object.hasOwn(REIMBURSEMENT_SUBMISSION_PAGES, normalized)
+    ? normalized as ReimbursementSubmissionPage
+    : null;
 }
 
 function parsePositiveInteger(value: unknown, field: string) {
@@ -476,6 +500,73 @@ export function createApp(input?: {
     scheduleBatchImportTask(jobId);
   }
 
+  async function createBatchReportTask(
+    request: express.Request,
+    response: express.Response,
+    next: express.NextFunction,
+    input?: {
+      allowedChannelCodes?: ReadonlySet<string>;
+      reporter?: string;
+    },
+  ) {
+    const uploadedFiles = Array.isArray(request.files) ? request.files : [];
+
+    try {
+      const channelCode = parseRequiredString(request.body?.channelCode, "channelCode", "门店");
+      const channel = config.channels.find(
+        (item) =>
+          item.enabled &&
+          item.scenario === "reimbursement" &&
+          item.code === channelCode &&
+          (!input?.allowedChannelCodes || input.allowedChannelCodes.has(item.code)),
+      );
+
+      if (!channel) {
+        throw new AdminValidationError("请选择有效的报账门店。", "channelCode");
+      }
+
+      const reporter = input?.reporter ??
+        parseRequiredString(request.body?.reporter, "reporter", "报账人");
+      const sentAt = parseManualImportSentAt(request.body?.sentAt, config.timeZone);
+
+      if (uploadedFiles.length === 0) {
+        throw new AdminValidationError("请至少添加一张报账图。", "images");
+      }
+
+      const notes = parseBatchImportNotes(request.body?.notesJson, uploadedFiles.length);
+      const attachments = uploadedFiles.map((file) =>
+        saveUploadedReimbursementImageFile({
+          config,
+          mimeType: file.mimetype,
+          sourcePath: file.path,
+        }),
+      );
+      const task = createBatchImportTask({
+        channelCode: channel.code,
+        channelName: channel.match.value,
+        reporter,
+        notes,
+        sentAt,
+        timeZone: config.timeZone,
+        attachments,
+        originalNames: uploadedFiles.map((file) => file.originalname),
+      });
+
+      response.status(202).json({
+        success: true,
+        task,
+      });
+      scheduleBatchImportTask(task.id);
+    } catch (error) {
+      for (const file of uploadedFiles) {
+        if (file.path && fs.existsSync(file.path)) {
+          fs.unlinkSync(file.path);
+        }
+      }
+      next(error);
+    }
+  }
+
   app.disable("x-powered-by");
   app.use(express.json({ limit: "32kb" }));
 
@@ -485,6 +576,14 @@ export function createApp(input?: {
 
   app.get([`${ADMIN_BASE_PATH}`, `${ADMIN_BASE_PATH}/`], adminAuth, (_request, response) => {
     response.sendFile(path.join(staticDir, "admin.html"));
+  });
+
+  const submissionPagePaths = Object.keys(REIMBURSEMENT_SUBMISSION_PAGES).flatMap((page) => [
+    `${ADMIN_BASE_PATH}/${page}`,
+    `${ADMIN_BASE_PATH}/${page}/`,
+  ]);
+  app.get(submissionPagePaths, adminAuth, (_request, response) => {
+    response.sendFile(path.join(staticDir, "submit.html"));
   });
 
   app.post(
@@ -618,6 +717,39 @@ export function createApp(input?: {
     });
   });
 
+  app.get(`${ADMIN_BASE_PATH}/api/submissions/:submissionPage/options`, (request, response) => {
+    const submissionPage = getReimbursementSubmissionPage(request.params.submissionPage);
+
+    if (!submissionPage) {
+      response.status(404).json({
+        success: false,
+        error: { message: "批量报账页面不存在。" },
+      });
+      return;
+    }
+
+    const session = getAdminSession(response);
+    const configuredChannelCodes = new Set(
+      config.channels
+        .filter((channel) => channel.enabled && channel.scenario === "reimbursement")
+        .map((channel) => channel.code),
+    );
+
+    response.status(200).json({
+      success: true,
+      account: {
+        username: session?.username,
+      },
+      permissions: {
+        canWrite: session?.canWrite === true,
+      },
+      channels: REIMBURSEMENT_SUBMISSION_PAGES[submissionPage].filter((channel) =>
+        configuredChannelCodes.has(channel.code),
+      ),
+      timeZone: config.timeZone,
+    });
+  });
+
   app.get(`${ADMIN_BASE_PATH}/api/manual-import-options`, (_request, response) => {
     response.status(200).json({
       success: true,
@@ -689,60 +821,36 @@ export function createApp(input?: {
   app.post(
     `${ADMIN_BASE_PATH}/api/batch-reports`,
     batchImportImageUpload.array("images", MAX_BATCH_IMPORT_IMAGES),
-    async (request, response, next) => {
-      const uploadedFiles = Array.isArray(request.files) ? request.files : [];
+    (request, response, next) => createBatchReportTask(request, response, next),
+  );
 
-      try {
-        const channelCode = parseRequiredString(request.body?.channelCode, "channelCode", "门店");
-        const channel = config.channels.find(
-          (item) => item.enabled && item.scenario === "reimbursement" && item.code === channelCode,
-        );
+  app.post(
+    `${ADMIN_BASE_PATH}/api/submissions/:submissionPage/batch-reports`,
+    batchImportImageUpload.array("images", MAX_BATCH_IMPORT_IMAGES),
+    (request, response, next) => {
+      const submissionPage = getReimbursementSubmissionPage(request.params.submissionPage);
 
-        if (!channel) {
-          throw new AdminValidationError("请选择有效的报账门店。", "channelCode");
-        }
-
-        const reporter = parseRequiredString(request.body?.reporter, "reporter", "报账人");
-        const sentAt = parseManualImportSentAt(request.body?.sentAt, config.timeZone);
-        const files = uploadedFiles;
-
-        if (files.length === 0) {
-          throw new AdminValidationError("请至少添加一张报账图。", "images");
-        }
-
-        const notes = parseBatchImportNotes(request.body?.notesJson, files.length);
-
-        const attachments = files.map((file) =>
-          saveUploadedReimbursementImageFile({
-            config,
-            mimeType: file.mimetype,
-            sourcePath: file.path,
-          }),
-        );
-        const task = createBatchImportTask({
-          channelCode: channel.code,
-          channelName: channel.match.value,
-          reporter,
-          notes,
-          sentAt,
-          timeZone: config.timeZone,
-          attachments,
-          originalNames: files.map((file) => file.originalname),
-        });
-
-        response.status(202).json({
-          success: true,
-          task,
-        });
-        scheduleBatchImportTask(task.id);
-      } catch (error) {
-        for (const file of uploadedFiles) {
+      if (!submissionPage) {
+        for (const file of Array.isArray(request.files) ? request.files : []) {
           if (file.path && fs.existsSync(file.path)) {
             fs.unlinkSync(file.path);
           }
         }
-        next(error);
+        response.status(404).json({
+          success: false,
+          error: { message: "批量报账页面不存在。" },
+        });
+        return;
       }
+
+      const session = getAdminSession(response);
+      const allowedChannelCodes = new Set<string>(
+        REIMBURSEMENT_SUBMISSION_PAGES[submissionPage].map((channel) => channel.code),
+      );
+      void createBatchReportTask(request, response, next, {
+        allowedChannelCodes,
+        reporter: session?.username,
+      });
     },
   );
 
