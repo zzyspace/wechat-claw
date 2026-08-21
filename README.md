@@ -91,8 +91,7 @@ WECHATY_ADMIN_USERNAME=
 WECHATY_ADMIN_PASSWORD=
 WECHATY_ADMIN_GUEST_USERNAME=
 WECHATY_ADMIN_GUEST_PASSWORD=
-WECHATY_ADMIN_NGINX_SITE_NAME=invoice-submit
-WECHATY_ADMIN_NGINX_HEALTHZ_URL=http://127.0.0.1:8080/reimbursement/healthz
+WECHATY_ADMIN_PUBLIC_HEALTHZ_URL=https://comeover.cn/reimbursement/healthz
 WECHATY_DEBUG_RECEIVED_ROOM_MESSAGE_ENABLED=false
 WECHATY_SELF_CANARY_ENABLED=false
 WECHATY_SELF_CANARY_TARGET_CONTACT_NAME=文件传输助手
@@ -157,8 +156,7 @@ WECHATY_CHANNELS_JSON=[{"code":"loss_a","enabled":true,"scenario":"loss-report",
 - `WECHATY_ADMIN_USERNAME/WECHATY_ADMIN_PASSWORD`: 报账后台 Basic Auth 账号密码；未配置时 `/reimbursement` 会返回 `503`
 - `WECHATY_ADMIN_GUEST_USERNAME/WECHATY_ADMIN_GUEST_PASSWORD`: 可选的只读 Basic Auth 账号密码；guest 可以查看列表、详情和附件，但不能删除或执行其他写操作
 - `WECHATY_REIMBURSEMENT_SHORTCUT_API_TOKEN`: 快捷指令单图报账接口的独立 Bearer Token；未配置时该接口返回 `503`
-- `WECHATY_ADMIN_NGINX_SITE_NAME`: 仅 deploy 脚本使用；表示把 `/reimbursement` 自动挂到哪个现有 Nginx site，默认 `invoice-submit`
-- `WECHATY_ADMIN_NGINX_HEALTHZ_URL`: 仅 deploy 脚本使用；deploy 完成后用于校验 Nginx 外网入口，默认 `http://127.0.0.1:8080/reimbursement/healthz`
+- `WECHATY_ADMIN_PUBLIC_HEALTHZ_URL`: 仅 deploy 脚本使用；应用发布后校验由 `server-infra` 管理的公网入口，默认 `https://comeover.cn/reimbursement/healthz`
 - `WECHATY_DEBUG_RECEIVED_ROOM_MESSAGE_ENABLED`: 是否发送 `"[wechat-claw] 已收到群消息"` 这类调试摘要，默认 `false`
 - `WECHATY_SUPPRESS_ROOM_TEXT_DELIVERY`: 临时禁止 bot 向任何群聊发送文字，默认 `false`；开启后私聊和后台处理不受影响，群消息链路自检会暂时停用
 - `WECHATY_CHANNELS_JSON`: 推荐的多群配置入口，支持 `loss-report` 和 `reimbursement` 场景
@@ -438,11 +436,9 @@ npm run admin:dev
 - 快捷指令接口会同步调用现有报账模型并写入正式报账链路；成功响应中的 `receipt` 可直接交给“显示结果”动作
 - `deploy/deploy-wechat-claw.sh` 现在会自动：
   - 安装 [deploy/wechat-claw-reimbursement-admin.service](/Users/ryan/DataDisk/Work/AI/wechat-claw/deploy/wechat-claw-reimbursement-admin.service)
-  - 把 [deploy/nginx/reimbursement-admin.locations.conf](/Users/ryan/DataDisk/Work/AI/wechat-claw/deploy/nginx/reimbursement-admin.locations.conf) 渲染成服务器上的 Nginx snippet
-  - 默认把这个 snippet 挂进 `invoice-submit` 站点
-  - 执行 `nginx -t`、`systemctl reload nginx`
-  - 校验 `127.0.0.1:8788/reimbursement/healthz` 和 `WECHATY_ADMIN_NGINX_HEALTHZ_URL`
-- 如果 `/reimbursement` 需要挂到别的 Nginx site，把 `WECHATY_ADMIN_NGINX_SITE_NAME` 改成对应 site 名即可
+  - 重启并校验 `127.0.0.1:8788/reimbursement/healthz`
+  - 校验 `WECHATY_ADMIN_PUBLIC_HEALTHZ_URL`
+- [deploy/nginx/reimbursement-admin.locations.conf](/Users/ryan/DataDisk/Work/AI/wechat-claw/deploy/nginx/reimbursement-admin.locations.conf) 是迁移前兼容快照；生产 Nginx 路由由独立的 `server-infra` 项目统一发布。业务部署不会写入或 reload Nginx。
 
 手工执行一次 watchdog 巡检：
 

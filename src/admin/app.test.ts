@@ -36,6 +36,17 @@ test("reimbursement nginx keeps shortcut Bearer auth public and protects admin r
   }
 });
 
+test("wechat-claw deployment leaves the shared Nginx entry to server-infra", () => {
+  const deployScript = fs.readFileSync(
+    path.resolve(process.cwd(), "deploy/deploy-wechat-claw.sh"),
+    "utf8",
+  );
+  assert.doesNotMatch(deployScript, /\/etc\/nginx\/sites-(available|enabled)/);
+  assert.doesNotMatch(deployScript, /\/etc\/nginx\/snippets/);
+  assert.doesNotMatch(deployScript, /\bnginx -t\b/);
+  assert.doesNotMatch(deployScript, /systemctl reload nginx/);
+});
+
 test("reimbursement admin exposes a POST logout action", () => {
   const html = fs.readFileSync(
     path.resolve(process.cwd(), "src/admin/public/admin.html"),
