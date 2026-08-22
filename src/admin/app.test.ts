@@ -665,6 +665,12 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     assert.match(submissionPageHtml, /request.upload.addEventListener\("progress"/);
     assert.match(submissionPageHtml, /正在上传报账图/);
     assert.match(submissionPageHtml, /setUploadProgress\(100, "提交成功"\)/);
+    assert.match(submissionPageHtml, /function enterSubmissionCompleteState\(\)/);
+    assert.match(submissionPageHtml, /elements\.submitButton\.disabled = true/);
+    assert.match(submissionPageHtml, /elements\.resetButton\.textContent = "继续报账"/);
+    assert.match(submissionPageHtml, /state\.submissionComplete = false/);
+    assert.match(submissionPageHtml, /window\.localStorage\.removeItem\(TASK_STORAGE_KEY\)/);
+    assert.match(submissionPageHtml, /state\.submissionComplete\) return/);
     assert.match(submissionPageHtml, /识别将在后台继续执行/);
     assert.doesNotMatch(submissionPageHtml, /setStatus\(`后台处理中，已完成/);
     assert.doesNotMatch(submissionPageHtml, /name="reporter"/);

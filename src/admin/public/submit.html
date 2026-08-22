@@ -409,6 +409,7 @@
         imageItems: [],
         imageDragDepth: 0,
         importing: false,
+        submissionComplete: false,
         taskPollTimer: null,
       };
 
@@ -612,6 +613,16 @@
         elements.taskList.replaceChildren();
       }
 
+      function enterSubmissionCompleteState() {
+        state.importing = false;
+        state.submissionComplete = true;
+        setControlsDisabled(false);
+        elements.submitButton.disabled = true;
+        elements.resetButton.disabled = false;
+        elements.resetButton.textContent = "继续报账";
+        setUploadProgress(100, "提交成功");
+      }
+
       function uploadSubmission(formData, onProgress) {
         return new Promise((resolve, reject) => {
           const request = new XMLHttpRequest();
@@ -654,9 +665,8 @@
           const payload = await readJsonResponse(response, "批量报账进度加载失败");
           if (!response.ok || !payload.success) {
             if (response.status >= 400 && response.status < 500) {
-              state.importing = false;
               window.localStorage.removeItem(TASK_STORAGE_KEY);
-              setControlsDisabled(false);
+              return;
             }
             throw new Error(payload?.error?.message || "批量报账进度加载失败");
           }
@@ -675,6 +685,9 @@
 
       function resetForm() {
         if (state.importing) return;
+        clearTaskPollTimer();
+        window.localStorage.removeItem(TASK_STORAGE_KEY);
+        state.submissionComplete = false;
         const channelCode = elements.channelCode.value;
         const reporter = elements.reporter.value;
         elements.form.reset();
@@ -726,7 +739,7 @@
       }
 
       async function submitForm() {
-        if (!state.canSubmit || state.importing) return;
+        if (!state.canSubmit || state.importing || state.submissionComplete) return;
         if (!state.imageItems.length) {
           setStatus("请至少添加一张报账图。", true);
           return;
@@ -749,11 +762,8 @@
             setUploadProgress(percent, `正在上传报账图 ${percent}%`);
           });
           window.localStorage.setItem(TASK_STORAGE_KEY, payload.task.id);
-          setUploadProgress(100, "提交成功");
+          enterSubmissionCompleteState();
           setStatus("报账图已上传，识别将在后台继续执行。", false);
-          state.importing = false;
-          setControlsDisabled(false);
-          elements.submitButton.disabled = false;
           void pollTask(payload.task.id);
         } catch (error) {
           state.importing = false;
@@ -826,7 +836,7 @@
           await loadOptions();
           const taskId = window.localStorage.getItem(TASK_STORAGE_KEY);
           if (taskId) {
-            setUploadProgress(100, "提交成功");
+            enterSubmissionCompleteState();
             void pollTask(taskId);
           }
         } catch (error) {
