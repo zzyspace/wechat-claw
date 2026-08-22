@@ -644,6 +644,12 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     assert.match(pageHtml, /method: "PATCH"/);
     assert.match(pageHtml, /body: JSON\.stringify\(payload\)/);
     assert.match(pageHtml, /elements\.operationColumnHeader\.hidden = !state\.canWrite/);
+    assert.match(pageHtml, /const MANAGER_CHANNEL_CODE_BY_STORE = new Map/);
+    assert.match(pageHtml, /new Option\("全部（权限内）", ""\)/);
+    assert.match(pageHtml, /elements\.filterReporter\.readOnly = true/);
+    assert.match(pageHtml, /elements\.reporterFilterLabel\.textContent = "报账人（当前账号）"/);
+    assert.match(pageHtml, /state\.accountRole === "manager"\s*\? ""\s*:/);
+    assert.match(pageHtml, /restoreRoleScopedFilterValues\(\)/);
     assert.match(pageHtml, /fetch\(buildAuthFetchUrl\(`\$\{BASE_PATH\}\/api\/session`\)/);
     assert.doesNotMatch(pageHtml, /<label for="needsReview">需复核<\/label>/);
 

@@ -1403,7 +1403,7 @@
               </select>
             </div>
             <div class="field">
-              <label for="reporter">报账人</label>
+              <label id="reporterFilterLabel" for="reporter">报账人</label>
               <input id="reporter" name="reporter" placeholder="支持部分匹配，如 Ry / 张" />
             </div>
             <div class="field">
@@ -1717,6 +1717,9 @@
         attachmentPreviewReportId: null,
         timeZone: DEFAULT_TIME_ZONE,
         canWrite: false,
+        accountRole: "",
+        accountUsername: "",
+        managerStores: [],
         importing: false,
         manualImageFile: null,
         manualImageDragDepth: 0,
@@ -1732,6 +1735,9 @@
 
       const elements = {
         filters: document.getElementById("filters"),
+        filterChannelCode: document.getElementById("channelCode"),
+        filterReporter: document.getElementById("reporter"),
+        reporterFilterLabel: document.getElementById("reporterFilterLabel"),
         manualImportOpen: document.getElementById("manualImportOpen"),
         manualImportModal: document.getElementById("manualImportModal"),
         manualImportModalBackdrop: document.getElementById("manualImportModalBackdrop"),
@@ -2002,6 +2008,45 @@
         ["reimbursement_fuzzyqz", "Fuzzy泉州店"],
         ["reimbursement_fuzzy_qz_manager", "Fuzzy泉州店长报账群"],
       ]);
+      const MANAGER_CHANNEL_CODE_BY_STORE = new Map([
+        ["fuzzy", "reimbursement_fuzzy_manager"],
+        ["peanut", "reimbursement_peanut_manager"],
+        ["fuzzyqz", "reimbursement_fuzzy_qz_manager"],
+      ]);
+
+      function configureReportFiltersForAccount(account) {
+        state.accountRole = String(account?.role || "");
+        state.accountUsername = String(account?.username || "");
+        state.managerStores = Array.isArray(account?.managerStores) ? account.managerStores : [];
+
+        if (state.accountRole !== "manager") {
+          return;
+        }
+
+        const previousChannelCode = elements.filterChannelCode.value;
+        const allowedChannelCodes = state.managerStores
+          .map((store) => MANAGER_CHANNEL_CODE_BY_STORE.get(String(store)))
+          .filter(Boolean);
+        const options = [new Option("全部（权限内）", "")];
+        for (const channelCode of allowedChannelCodes) {
+          options.push(new Option(STORE_LABELS_BY_CHANNEL_CODE.get(channelCode) || channelCode, channelCode));
+        }
+        elements.filterChannelCode.replaceChildren(...options);
+        elements.filterChannelCode.value = allowedChannelCodes.includes(previousChannelCode)
+          ? previousChannelCode
+          : "";
+        elements.filterReporter.value = state.accountUsername;
+        elements.filterReporter.readOnly = true;
+        elements.filterReporter.placeholder = "当前登录账号";
+        elements.reporterFilterLabel.textContent = "报账人（当前账号）";
+      }
+
+      function restoreRoleScopedFilterValues() {
+        if (state.accountRole === "manager") {
+          elements.filterChannelCode.value = "";
+          elements.filterReporter.value = state.accountUsername;
+        }
+      }
 
       function renderStoreCell(item) {
         const label = STORE_LABELS_BY_CHANNEL_CODE.get(String(item.channelCode || "").trim());
@@ -2472,7 +2517,9 @@
         return {
           search: String(formData.get("search") || "").trim(),
           channelCode: String(formData.get("channelCode") || "").trim(),
-          reporter: String(formData.get("reporter") || "").trim(),
+          reporter: state.accountRole === "manager"
+            ? ""
+            : String(formData.get("reporter") || "").trim(),
           note: String(formData.get("note") || "").trim(),
           expenseCategory: String(formData.get("expenseCategory") || "").trim(),
           createdDateFrom: String(formData.get("createdDateFrom") || "").trim(),
@@ -2891,6 +2938,7 @@
         }
 
         state.canWrite = payload.permissions?.canWrite === true;
+        configureReportFiltersForAccount(payload.account);
         const roleLabel = ({ admin: "管理员", partner: "合伙人", manager: "店长" })[payload.account?.role]
           || "账号";
         elements.operationColumnHeader.hidden = !state.canWrite;
@@ -3404,6 +3452,7 @@
 
       elements.resetFilters.addEventListener("click", () => {
         elements.filters.reset();
+        restoreRoleScopedFilterValues();
         state.offset = 0;
         state.selectedReportId = null;
         closeAttachmentPreviewModal();
