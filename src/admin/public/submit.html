@@ -318,6 +318,13 @@
       .footer-actions { display: flex; gap: 10px; margin-left: auto; }
       .footer-actions button { min-width: 112px; }
 
+      #submissionForm.is-submitted .upload,
+      #submissionForm.is-submitted .image-list,
+      #submissionForm.is-submitted .image-count {
+        opacity: 0.55;
+        pointer-events: none;
+      }
+
       @media (max-width: 680px) {
         .page { width: min(100% - 20px, 920px); padding-top: 18px; }
         .hero-heading { align-items: flex-start; flex-direction: column; }
@@ -616,7 +623,8 @@
       function enterSubmissionCompleteState() {
         state.importing = false;
         state.submissionComplete = true;
-        setControlsDisabled(false);
+        elements.form.classList.add("is-submitted");
+        setControlsDisabled(true);
         elements.submitButton.disabled = true;
         elements.resetButton.disabled = false;
         elements.resetButton.textContent = "继续报账";
@@ -688,6 +696,7 @@
         clearTaskPollTimer();
         window.localStorage.removeItem(TASK_STORAGE_KEY);
         state.submissionComplete = false;
+        elements.form.classList.remove("is-submitted");
         const channelCode = elements.channelCode.value;
         const reporter = elements.reporter.value;
         elements.form.reset();
@@ -696,6 +705,7 @@
         elements.sentAt.value = formatLocalDateTimeInput();
         clearImages();
         renderTask(null);
+        setControlsDisabled(false);
         elements.submitButton.disabled = !state.canSubmit;
         elements.resetButton.textContent = "清空";
         setStatus("");

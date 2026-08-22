@@ -668,6 +668,11 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     assert.match(submissionPageHtml, /function enterSubmissionCompleteState\(\)/);
     assert.match(submissionPageHtml, /elements\.submitButton\.disabled = true/);
     assert.match(submissionPageHtml, /elements\.resetButton\.textContent = "继续报账"/);
+    assert.match(submissionPageHtml, /elements\.form\.classList\.add\("is-submitted"\)/);
+    assert.match(submissionPageHtml, /setControlsDisabled\(true\)/);
+    assert.match(submissionPageHtml, /elements\.resetButton\.disabled = false/);
+    assert.match(submissionPageHtml, /elements\.form\.classList\.remove\("is-submitted"\)/);
+    assert.match(submissionPageHtml, /#submissionForm\.is-submitted \.image-list/);
     assert.match(submissionPageHtml, /state\.submissionComplete = false/);
     assert.match(submissionPageHtml, /window\.localStorage\.removeItem\(TASK_STORAGE_KEY\)/);
     assert.match(submissionPageHtml, /state\.submissionComplete\) return/);
