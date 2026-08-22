@@ -660,6 +660,13 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     const submissionPageHtml = await submissionPageResponse.text();
     assert.match(submissionPageHtml, /<h1>批量报账<\/h1>/);
     assert.match(submissionPageHtml, /id="reporter" type="text" readonly aria-readonly="true"/);
+    assert.match(submissionPageHtml, /id="submitButton" type="submit">确认提交/);
+    assert.match(submissionPageHtml, /function uploadSubmission/);
+    assert.match(submissionPageHtml, /request.upload.addEventListener\("progress"/);
+    assert.match(submissionPageHtml, /正在上传报账图/);
+    assert.match(submissionPageHtml, /setUploadProgress\(100, "提交成功"\)/);
+    assert.match(submissionPageHtml, /识别将在后台继续执行/);
+    assert.doesNotMatch(submissionPageHtml, /setStatus\(`后台处理中，已完成/);
     assert.doesNotMatch(submissionPageHtml, /name="reporter"/);
     assert.match(submissionPageHtml, /const reporter = elements\.reporter\.value;[\s\S]*?elements\.form\.reset\(\);[\s\S]*?elements\.reporter\.value = reporter;/);
     assert.match(submissionPageHtml, /点击选择或拖拽多张报账图到这里/);
