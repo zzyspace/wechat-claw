@@ -98,6 +98,15 @@
         font-weight: 700;
       }
 
+      .theme-toggle {
+        width: 42px;
+        min-width: 42px;
+        padding: 0;
+        flex: 0 0 42px;
+        font-size: 20px;
+        line-height: 1;
+      }
+
       .page {
         width: min(920px, calc(100vw - 28px));
         margin: 0 auto;
@@ -343,8 +352,8 @@
         <div class="hero-heading">
           <h1>批量报账</h1>
           <div class="hero-actions">
-            <a class="link-button" href="/reimbursement">查看报账后台</a>
-            <button id="themeToggle" type="button">切换主题</button>
+            <a class="link-button button-primary" href="/reimbursement">查看报账</a>
+            <button class="theme-toggle" id="themeToggle" type="button" aria-label="切换到深色模式" aria-pressed="false">☾</button>
             <form method="post" action="/admin-logout">
               <input id="logoutReturnTo" type="hidden" name="returnTo" value="/reimbursement/submit" />
               <button type="submit">退出登录</button>
@@ -783,10 +792,22 @@
         }
       }
 
-      function applyTheme(theme, persist = true) {
+      function readSavedTheme() {
+        try {
+          const savedTheme = window.localStorage.getItem(THEME_STORAGE_KEY);
+          return savedTheme === "light" || savedTheme === "dark" ? savedTheme : null;
+        } catch {
+          return null;
+        }
+      }
+
+      function applyTheme(theme, persist = false) {
         const normalized = theme === "dark" ? "dark" : "light";
         document.documentElement.dataset.theme = normalized;
         document.documentElement.style.colorScheme = normalized;
+        elements.themeToggle.textContent = normalized === "dark" ? "☀" : "☾";
+        elements.themeToggle.setAttribute("aria-label", normalized === "dark" ? "切换到浅色模式" : "切换到深色模式");
+        elements.themeToggle.setAttribute("aria-pressed", String(normalized === "dark"));
         if (persist) {
           try { window.localStorage.setItem(THEME_STORAGE_KEY, normalized); } catch { /* Ignore. */ }
         }
@@ -835,8 +856,16 @@
         const item = state.imageItems[Number(input.dataset.noteIndex)];
         if (item) item.note = input.value;
       });
+      const systemThemePreference = window.matchMedia("(prefers-color-scheme: dark)");
+      applyTheme(document.documentElement.dataset.theme || (systemThemePreference.matches ? "dark" : "light"));
+
       elements.themeToggle.addEventListener("click", () => {
-        applyTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark");
+        applyTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark", true);
+      });
+      systemThemePreference.addEventListener("change", (event) => {
+        if (!readSavedTheme()) {
+          applyTheme(event.matches ? "dark" : "light");
+        }
       });
 
       async function initialize() {

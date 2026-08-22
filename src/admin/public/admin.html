@@ -132,6 +132,13 @@
         border-color: var(--eyebrow-border);
       }
 
+      #themeToggle {
+        width: 40px;
+        padding: 0;
+        font-size: 20px;
+        line-height: 1;
+      }
+
       .eyebrow {
         display: inline-flex;
         width: fit-content;
@@ -1369,11 +1376,11 @@
           <h1>报账查看后台</h1>
           <div class="hero-actions">
             <form method="get" action="/reimbursement/submit">
-              <button class="button-primary" type="submit">批量报账</button>
+              <button class="button-primary" type="submit">提交报账</button>
             </form>
             <button class="button-primary" id="manualImportOpen" type="button" hidden>手工补录</button>
             <button class="button-primary" id="batchImportOpen" type="button" hidden>批量补录</button>
-            <button class="theme-toggle" id="themeToggle" type="button">切换主题</button>
+            <button class="theme-toggle" id="themeToggle" type="button" aria-label="切换到深色模式" aria-pressed="false">☾</button>
             <form method="post" action="/admin-logout">
               <input type="hidden" name="returnTo" value="/reimbursement" />
               <button class="theme-toggle" type="submit">退出登录</button>
@@ -1827,7 +1834,7 @@
         const normalizedTheme = theme === "dark" ? "dark" : "light";
         document.documentElement.dataset.theme = normalizedTheme;
         document.documentElement.style.colorScheme = normalizedTheme;
-        elements.themeToggle.textContent = normalizedTheme === "dark" ? "☀ 浅色" : "☾ 深色";
+        elements.themeToggle.textContent = normalizedTheme === "dark" ? "☀" : "☾";
         elements.themeToggle.setAttribute("aria-label", normalizedTheme === "dark" ? "切换到浅色模式" : "切换到深色模式");
         elements.themeToggle.setAttribute("aria-pressed", String(normalizedTheme === "dark"));
 
@@ -2939,7 +2946,7 @@
 
         state.canWrite = payload.permissions?.canWrite === true;
         configureReportFiltersForAccount(payload.account);
-        const roleLabel = ({ admin: "管理员", partner: "合伙人", manager: "店长" })[payload.account?.role]
+        const roleLabel = ({ admin: "管理员", partner: "合伙人", manager: "管理" })[payload.account?.role]
           || "账号";
         elements.operationColumnHeader.hidden = !state.canWrite;
         elements.accessPill.hidden = false;

@@ -544,6 +544,7 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     const pageHtml = await pageResponse.text();
     assert.match(pageHtml, /报账查看后台/);
     assert.match(pageHtml, /<form method="get" action="\/reimbursement\/submit">/);
+    assert.match(pageHtml, /<button class="button-primary" type="submit">提交报账<\/button>/);
     assert.match(pageHtml, /<h2 id="manualImportModalTitle">手工补录<\/h2>/);
     assert.match(pageHtml, /id="manualImportOpen"[^>]*hidden>手工补录<\/button>/);
     assert.match(pageHtml, /id="manualImportModal" hidden/);
@@ -613,6 +614,8 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     assert.match(pageHtml, /<th>金额<\/th>\s*<th>类别<\/th>\s*<th>备注<\/th>/);
     assert.match(pageHtml, /<meta name="color-scheme" content="light dark"/);
     assert.match(pageHtml, /id="themeToggle"/);
+    assert.match(pageHtml, /id="themeToggle"[^>]*>☾<\/button>/);
+    assert.match(pageHtml, /elements\.themeToggle\.textContent = normalizedTheme === "dark" \? "☀" : "☾"/);
     assert.match(pageHtml, /:root\[data-theme="dark"\]/);
     assert.match(pageHtml, /window\.localStorage\.setItem\(THEME_STORAGE_KEY, normalizedTheme\)/);
     assert.match(pageHtml, /systemThemePreference\.addEventListener\("change"/);
@@ -644,6 +647,7 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     assert.match(pageHtml, /method: "PATCH"/);
     assert.match(pageHtml, /body: JSON\.stringify\(payload\)/);
     assert.match(pageHtml, /elements\.operationColumnHeader\.hidden = !state\.canWrite/);
+    assert.match(pageHtml, /manager: "管理"/);
     assert.match(pageHtml, /const MANAGER_CHANNEL_CODE_BY_STORE = new Map/);
     assert.match(pageHtml, /new Option\("全部（权限内）", ""\)/);
     assert.match(pageHtml, /elements\.filterReporter\.readOnly = true/);
@@ -659,6 +663,9 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     assert.equal(submissionPageResponse.status, 200);
     const submissionPageHtml = await submissionPageResponse.text();
     assert.match(submissionPageHtml, /<h1>批量报账<\/h1>/);
+    assert.match(submissionPageHtml, /class="link-button button-primary" href="\/reimbursement">查看报账<\/a>/);
+    assert.match(submissionPageHtml, /class="theme-toggle" id="themeToggle"[^>]*>☾<\/button>/);
+    assert.match(submissionPageHtml, /elements\.themeToggle\.textContent = normalized === "dark" \? "☀" : "☾"/);
     assert.match(submissionPageHtml, /id="reporter" type="text" readonly aria-readonly="true"/);
     assert.match(submissionPageHtml, /id="submitButton" type="submit">确认提交/);
     assert.match(submissionPageHtml, /function uploadSubmission/);
