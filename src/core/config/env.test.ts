@@ -61,6 +61,7 @@ const managedEnvKeys = [
   "WECHATY_ADMIN_PORT",
   "WECHATY_ADMIN_USERNAME",
   "WECHATY_ADMIN_PASSWORD",
+  "WECHATY_REIMBURSEMENT_ACCOUNTS_JSON",
   "WECHATY_ADMIN_GUEST_USERNAME",
   "WECHATY_ADMIN_GUEST_PASSWORD",
   "WECHATY_ENV_FILE",
@@ -152,8 +153,21 @@ test("getAppConfig parses WECHATY_CHANNELS_JSON with mixed delivery targets", ()
     WECHATY_ADMIN_PORT: "8788",
     WECHATY_ADMIN_USERNAME: "admin",
     WECHATY_ADMIN_PASSWORD: "secret-pass",
-    WECHATY_ADMIN_GUEST_USERNAME: "guest",
-    WECHATY_ADMIN_GUEST_PASSWORD: "guest-secret-pass",
+    WECHATY_REIMBURSEMENT_ACCOUNTS_JSON: JSON.stringify([
+      {
+        accountId: "partner-001",
+        username: "partner",
+        password: "partner-secret",
+        role: "partner",
+      },
+      {
+        accountId: "manager-001",
+        username: "manager",
+        password: "manager-secret",
+        role: "manager",
+        managerStores: ["fuzzyqz", "fuzzy"],
+      },
+    ]),
   });
 
   const config = getAppConfig();
@@ -195,8 +209,22 @@ test("getAppConfig parses WECHATY_CHANNELS_JSON with mixed delivery targets", ()
   assert.equal(config.adminPort, 8788);
   assert.equal(config.adminUsername, "admin");
   assert.equal(config.adminPassword, "secret-pass");
-  assert.equal(config.adminGuestUsername, "guest");
-  assert.equal(config.adminGuestPassword, "guest-secret-pass");
+  assert.deepEqual(config.reimbursementAccounts, [
+    {
+      accountId: "partner-001",
+      username: "partner",
+      password: "partner-secret",
+      role: "partner",
+      managerStores: [],
+    },
+    {
+      accountId: "manager-001",
+      username: "manager",
+      password: "manager-secret",
+      role: "manager",
+      managerStores: ["fuzzy", "fuzzyqz"],
+    },
+  ]);
   assert.deepEqual(validation.errors, []);
   assert.equal(config.channels[0]?.deliveryTargets.length, 2);
   assert.deepEqual(config.channels[0]?.deliveryTargets[1], {
@@ -379,36 +407,44 @@ test("getAppConfig defaults log settings from state dir", () => {
   assert.equal(config.adminPort, 8788);
   assert.equal(config.adminUsername, undefined);
   assert.equal(config.adminPassword, undefined);
-  assert.equal(config.adminGuestUsername, undefined);
-  assert.equal(config.adminGuestPassword, undefined);
+  assert.deepEqual(config.reimbursementAccounts, []);
 });
 
-test("validateAppConfig validates optional admin guest credentials", () => {
+test("validateAppConfig rejects invalid reimbursement accounts and ignores legacy guest credentials", () => {
   applyEnv({
     WECHATY_ADMIN_USERNAME: "admin",
     WECHATY_ADMIN_PASSWORD: "secret-pass",
     WECHATY_ADMIN_GUEST_USERNAME: "guest",
-    WECHATY_ADMIN_GUEST_PASSWORD: undefined,
+    WECHATY_ADMIN_GUEST_PASSWORD: "legacy-secret",
   });
 
-  const incompleteGuestValidation = validateAppConfig(getAppConfig());
+  const legacyGuestValidation = validateAppConfig(getAppConfig());
   assert(
-    incompleteGuestValidation.warnings.some((warning) =>
-      warning.includes("WECHATY_ADMIN_GUEST_USERNAME and WECHATY_ADMIN_GUEST_PASSWORD"),
+    legacyGuestValidation.warnings.some((warning) =>
+      warning.includes("deprecated and ignored"),
     ),
   );
 
   applyEnv({
     WECHATY_ADMIN_USERNAME: "admin",
     WECHATY_ADMIN_PASSWORD: "secret-pass",
-    WECHATY_ADMIN_GUEST_USERNAME: "admin",
-    WECHATY_ADMIN_GUEST_PASSWORD: "guest-secret-pass",
+    WECHATY_ADMIN_GUEST_USERNAME: undefined,
+    WECHATY_ADMIN_GUEST_PASSWORD: undefined,
+    WECHATY_REIMBURSEMENT_ACCOUNTS_JSON: JSON.stringify([
+      {
+        accountId: "manager-001",
+        username: "admin",
+        password: "manager-secret",
+        role: "manager",
+        managerStores: ["fuzzy"],
+      },
+    ]),
   });
 
   const duplicateUsernameValidation = validateAppConfig(getAppConfig());
   assert(
     duplicateUsernameValidation.errors.includes(
-      "WECHATY_ADMIN_GUEST_USERNAME must differ from WECHATY_ADMIN_USERNAME.",
+      "Reimbursement account usernames must differ from WECHATY_ADMIN_USERNAME.",
     ),
   );
 });

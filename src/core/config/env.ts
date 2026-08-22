@@ -2,6 +2,10 @@ import { config as loadEnv } from "dotenv";
 
 import { dedupeDeliveryTargets } from "../channels/router.js";
 import type { ChannelConfig, ChannelMatch, DeliveryTarget } from "../channels/types.js";
+import {
+  parseReimbursementAccessAccounts,
+  type ReimbursementAccessAccountConfig,
+} from "./reimbursement-access.js";
 
 const DEFAULT_ENV_FILE_PATHS = [".env", "/etc/wechat-claw.env"];
 
@@ -82,8 +86,8 @@ export interface AppConfig {
   adminPort?: number;
   adminUsername?: string;
   adminPassword?: string;
-  adminGuestUsername?: string;
-  adminGuestPassword?: string;
+  reimbursementAccounts?: ReimbursementAccessAccountConfig[];
+  reimbursementAccountsParseError?: string;
   reimbursementShortcutApiToken?: string;
 }
 
@@ -444,6 +448,9 @@ export function getAppConfig(): AppConfig {
       ? "https://dashscope.aliyuncs.com/compatible-mode/v1"
       : "https://api.openai.com/v1");
   const suppressRoomTextDelivery = isRoomTextDeliverySuppressed();
+  const reimbursementAccountsResult = parseReimbursementAccessAccounts(
+    readOptionalEnv("WECHATY_REIMBURSEMENT_ACCOUNTS_JSON"),
+  );
 
   return {
     puppet: readOptionalEnv("WECHATY_PUPPET"),
@@ -537,8 +544,8 @@ export function getAppConfig(): AppConfig {
     adminPort: readConfiguredPositiveNumberEnv("WECHATY_ADMIN_PORT", 8788),
     adminUsername: readOptionalEnv("WECHATY_ADMIN_USERNAME"),
     adminPassword: readOptionalEnv("WECHATY_ADMIN_PASSWORD"),
-    adminGuestUsername: readOptionalEnv("WECHATY_ADMIN_GUEST_USERNAME"),
-    adminGuestPassword: readOptionalEnv("WECHATY_ADMIN_GUEST_PASSWORD"),
+    reimbursementAccounts: reimbursementAccountsResult.accounts,
+    reimbursementAccountsParseError: reimbursementAccountsResult.error,
     reimbursementShortcutApiToken: readOptionalEnv("WECHATY_REIMBURSEMENT_SHORTCUT_API_TOKEN"),
   };
 }
@@ -721,21 +728,17 @@ export function validateAppConfig(config: AppConfig): ConfigValidationResult {
     warnings.push("WECHATY_ADMIN_USERNAME and WECHATY_ADMIN_PASSWORD should be configured together.");
   }
 
-  if (
-    (config.adminGuestUsername && !config.adminGuestPassword) ||
-    (!config.adminGuestUsername && config.adminGuestPassword)
-  ) {
-    warnings.push(
-      "WECHATY_ADMIN_GUEST_USERNAME and WECHATY_ADMIN_GUEST_PASSWORD should be configured together.",
-    );
+  if (config.reimbursementAccountsParseError) {
+    errors.push(config.reimbursementAccountsParseError);
   }
-
   if (
     config.adminUsername &&
-    config.adminGuestUsername &&
-    config.adminUsername === config.adminGuestUsername
+    config.reimbursementAccounts?.some((account) => account.username === config.adminUsername)
   ) {
-    errors.push("WECHATY_ADMIN_GUEST_USERNAME must differ from WECHATY_ADMIN_USERNAME.");
+    errors.push("Reimbursement account usernames must differ from WECHATY_ADMIN_USERNAME.");
+  }
+  if (process.env.WECHATY_ADMIN_GUEST_USERNAME || process.env.WECHATY_ADMIN_GUEST_PASSWORD) {
+    warnings.push("WECHATY_ADMIN_GUEST_USERNAME and WECHATY_ADMIN_GUEST_PASSWORD are deprecated and ignored.");
   }
 
   if (config.channelsParseError) {

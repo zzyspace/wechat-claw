@@ -62,6 +62,7 @@ const managedEnvKeys = [
   "WECHATY_ADMIN_PASSWORD",
   "WECHATY_ADMIN_PORT",
   "WECHATY_ADMIN_USERNAME",
+  "WECHATY_REIMBURSEMENT_ACCOUNTS_JSON",
   "WECHATY_ADMIN_GUEST_PASSWORD",
   "WECHATY_ADMIN_GUEST_USERNAME",
   "WECHATY_CHANNELS_JSON",
@@ -502,8 +503,28 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
   applyEnv({
     WECHATY_ADMIN_USERNAME: "admin",
     WECHATY_ADMIN_PASSWORD: "secret-pass",
-    WECHATY_ADMIN_GUEST_USERNAME: "guest",
-    WECHATY_ADMIN_GUEST_PASSWORD: "guest-secret-pass",
+    WECHATY_REIMBURSEMENT_ACCOUNTS_JSON: JSON.stringify([
+      {
+        accountId: "partner-001",
+        username: "partner",
+        password: "partner-secret-pass",
+        role: "partner",
+      },
+      {
+        accountId: "manager-001",
+        username: "manager",
+        password: "manager-secret-pass",
+        role: "manager",
+        managerStores: ["fuzzy", "fuzzyqz"],
+      },
+      {
+        accountId: "manager-002",
+        username: "manager-two",
+        password: "manager-two-secret-pass",
+        role: "manager",
+        managerStores: ["fuzzy"],
+      },
+    ]),
   });
   const seeded = seedReports();
   const server = await startServer();
@@ -522,6 +543,7 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     assert.equal(pageResponse.status, 200);
     const pageHtml = await pageResponse.text();
     assert.match(pageHtml, /报账查看后台/);
+    assert.match(pageHtml, /<form method="get" action="\/reimbursement\/submit">/);
     assert.match(pageHtml, /<h2 id="manualImportModalTitle">手工补录<\/h2>/);
     assert.match(pageHtml, /id="manualImportOpen"[^>]*hidden>手工补录<\/button>/);
     assert.match(pageHtml, /id="manualImportModal" hidden/);
@@ -641,10 +663,11 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
 
     for (const route of ["submit_fuzzy", "submit_peanut", "submit_fuzzyqz"]) {
       const response = await fetch(`${server.baseUrl}/reimbursement/${route}`, {
+        redirect: "manual",
         headers: createAdminAuthHeaders(),
       });
-      assert.equal(response.status, 200);
-      assert.match(await response.text(), /<h1>批量报账<\/h1>/);
+      assert.equal(response.status, 302);
+      assert.equal(response.headers.get("location"), "/reimbursement/submit");
     }
 
     const unauthorizedSubmissionPage = await fetch(`${server.baseUrl}/reimbursement/submit`);
@@ -657,56 +680,58 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     assert.deepEqual(await adminSessionResponse.json(), {
       success: true,
       account: {
+        accountId: "reimbursement-admin",
+        managerStores: [],
         username: "admin",
         role: "admin",
       },
       permissions: {
         canWrite: true,
+        canSubmit: true,
+        canViewAllReports: true,
       },
     });
 
-    const guestSessionResponse = await fetch(`${server.baseUrl}/reimbursement/api/session`, {
-      headers: createAdminAuthHeaders("guest", "guest-secret-pass"),
+    const partnerSessionResponse = await fetch(`${server.baseUrl}/reimbursement/api/session`, {
+      headers: createAdminAuthHeaders("partner", "partner-secret-pass"),
     });
-    assert.equal(guestSessionResponse.status, 200);
-    assert.deepEqual(await guestSessionResponse.json(), {
+    assert.equal(partnerSessionResponse.status, 200);
+    assert.deepEqual(await partnerSessionResponse.json(), {
       success: true,
       account: {
-        username: "guest",
-        role: "readonly",
+        accountId: "partner-001",
+        managerStores: [],
+        username: "partner",
+        role: "partner",
       },
       permissions: {
         canWrite: false,
+        canSubmit: true,
+        canViewAllReports: true,
       },
     });
 
-    const expectedSubmissionChannels = new Map([
-      ["submit", [
-        { code: "reimbursement_fuzzy", name: "Fuzzy" },
-        { code: "reimbursement_peanut", name: "Peanut" },
-        { code: "reimbursement_fuzzyqz", name: "Fuzzy泉州店" },
-      ]],
-      ["submit_fuzzy", [
-        { code: "reimbursement_fuzzy_manager", name: "Fuzzy店长报账" },
-      ]],
-      ["submit_peanut", [
-        { code: "reimbursement_peanut_manager", name: "Peanut店长报账" },
-      ]],
-      ["submit_fuzzyqz", [
-        { code: "reimbursement_fuzzy_qz_manager", name: "Fuzzy泉州店长报账" },
-      ]],
+    const adminSubmissionOptionsResponse = await fetch(
+      `${server.baseUrl}/reimbursement/api/submissions/submit/options`,
+      { headers: createAdminAuthHeaders() },
+    );
+    assert.equal(adminSubmissionOptionsResponse.status, 200);
+    const adminSubmissionOptions = await adminSubmissionOptionsResponse.json();
+    assert.equal(adminSubmissionOptions.account.username, "admin");
+    assert.equal(adminSubmissionOptions.permissions.canSubmit, true);
+    assert.deepEqual(adminSubmissionOptions.channels, [
+      { code: "reimbursement_fuzzy", name: "Fuzzy" },
+      { code: "reimbursement_peanut", name: "Peanut" },
+      { code: "reimbursement_fuzzyqz", name: "Fuzzy泉州店" },
+      { code: "reimbursement_fuzzy_manager", name: "Fuzzy店长报账" },
+      { code: "reimbursement_peanut_manager", name: "Peanut店长报账" },
+      { code: "reimbursement_fuzzy_qz_manager", name: "Fuzzy泉州店长报账" },
     ]);
-    for (const [route, channels] of expectedSubmissionChannels) {
-      const response = await fetch(
-        `${server.baseUrl}/reimbursement/api/submissions/${route}/options`,
-        { headers: createAdminAuthHeaders() },
-      );
-      assert.equal(response.status, 200);
-      const payload = await response.json();
-      assert.equal(payload.account.username, "admin");
-      assert.equal(payload.permissions.canWrite, true);
-      assert.deepEqual(payload.channels, channels);
-    }
+    const legacySubmissionOptionsResponse = await fetch(
+      `${server.baseUrl}/reimbursement/api/submissions/submit_fuzzy/options`,
+      { headers: createAdminAuthHeaders() },
+    );
+    assert.equal(legacySubmissionOptionsResponse.status, 404);
 
     const manualImportOptionsResponse = await fetch(
       `${server.baseUrl}/reimbursement/api/manual-import-options`,
@@ -828,7 +853,7 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     submissionForm.set("notesJson", JSON.stringify(["店长页面报账"]));
     submissionForm.append("images", new Blob(["manager-image"], { type: "image/png" }), "manager.png");
     const submissionResponse = await fetch(
-      `${server.baseUrl}/reimbursement/api/submissions/submit_fuzzy/batch-reports`,
+      `${server.baseUrl}/reimbursement/api/submissions/submit/batch-reports`,
       {
         method: "POST",
         headers: createAdminAuthHeaders(),
@@ -847,6 +872,7 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     const submissionReport = (await submissionReportResponse.json()).report;
     assert.equal(submissionReport.reporter, "admin");
     assert.equal(submissionReport.channelCode, "reimbursement_fuzzy_manager");
+    assert.equal(submissionReport.submittedByAccountId, "reimbursement-admin");
 
     const wrongStoreSubmissionForm = new FormData();
     wrongStoreSubmissionForm.set("channelCode", "reimbursement_peanut_manager");
@@ -854,15 +880,150 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     wrongStoreSubmissionForm.set("notesJson", JSON.stringify([""]));
     wrongStoreSubmissionForm.append("images", new Blob(["wrong-store"], { type: "image/png" }), "wrong.png");
     const wrongStoreSubmissionResponse = await fetch(
-      `${server.baseUrl}/reimbursement/api/submissions/submit_fuzzy/batch-reports`,
+      `${server.baseUrl}/reimbursement/api/submissions/submit/batch-reports`,
       {
         method: "POST",
-        headers: createAdminAuthHeaders(),
+        headers: createAdminAuthHeaders("manager", "manager-secret-pass"),
         body: wrongStoreSubmissionForm,
       },
     );
     assert.equal(wrongStoreSubmissionResponse.status, 400);
     assert.equal((await wrongStoreSubmissionResponse.json()).error.field, "channelCode");
+
+    const managerOptionsResponse = await fetch(
+      `${server.baseUrl}/reimbursement/api/submissions/submit/options`,
+      { headers: createAdminAuthHeaders("manager", "manager-secret-pass") },
+    );
+    assert.equal(managerOptionsResponse.status, 200);
+    assert.deepEqual((await managerOptionsResponse.json()).channels, [
+      { code: "reimbursement_fuzzy_manager", name: "Fuzzy店长报账" },
+      { code: "reimbursement_fuzzy_qz_manager", name: "Fuzzy泉州店长报账" },
+    ]);
+
+    const partnerOptionsResponse = await fetch(
+      `${server.baseUrl}/reimbursement/api/submissions/submit/options`,
+      { headers: createAdminAuthHeaders("partner", "partner-secret-pass") },
+    );
+    assert.equal(partnerOptionsResponse.status, 200);
+    assert.deepEqual((await partnerOptionsResponse.json()).channels, [
+      { code: "reimbursement_fuzzy", name: "Fuzzy" },
+      { code: "reimbursement_peanut", name: "Peanut" },
+      { code: "reimbursement_fuzzyqz", name: "Fuzzy泉州店" },
+    ]);
+
+    const managerSubmissionForm = new FormData();
+    managerSubmissionForm.set("channelCode", "reimbursement_fuzzy_manager");
+    managerSubmissionForm.set("sentAt", "2026-08-22T11:30");
+    managerSubmissionForm.set("notesJson", JSON.stringify(["店长本人报账"]));
+    managerSubmissionForm.append("images", new Blob(["manager-own-image"], { type: "image/png" }), "own.png");
+    const managerSubmissionResponse = await fetch(
+      `${server.baseUrl}/reimbursement/api/submissions/submit/batch-reports`,
+      {
+        method: "POST",
+        headers: createAdminAuthHeaders("manager", "manager-secret-pass"),
+        body: managerSubmissionForm,
+      },
+    );
+    assert.equal(managerSubmissionResponse.status, 202);
+    const managerTask = await waitForBatchImportTask(
+      server.baseUrl,
+      (await managerSubmissionResponse.json()).task.id,
+    );
+    const managerTaskResponse = await fetch(
+      `${server.baseUrl}/reimbursement/api/batch-reports/${managerTask.id}`,
+      { headers: createAdminAuthHeaders("manager", "manager-secret-pass") },
+    );
+    assert.equal(managerTaskResponse.status, 200);
+    const otherManagerTaskResponse = await fetch(
+      `${server.baseUrl}/reimbursement/api/batch-reports/${managerTask.id}`,
+      { headers: createAdminAuthHeaders("manager-two", "manager-two-secret-pass") },
+    );
+    assert.equal(otherManagerTaskResponse.status, 404);
+    const managerReportId = managerTask.items[0].reportId;
+    const managerOwnDetailResponse = await fetch(
+      `${server.baseUrl}/reimbursement/api/reports/${managerReportId}`,
+      { headers: createAdminAuthHeaders("manager", "manager-secret-pass") },
+    );
+    assert.equal(managerOwnDetailResponse.status, 200);
+    const managerOwnReport = (await managerOwnDetailResponse.json()).report;
+    assert.equal(managerOwnReport.reporter, "manager");
+    assert.equal(managerOwnReport.submittedByAccountId, "manager-001");
+    assert.equal(managerOwnReport.submittedByRole, "manager");
+    const managerHistoricalDetailResponse = await fetch(
+      `${server.baseUrl}/reimbursement/api/reports/${seeded.reportId}`,
+      { headers: createAdminAuthHeaders("manager", "manager-secret-pass") },
+    );
+    assert.equal(managerHistoricalDetailResponse.status, 404);
+    const otherManagerDetailResponse = await fetch(
+      `${server.baseUrl}/reimbursement/api/reports/${managerReportId}`,
+      { headers: createAdminAuthHeaders("manager-two", "manager-two-secret-pass") },
+    );
+    assert.equal(otherManagerDetailResponse.status, 404);
+    const managerListResponse = await fetch(`${server.baseUrl}/reimbursement/api/reports?limit=1000`, {
+      headers: createAdminAuthHeaders("manager", "manager-secret-pass"),
+    });
+    const managerList = await managerListResponse.json();
+    assert.equal(managerList.total, 1);
+    assert.deepEqual(managerList.items.map((item: { id: number }) => item.id), [managerReportId]);
+    const otherManagerListResponse = await fetch(`${server.baseUrl}/reimbursement/api/reports?limit=1000`, {
+      headers: createAdminAuthHeaders("manager-two", "manager-two-secret-pass"),
+    });
+    assert.equal((await otherManagerListResponse.json()).total, 0);
+    const managerAttachmentId = managerOwnReport.sources[0]?.attachments[0]?.id;
+    assert.ok(managerAttachmentId);
+    const managerAttachmentResponse = await fetch(
+      `${server.baseUrl}/reimbursement/api/attachments/${managerAttachmentId}/content`,
+      { headers: createAdminAuthHeaders("manager", "manager-secret-pass") },
+    );
+    assert.equal(managerAttachmentResponse.status, 200);
+    const otherManagerAttachmentResponse = await fetch(
+      `${server.baseUrl}/reimbursement/api/attachments/${managerAttachmentId}/content`,
+      { headers: createAdminAuthHeaders("manager-two", "manager-two-secret-pass") },
+    );
+    assert.equal(otherManagerAttachmentResponse.status, 404);
+
+    const partnerForbiddenForm = new FormData();
+    partnerForbiddenForm.set("channelCode", "reimbursement_fuzzy_manager");
+    partnerForbiddenForm.set("sentAt", "2026-08-22T12:00");
+    partnerForbiddenForm.set("notesJson", JSON.stringify([""]));
+    partnerForbiddenForm.append("images", new Blob(["partner-forbidden"], { type: "image/png" }), "forbidden.png");
+    const partnerForbiddenResponse = await fetch(
+      `${server.baseUrl}/reimbursement/api/submissions/submit/batch-reports`,
+      {
+        method: "POST",
+        headers: createAdminAuthHeaders("partner", "partner-secret-pass"),
+        body: partnerForbiddenForm,
+      },
+    );
+    assert.equal(partnerForbiddenResponse.status, 400);
+    assert.equal((await partnerForbiddenResponse.json()).error.field, "channelCode");
+
+    const partnerSubmissionForm = new FormData();
+    partnerSubmissionForm.set("channelCode", "reimbursement_peanut");
+    partnerSubmissionForm.set("sentAt", "2026-08-22T12:10");
+    partnerSubmissionForm.set("notesJson", JSON.stringify(["合伙人报账"]));
+    partnerSubmissionForm.append("images", new Blob(["partner-image"], { type: "image/png" }), "partner.png");
+    const partnerSubmissionResponse = await fetch(
+      `${server.baseUrl}/reimbursement/api/submissions/submit/batch-reports`,
+      {
+        method: "POST",
+        headers: createAdminAuthHeaders("partner", "partner-secret-pass"),
+        body: partnerSubmissionForm,
+      },
+    );
+    assert.equal(partnerSubmissionResponse.status, 202);
+    const partnerTask = await waitForBatchImportTask(
+      server.baseUrl,
+      (await partnerSubmissionResponse.json()).task.id,
+    );
+    const partnerReportResponse = await fetch(
+      `${server.baseUrl}/reimbursement/api/reports/${partnerTask.items[0].reportId}`,
+      { headers: createAdminAuthHeaders("partner", "partner-secret-pass") },
+    );
+    const partnerReport = (await partnerReportResponse.json()).report;
+    assert.equal(partnerReport.reporter, "partner");
+    assert.equal(partnerReport.submittedByAccountId, "partner-001");
+    assert.equal(partnerReport.channelCode, "reimbursement_peanut");
 
     const emptyBatchImportForm = new FormData();
     emptyBatchImportForm.set("channelCode", "reimbursement_admin_test");
@@ -933,7 +1094,7 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     assert.equal((await invalidImageResponse.json()).error.field, "image");
 
     const guestPageResponse = await fetch(`${server.baseUrl}/reimbursement`, {
-      headers: createAdminAuthHeaders("guest", "guest-secret-pass"),
+      headers: createAdminAuthHeaders("partner", "partner-secret-pass"),
     });
     assert.equal(guestPageResponse.status, 200);
 
@@ -958,7 +1119,7 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
 
     const guestListResponse = await fetch(`${server.baseUrl}/reimbursement/api/reports?limit=20`, {
       headers: {
-        ...createAdminAuthHeaders("guest", "guest-secret-pass"),
+        ...createAdminAuthHeaders("partner", "partner-secret-pass"),
         Accept: "application/json",
       },
     });
@@ -981,7 +1142,7 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     const guestEditResponse = await fetch(`${server.baseUrl}/reimbursement/api/reports/${seeded.reportId}`, {
       method: "PATCH",
       headers: {
-        ...createAdminAuthHeaders("guest", "guest-secret-pass"),
+        ...createAdminAuthHeaders("partner", "partner-secret-pass"),
         Accept: "application/json",
         "Content-Type": "application/json",
       },
@@ -1072,7 +1233,7 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
       {
         method: "DELETE",
         headers: {
-          ...createAdminAuthHeaders("guest", "guest-secret-pass"),
+          ...createAdminAuthHeaders("partner", "partner-secret-pass"),
           Accept: "application/json",
         },
       },
@@ -1081,14 +1242,14 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     assert.deepEqual(await guestDeleteResponse.json(), {
       success: false,
       error: {
-        message: "只读账号无权执行删除或其他编辑操作。",
+        message: "当前账号无权使用管理员专属功能。",
       },
     });
 
     const guestWriteResponse = await fetch(`${server.baseUrl}/reimbursement/api/reports`, {
       method: "POST",
       headers: {
-        ...createAdminAuthHeaders("guest", "guest-secret-pass"),
+        ...createAdminAuthHeaders("partner", "partner-secret-pass"),
         Accept: "application/json",
       },
     });
@@ -1098,7 +1259,7 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
       `${server.baseUrl}/reimbursement/api/reports/${seeded.missingReportId}`,
       {
         headers: {
-          ...createAdminAuthHeaders("guest", "guest-secret-pass"),
+          ...createAdminAuthHeaders("partner", "partner-secret-pass"),
           Accept: "application/json",
         },
       },

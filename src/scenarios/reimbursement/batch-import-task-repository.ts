@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 
 import { getDatabase } from "../../core/storage/database.js";
 import type { StoredAttachment } from "../../core/storage/types.js";
+import type { ReimbursementAccessPrincipal } from "../../core/config/reimbursement-access.js";
 
 export type BatchImportJobStatus = "queued" | "processing" | "completed";
 export type BatchImportItemStatus = "queued" | "processing" | "succeeded" | "failed";
@@ -24,6 +25,9 @@ export interface BatchImportTask {
   id: string;
   items: BatchImportTaskItem[];
   reporter: string;
+  submittedByAccountId?: string;
+  submittedByUsername?: string;
+  submittedByRole?: string;
   sentAt: string;
   startedAt?: string;
   status: BatchImportJobStatus;
@@ -42,6 +46,9 @@ export interface BatchImportWorkItem {
   note: string;
   originalName: string;
   reporter: string;
+  submittedByAccountId?: string;
+  submittedByUsername?: string;
+  submittedByRole?: string;
   sentAt: string;
   timeZone: string;
 }
@@ -54,6 +61,7 @@ interface CreateBatchImportTaskInput {
   notes: string[];
   reporter: string;
   sentAt: string;
+  submittedBy?: ReimbursementAccessPrincipal;
   timeZone: string;
 }
 
@@ -65,6 +73,9 @@ function selectTaskRow(id: string) {
         channel_code as channelCode,
         channel_name as channelName,
         reporter,
+        submitted_by_account_id as submittedByAccountId,
+        submitted_by_username as submittedByUsername,
+        submitted_by_role as submittedByRole,
         sent_at as sentAt,
         time_zone as timeZone,
         status,
@@ -116,6 +127,9 @@ export function getBatchImportTask(id: string): BatchImportTask | null {
 
   return {
     ...row,
+    submittedByAccountId: row.submittedByAccountId ?? undefined,
+    submittedByUsername: row.submittedByUsername ?? undefined,
+    submittedByRole: row.submittedByRole ?? undefined,
     startedAt: row.startedAt ?? undefined,
     finishedAt: row.finishedAt ?? undefined,
     items: items.map((item) => ({
@@ -143,11 +157,14 @@ export function createBatchImportTask(input: CreateBatchImportTaskInput): BatchI
       channel_code,
       channel_name,
       reporter,
+      submitted_by_account_id,
+      submitted_by_username,
+      submitted_by_role,
       sent_at,
       time_zone,
       status,
       total_count
-    ) VALUES (?, ?, ?, ?, ?, ?, 'queued', ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'queued', ?)
   `);
   const insertItem = db.prepare(`
     INSERT INTO reimbursement_batch_import_items (
@@ -169,6 +186,9 @@ export function createBatchImportTask(input: CreateBatchImportTaskInput): BatchI
       input.channelCode,
       input.channelName,
       input.reporter,
+      input.submittedBy?.accountId ?? null,
+      input.submittedBy?.username ?? null,
+      input.submittedBy?.role ?? null,
       input.sentAt,
       input.timeZone,
       input.attachments.length,
@@ -265,6 +285,9 @@ export function claimNextBatchImportWorkItem(jobId: string): BatchImportWorkItem
       note: item.note,
       originalName: item.originalName,
       reporter: job.reporter,
+      submittedByAccountId: job.submittedByAccountId,
+      submittedByUsername: job.submittedByUsername,
+      submittedByRole: job.submittedByRole,
       sentAt: job.sentAt,
       timeZone: job.timeZone,
     };

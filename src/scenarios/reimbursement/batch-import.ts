@@ -40,6 +40,9 @@ export interface BatchReimbursementItemImportInput {
   reporter: string;
   sentAt: string;
   source?: string;
+  submittedByAccountId?: string;
+  submittedByUsername?: string;
+  submittedByRole?: string;
   timeZone?: string;
 }
 
@@ -152,6 +155,9 @@ export async function importBatchReimbursementReport(
     primaryRawMessageId: saveResult.rawMessageId,
     timeZone,
     referenceDateTime: input.sentAt,
+    submittedByAccountId: input.submittedByAccountId,
+    submittedByUsername: input.submittedByUsername,
+    submittedByRole: input.submittedByRole,
   });
   const extraction = saveScenarioExtraction({
     rawMessageId: saveResult.rawMessageId,

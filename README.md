@@ -89,8 +89,7 @@ WECHATY_ADMIN_HOST=127.0.0.1
 WECHATY_ADMIN_PORT=8788
 WECHATY_ADMIN_USERNAME=
 WECHATY_ADMIN_PASSWORD=
-WECHATY_ADMIN_GUEST_USERNAME=
-WECHATY_ADMIN_GUEST_PASSWORD=
+WECHATY_REIMBURSEMENT_ACCOUNTS_JSON='[{"accountId":"partner-001","username":"partner","password":"replace-with-a-strong-password","role":"partner"},{"accountId":"manager-001","username":"manager","password":"replace-with-another-strong-password","role":"manager","managerStores":["fuzzy","fuzzyqz"]}]'
 WECHATY_ADMIN_PUBLIC_HEALTHZ_URL=https://comeover.cn/reimbursement/healthz
 WECHATY_DEBUG_RECEIVED_ROOM_MESSAGE_ENABLED=false
 WECHATY_SELF_CANARY_ENABLED=false
@@ -154,7 +153,7 @@ WECHATY_CHANNELS_JSON=[{"code":"loss_a","enabled":true,"scenario":"loss-report",
 - `WECHATY_ADMIN_HOST`: 报账后台监听地址，默认 `127.0.0.1`
 - `WECHATY_ADMIN_PORT`: 报账后台监听端口，默认 `8788`
 - `WECHATY_ADMIN_USERNAME/WECHATY_ADMIN_PASSWORD`: 报账后台 Basic Auth 账号密码；未配置时 `/reimbursement` 会返回 `503`
-- `WECHATY_ADMIN_GUEST_USERNAME/WECHATY_ADMIN_GUEST_PASSWORD`: 可选的只读 Basic Auth 账号密码；guest 可以查看列表、详情和附件，但不能删除或执行其他写操作
+- `WECHATY_REIMBURSEMENT_ACCOUNTS_JSON`: 合伙人和店长账号数组；每个账号需要稳定的 `accountId`。`partner` 可提交基础门店并只读查看全部报账；`manager` 可配置一个或多个 `managerStores`，只能提交并查看该账号自己的店长报账
 - `WECHATY_REIMBURSEMENT_SHORTCUT_API_TOKEN`: 快捷指令单图报账接口的独立 Bearer Token；未配置时该接口返回 `503`
 - `WECHATY_ADMIN_PUBLIC_HEALTHZ_URL`: 仅 deploy 脚本使用；应用发布后校验由 `server-infra` 管理的公网入口，默认 `https://comeover.cn/reimbursement/healthz`
 - `WECHATY_DEBUG_RECEIVED_ROOM_MESSAGE_ENABLED`: 是否发送 `"[wechat-claw] 已收到群消息"` 这类调试摘要，默认 `false`
@@ -430,8 +429,10 @@ npm run admin:dev
 - 后台默认监听 `127.0.0.1:8788`
 - 建议只开放给本机，由 Nginx 反代到外网
 - `/reimbursement` 使用 Basic Auth；未配置 `WECHATY_ADMIN_USERNAME/WECHATY_ADMIN_PASSWORD` 时会返回 `503`
-- 可选配置 `WECHATY_ADMIN_GUEST_USERNAME/WECHATY_ADMIN_GUEST_PASSWORD` 增加只读账号；服务端会拒绝该账号的所有删除和其他写请求
-- 修改管理员或 guest 凭据后，执行 `sudo systemctl restart wechat-claw-reimbursement-admin.service` 使新配置生效
+- `/reimbursement/submit` 是统一报账入口；服务端按 `admin`、`partner`、`manager` 角色返回并校验可提交门店，旧店长专属地址会跳转到统一入口
+- `WECHATY_ADMIN_GUEST_USERNAME/WECHATY_ADMIN_GUEST_PASSWORD` 已废弃且不会授予登录权限
+- 店长报账以不可编辑的 `submitted_by_account_id` 记录账号所有权；同门店的不同店长互不可见，历史微信群报账因没有该字段暂不向店长展示
+- 修改管理员或角色账号配置后，执行 `sudo systemctl restart wechat-claw-reimbursement-admin.service admin-auth-gateway.service` 使新配置生效
 - 快捷指令接口使用独立 Bearer Token，不接受后台 Basic Auth；请求体为 `multipart/form-data`，包含 `image`、`note`、`channelCode`、`reporter`，并要求 8 至 256 个可打印 ASCII 字符的 `Idempotency-Key` 请求头
 - 快捷指令接口会同步调用现有报账模型并写入正式报账链路；成功响应中的 `receipt` 可直接交给“显示结果”动作
 - `deploy/deploy-wechat-claw.sh` 现在会自动：

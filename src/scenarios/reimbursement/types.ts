@@ -65,6 +65,9 @@ export interface ReimbursementReportInput {
   primaryRawMessageId: number;
   timeZone?: string;
   referenceDateTime?: string;
+  submittedByAccountId?: string;
+  submittedByUsername?: string;
+  submittedByRole?: string;
 }
 
 export interface ReimbursementReportRecord {
@@ -87,6 +90,9 @@ export interface ReimbursementReportRecord {
   needsReview: boolean;
   createdAt: string;
   updatedAt: string;
+  submittedByAccountId?: string;
+  submittedByUsername?: string;
+  submittedByRole?: string;
 }
 
 export interface ReimbursementReportSourceRecord {

@@ -4,7 +4,7 @@ import { ensureStateDir, getDatabaseFilePath } from "../runtime/state-paths.js";
 
 let database: Database.Database | null = null;
 
-function migrate(db: Database.Database) {
+export function migrateDatabase(db: Database.Database) {
   db.exec(`
     CREATE TABLE IF NOT EXISTS raw_messages (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -94,6 +94,9 @@ function migrate(db: Database.Database) {
       ocr_text TEXT,
       confidence REAL NOT NULL,
       needs_review INTEGER NOT NULL,
+      submitted_by_account_id TEXT,
+      submitted_by_username TEXT,
+      submitted_by_role TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
@@ -143,6 +146,9 @@ function migrate(db: Database.Database) {
       channel_code TEXT NOT NULL,
       channel_name TEXT NOT NULL,
       reporter TEXT NOT NULL,
+      submitted_by_account_id TEXT,
+      submitted_by_username TEXT,
+      submitted_by_role TEXT,
       sent_at TEXT NOT NULL,
       time_zone TEXT NOT NULL,
       status TEXT NOT NULL,
@@ -189,6 +195,12 @@ function migrate(db: Database.Database) {
   const hasChannelCode = columns.some((column) => column.name === "channel_code");
   const summaryRequestColumns = db.prepare(`PRAGMA table_info(summary_send_requests)`).all() as Array<{ name: string }>;
   const hasSummaryType = summaryRequestColumns.some((column) => column.name === "summary_type");
+  const reimbursementReportColumns = db
+    .prepare(`PRAGMA table_info(reimbursement_reports)`)
+    .all() as Array<{ name: string }>;
+  const batchJobColumns = db
+    .prepare(`PRAGMA table_info(reimbursement_batch_import_jobs)`)
+    .all() as Array<{ name: string }>;
 
   if (!hasEventReceivedAt) {
     db.exec(`
@@ -214,12 +226,28 @@ function migrate(db: Database.Database) {
     `);
   }
 
+  for (const columnName of [
+    "submitted_by_account_id",
+    "submitted_by_username",
+    "submitted_by_role",
+  ]) {
+    if (!reimbursementReportColumns.some((column) => column.name === columnName)) {
+      db.exec(`ALTER TABLE reimbursement_reports ADD COLUMN ${columnName} TEXT;`);
+    }
+    if (!batchJobColumns.some((column) => column.name === columnName)) {
+      db.exec(`ALTER TABLE reimbursement_batch_import_jobs ADD COLUMN ${columnName} TEXT;`);
+    }
+  }
+
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_raw_messages_event_received_at
       ON raw_messages(event_received_at);
 
     CREATE INDEX IF NOT EXISTS idx_raw_messages_channel_code_event_received_at
       ON raw_messages(channel_code, event_received_at);
+
+    CREATE INDEX IF NOT EXISTS idx_reimbursement_reports_submitter_channel
+      ON reimbursement_reports(submitted_by_account_id, channel_code);
   `);
 }
 
@@ -232,7 +260,7 @@ export function getDatabase() {
   const databasePath = getDatabaseFilePath();
   database = new Database(databasePath);
   database.pragma("journal_mode = WAL");
-  migrate(database);
+  migrateDatabase(database);
   return database;
 }
 

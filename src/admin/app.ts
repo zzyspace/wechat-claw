@@ -8,6 +8,11 @@ import multer from "multer";
 
 import { getAppConfig, type AppConfig } from "../core/config/env.js";
 import {
+  getAllowedSubmissionChannelCodes,
+  REIMBURSEMENT_SUBMISSION_CHANNEL_LABELS,
+  type ReimbursementAccessPrincipal,
+} from "../core/config/reimbursement-access.js";
+import {
   ADMIN_MANUAL_IMPORT_IMAGE_MIME_TYPES,
   saveUploadedReimbursementImage,
   saveUploadedReimbursementImageFile,
@@ -44,7 +49,7 @@ import { getRawMessageByMessageExternalId } from "../core/storage/raw-message-re
 import {
   createAdminAuthMiddleware,
   createShortcutApiAuthMiddleware,
-  enforceAdminWriteAccess,
+  enforceAdminRole,
   getAdminSession,
 } from "./auth.js";
 
@@ -59,23 +64,7 @@ const MAX_SHORTCUT_REPORTER_LENGTH = 100;
 const SHORTCUT_API_PATH = `${ADMIN_BASE_PATH}/api/shortcut/reports`;
 const SHORTCUT_MESSAGE_TYPE = "shortcut_api";
 const IDEMPOTENCY_KEY_PATTERN = /^[\x20-\x7e]{8,256}$/;
-const REIMBURSEMENT_SUBMISSION_PAGES = {
-  submit: [
-    { code: "reimbursement_fuzzy", name: "Fuzzy" },
-    { code: "reimbursement_peanut", name: "Peanut" },
-    { code: "reimbursement_fuzzyqz", name: "Fuzzy泉州店" },
-  ],
-  submit_fuzzy: [
-    { code: "reimbursement_fuzzy_manager", name: "Fuzzy店长报账" },
-  ],
-  submit_peanut: [
-    { code: "reimbursement_peanut_manager", name: "Peanut店长报账" },
-  ],
-  submit_fuzzyqz: [
-    { code: "reimbursement_fuzzy_qz_manager", name: "Fuzzy泉州店长报账" },
-  ],
-} as const;
-type ReimbursementSubmissionPage = keyof typeof REIMBURSEMENT_SUBMISSION_PAGES;
+const LEGACY_REIMBURSEMENT_SUBMISSION_PAGES = ["submit_fuzzy", "submit_peanut", "submit_fuzzyqz"];
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
 const defaultStaticDir = path.join(currentDir, "public");
 
@@ -116,11 +105,8 @@ function trimString(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
 }
 
-function getReimbursementSubmissionPage(value: unknown): ReimbursementSubmissionPage | null {
-  const normalized = trimString(value);
-  return Object.hasOwn(REIMBURSEMENT_SUBMISSION_PAGES, normalized)
-    ? normalized as ReimbursementSubmissionPage
-    : null;
+function isUnifiedSubmissionPage(value: unknown) {
+  return trimString(value) === "submit";
 }
 
 function parsePositiveInteger(value: unknown, field: string) {
@@ -424,6 +410,28 @@ function parseReportListQuery(query: Record<string, unknown>) {
   };
 }
 
+function canAccessSubmittedResource(
+  principal: ReimbursementAccessPrincipal,
+  resource: { channelCode?: string; submittedByAccountId?: string },
+) {
+  if (principal.role === "admin" || principal.role === "partner") {
+    return true;
+  }
+  return (
+    resource.submittedByAccountId === principal.accountId &&
+    Boolean(resource.channelCode) &&
+    getAllowedSubmissionChannelCodes(principal).includes(resource.channelCode as string)
+  );
+}
+
+function getReportAccessScope(principal: ReimbursementAccessPrincipal) {
+  if (principal.role !== "manager") return {};
+  return {
+    submittedByAccountId: principal.accountId,
+    allowedChannelCodes: getAllowedSubmissionChannelCodes(principal),
+  };
+}
+
 function sendNotFound(_request: express.Request, response: express.Response) {
   response.status(404).type("text/plain; charset=utf-8").send("Not found");
 }
@@ -434,6 +442,9 @@ export function createApp(input?: {
   staticDir?: string;
 }) {
   const config = input?.config ?? getAppConfig();
+  if (config.reimbursementAccountsParseError) {
+    throw new Error(config.reimbursementAccountsParseError);
+  }
   const staticDir = resolveStaticDir(input?.staticDir);
   const batchUploadTempDir = path.join(getStateDirPath(config), "reimbursement", "batch-upload-temp");
   fs.mkdirSync(batchUploadTempDir, { recursive: true });
@@ -458,8 +469,7 @@ export function createApp(input?: {
   const adminAuth = createAdminAuthMiddleware({
     username: config.adminUsername,
     password: config.adminPassword,
-    guestUsername: config.adminGuestUsername,
-    guestPassword: config.adminGuestPassword,
+    accounts: config.reimbursementAccounts ?? [],
   });
   const shortcutApiAuth = createShortcutApiAuthMiddleware({
     token: config.reimbursementShortcutApiToken,
@@ -507,6 +517,7 @@ export function createApp(input?: {
     input?: {
       allowedChannelCodes?: ReadonlySet<string>;
       reporter?: string;
+      submittedBy?: ReimbursementAccessPrincipal;
     },
   ) {
     const uploadedFiles = Array.isArray(request.files) ? request.files : [];
@@ -550,6 +561,7 @@ export function createApp(input?: {
         timeZone: config.timeZone,
         attachments,
         originalNames: uploadedFiles.map((file) => file.originalname),
+        submittedBy: input?.submittedBy,
       });
 
       response.status(202).json({
@@ -578,13 +590,17 @@ export function createApp(input?: {
     response.sendFile(path.join(staticDir, "admin.html"));
   });
 
-  const submissionPagePaths = Object.keys(REIMBURSEMENT_SUBMISSION_PAGES).flatMap((page) => [
-    `${ADMIN_BASE_PATH}/${page}`,
-    `${ADMIN_BASE_PATH}/${page}/`,
-  ]);
-  app.get(submissionPagePaths, adminAuth, (_request, response) => {
+  app.get([`${ADMIN_BASE_PATH}/submit`, `${ADMIN_BASE_PATH}/submit/`], adminAuth, (_request, response) => {
     response.sendFile(path.join(staticDir, "submit.html"));
   });
+  app.get(
+    LEGACY_REIMBURSEMENT_SUBMISSION_PAGES.flatMap((page) => [
+      `${ADMIN_BASE_PATH}/${page}`,
+      `${ADMIN_BASE_PATH}/${page}/`,
+    ]),
+    adminAuth,
+    (_request, response) => response.redirect(302, `${ADMIN_BASE_PATH}/submit`),
+  );
 
   app.post(
     SHORTCUT_API_PATH,
@@ -700,7 +716,7 @@ export function createApp(input?: {
     },
   );
 
-  app.use(`${ADMIN_BASE_PATH}/api`, adminAuth, enforceAdminWriteAccess);
+  app.use(`${ADMIN_BASE_PATH}/api`, adminAuth);
 
   app.get(`${ADMIN_BASE_PATH}/api/session`, (_request, response) => {
     const session = getAdminSession(response);
@@ -708,19 +724,21 @@ export function createApp(input?: {
     response.status(200).json({
       success: true,
       account: {
+        accountId: session?.accountId,
+        managerStores: session?.managerStores,
         username: session?.username,
         role: session?.role,
       },
       permissions: {
         canWrite: session?.canWrite === true,
+        canSubmit: session?.canSubmit === true,
+        canViewAllReports: session?.canViewAllReports === true,
       },
     });
   });
 
   app.get(`${ADMIN_BASE_PATH}/api/submissions/:submissionPage/options`, (request, response) => {
-    const submissionPage = getReimbursementSubmissionPage(request.params.submissionPage);
-
-    if (!submissionPage) {
+    if (!isUnifiedSubmissionPage(request.params.submissionPage)) {
       response.status(404).json({
         success: false,
         error: { message: "批量报账页面不存在。" },
@@ -729,6 +747,10 @@ export function createApp(input?: {
     }
 
     const session = getAdminSession(response);
+    if (!session) {
+      response.status(401).json({ success: false, error: { message: "需要登录。" } });
+      return;
+    }
     const configuredChannelCodes = new Set(
       config.channels
         .filter((channel) => channel.enabled && channel.scenario === "reimbursement")
@@ -738,19 +760,23 @@ export function createApp(input?: {
     response.status(200).json({
       success: true,
       account: {
+        accountId: session.accountId,
+        managerStores: session.managerStores,
         username: session?.username,
+        role: session.role,
       },
       permissions: {
         canWrite: session?.canWrite === true,
+        canSubmit: session.canSubmit,
       },
-      channels: REIMBURSEMENT_SUBMISSION_PAGES[submissionPage].filter((channel) =>
-        configuredChannelCodes.has(channel.code),
-      ),
+      channels: getAllowedSubmissionChannelCodes(session)
+        .filter((code) => configuredChannelCodes.has(code))
+        .map((code) => ({ code, name: REIMBURSEMENT_SUBMISSION_CHANNEL_LABELS.get(code) ?? code })),
       timeZone: config.timeZone,
     });
   });
 
-  app.get(`${ADMIN_BASE_PATH}/api/manual-import-options`, (_request, response) => {
+  app.get(`${ADMIN_BASE_PATH}/api/manual-import-options`, enforceAdminRole, (_request, response) => {
     response.status(200).json({
       success: true,
       channels: config.channels
@@ -767,70 +793,76 @@ export function createApp(input?: {
     });
   });
 
-  app.post(`${ADMIN_BASE_PATH}/api/reports`, manualImportImageUpload.single("image"), (request, response, next) => {
-    try {
-      const channelCode = parseRequiredString(request.body?.channelCode, "channelCode", "门店");
-      const channel = config.channels.find(
-        (item) => item.enabled && item.scenario === "reimbursement" && item.code === channelCode,
-      );
+  app.post(
+    `${ADMIN_BASE_PATH}/api/reports`,
+    enforceAdminRole,
+    manualImportImageUpload.single("image"),
+    (request, response, next) => {
+      try {
+        const channelCode = parseRequiredString(request.body?.channelCode, "channelCode", "门店");
+        const channel = config.channels.find(
+          (item) => item.enabled && item.scenario === "reimbursement" && item.code === channelCode,
+        );
 
-      if (!channel) {
-        throw new AdminValidationError("请选择有效的报账门店。", "channelCode");
+        if (!channel) {
+          throw new AdminValidationError("请选择有效的报账门店。", "channelCode");
+        }
+
+        const expenseCategory = parseExpenseCategory(request.body?.expenseCategory);
+
+        if (!expenseCategory) {
+          throw new AdminValidationError("请选择报账类别。", "expenseCategory");
+        }
+
+        const reporter = parseRequiredString(request.body?.reporter, "reporter", "报账人");
+        const amount = parseManualImportAmount(request.body?.amount);
+        const sentAt = parseManualImportSentAt(request.body?.sentAt, config.timeZone);
+        const attachments = request.file
+          ? [
+              saveUploadedReimbursementImage({
+                buffer: request.file.buffer,
+                config,
+                mimeType: request.file.mimetype,
+              }),
+            ]
+          : [];
+
+        const result = importManualReimbursementReport({
+          channelCode: channel.code,
+          channelName: channel.match.value,
+          reporter,
+          amount,
+          expenseCategory,
+          note: trimString(request.body?.note),
+          sentAt,
+          timeZone: config.timeZone,
+          attachments,
+        });
+
+        response.status(201).json({
+          success: true,
+          report: result.report,
+        });
+      } catch (error) {
+        next(error);
       }
-
-      const expenseCategory = parseExpenseCategory(request.body?.expenseCategory);
-
-      if (!expenseCategory) {
-        throw new AdminValidationError("请选择报账类别。", "expenseCategory");
-      }
-
-      const reporter = parseRequiredString(request.body?.reporter, "reporter", "报账人");
-      const amount = parseManualImportAmount(request.body?.amount);
-      const sentAt = parseManualImportSentAt(request.body?.sentAt, config.timeZone);
-      const attachments = request.file
-        ? [
-            saveUploadedReimbursementImage({
-              buffer: request.file.buffer,
-              config,
-              mimeType: request.file.mimetype,
-            }),
-          ]
-        : [];
-
-      const result = importManualReimbursementReport({
-        channelCode: channel.code,
-        channelName: channel.match.value,
-        reporter,
-        amount,
-        expenseCategory,
-        note: trimString(request.body?.note),
-        sentAt,
-        timeZone: config.timeZone,
-        attachments,
-      });
-
-      response.status(201).json({
-        success: true,
-        report: result.report,
-      });
-    } catch (error) {
-      next(error);
-    }
-  });
+    },
+  );
 
   app.post(
     `${ADMIN_BASE_PATH}/api/batch-reports`,
+    enforceAdminRole,
     batchImportImageUpload.array("images", MAX_BATCH_IMPORT_IMAGES),
-    (request, response, next) => createBatchReportTask(request, response, next),
+    (request, response, next) => createBatchReportTask(request, response, next, {
+      submittedBy: getAdminSession(response),
+    }),
   );
 
   app.post(
     `${ADMIN_BASE_PATH}/api/submissions/:submissionPage/batch-reports`,
     batchImportImageUpload.array("images", MAX_BATCH_IMPORT_IMAGES),
     (request, response, next) => {
-      const submissionPage = getReimbursementSubmissionPage(request.params.submissionPage);
-
-      if (!submissionPage) {
+      if (!isUnifiedSubmissionPage(request.params.submissionPage)) {
         for (const file of Array.isArray(request.files) ? request.files : []) {
           if (file.path && fs.existsSync(file.path)) {
             fs.unlinkSync(file.path);
@@ -844,12 +876,15 @@ export function createApp(input?: {
       }
 
       const session = getAdminSession(response);
-      const allowedChannelCodes = new Set<string>(
-        REIMBURSEMENT_SUBMISSION_PAGES[submissionPage].map((channel) => channel.code),
-      );
+      if (!session) {
+        response.status(401).json({ success: false, error: { message: "需要登录。" } });
+        return;
+      }
+      const allowedChannelCodes = new Set(getAllowedSubmissionChannelCodes(session));
       void createBatchReportTask(request, response, next, {
         allowedChannelCodes,
-        reporter: session?.username,
+        reporter: session.username,
+        submittedBy: session,
       });
     },
   );
@@ -858,8 +893,17 @@ export function createApp(input?: {
     try {
       const taskId = parseRequiredString(request.params.taskId, "taskId", "批量补录任务");
       const task = getBatchImportTask(taskId);
+      const session = getAdminSession(response);
 
-      if (!task) {
+      if (
+        !task ||
+        !session ||
+        (session.role !== "admin" && task.submittedByAccountId !== session.accountId) ||
+        (session.role === "manager" && !canAccessSubmittedResource(session, {
+          channelCode: task.channelCode,
+          submittedByAccountId: task.submittedByAccountId,
+        }))
+      ) {
         response.status(404).json({
           success: false,
           error: {
@@ -880,9 +924,15 @@ export function createApp(input?: {
 
   app.get(`${ADMIN_BASE_PATH}/api/reports`, (request, response, next) => {
     try {
+      const session = getAdminSession(response);
+      if (!session) {
+        response.status(401).json({ success: false, error: { message: "需要登录。" } });
+        return;
+      }
       const result = listAdminReimbursementReports(
         {
           ...parseReportListQuery(request.query as Record<string, unknown>),
+          ...getReportAccessScope(session),
           timeZone: config.timeZone,
         },
       );
@@ -900,8 +950,12 @@ export function createApp(input?: {
     try {
       const reportId = parsePositiveInteger(request.params.id, "id");
       const report = getAdminReimbursementReportDetail(reportId);
+      const session = getAdminSession(response);
 
-      if (!report) {
+      if (!report || !session || !canAccessSubmittedResource(session, {
+        channelCode: report.channelCode,
+        submittedByAccountId: report.submittedByAccountId,
+      })) {
         response.status(404).json({
           success: false,
           error: {
@@ -921,7 +975,7 @@ export function createApp(input?: {
     }
   });
 
-  app.patch(`${ADMIN_BASE_PATH}/api/reports/:id`, (request, response, next) => {
+  app.patch(`${ADMIN_BASE_PATH}/api/reports/:id`, enforceAdminRole, (request, response, next) => {
     try {
       const reportId = parsePositiveInteger(request.params.id, "id");
       const expectedUpdatedAt = parseRequiredString(request.body?.updatedAt, "updatedAt", "更新时间");
@@ -980,7 +1034,7 @@ export function createApp(input?: {
     }
   });
 
-  app.delete(`${ADMIN_BASE_PATH}/api/reports/:id`, (request, response, next) => {
+  app.delete(`${ADMIN_BASE_PATH}/api/reports/:id`, enforceAdminRole, (request, response, next) => {
     try {
       const reportId = parsePositiveInteger(request.params.id, "id");
       const deleted = deleteReimbursementReport(reportId);
@@ -1008,8 +1062,17 @@ export function createApp(input?: {
     try {
       const attachmentId = parsePositiveInteger(request.params.attachmentId, "attachmentId");
       const attachment = findAdminReimbursementAttachment(attachmentId);
+      const session = getAdminSession(response);
 
-      if (!attachment || !attachment.exists) {
+      if (
+        !attachment ||
+        !attachment.exists ||
+        !session ||
+        !canAccessSubmittedResource(session, {
+          channelCode: attachment.reportChannelCode,
+          submittedByAccountId: attachment.reportSubmittedByAccountId,
+        })
+      ) {
         response.status(404).json({
           success: false,
           error: {

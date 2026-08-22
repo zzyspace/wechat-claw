@@ -396,16 +396,16 @@
 
     <script>
       const BASE_PATH = "/reimbursement";
-      const SUBMISSION_PAGE = location.pathname.replace(/\/$/, "").split("/").pop();
-      const SUPPORTED_SUBMISSION_PAGES = new Set(["submit", "submit_fuzzy", "submit_peanut", "submit_fuzzyqz"]);
-      const TASK_STORAGE_KEY = `reimbursement-active-submission-task:${SUBMISSION_PAGE}`;
+      const SUBMISSION_PAGE = "submit";
+      const TASK_STORAGE_KEY = "reimbursement-active-submission-task:submit";
       const THEME_STORAGE_KEY = "reimbursement-admin-theme";
       const IMAGE_MIME_TYPES = new Set([
         "image/jpeg", "image/png", "image/webp", "image/gif", "image/heic", "image/heif",
       ]);
 
       const state = {
-        canWrite: false,
+        canSubmit: false,
+        channelLocked: false,
         imageItems: [],
         imageDragDepth: 0,
         importing: false,
@@ -481,6 +481,7 @@
           control.disabled = disabled;
         }
         elements.reporter.disabled = false;
+        elements.channelCode.disabled = disabled || state.channelLocked;
       }
 
       function renderImages() {
@@ -658,15 +659,12 @@
         elements.sentAt.value = formatLocalDateTimeInput();
         clearImages();
         renderTask(null);
-        elements.submitButton.disabled = !state.canWrite;
+        elements.submitButton.disabled = !state.canSubmit;
         elements.resetButton.textContent = "清空";
         setStatus("");
       }
 
       async function loadOptions() {
-        if (!SUPPORTED_SUBMISSION_PAGES.has(SUBMISSION_PAGE)) {
-          throw new Error("当前批量报账页面地址无效。");
-        }
         const response = await fetch(`${BASE_PATH}/api/submissions/${encodeURIComponent(SUBMISSION_PAGE)}/options`, {
           headers: { Accept: "application/json" },
         });
@@ -675,7 +673,7 @@
           throw new Error(payload?.error?.message || "批量报账信息加载失败");
         }
 
-        state.canWrite = payload.permissions?.canWrite === true;
+        state.canSubmit = payload.permissions?.canSubmit === true;
         elements.reporter.value = payload.account?.username || "";
         elements.channelCode.replaceChildren();
         const placeholder = document.createElement("option");
@@ -691,10 +689,12 @@
         if ((payload.channels || []).length === 1) {
           elements.channelCode.value = payload.channels[0].code;
         }
+        state.channelLocked = (payload.channels || []).length === 1;
+        elements.channelCode.disabled = state.channelLocked;
 
-        if (!state.canWrite) {
+        if (!state.canSubmit) {
           elements.submitButton.disabled = true;
-          setStatus("当前账号为只读账号，无法提交报账。", true);
+          setStatus("当前账号没有报账提交权限。", true);
         } else if (!(payload.channels || []).length) {
           elements.submitButton.disabled = true;
           setStatus("当前页面对应的报账门店尚未启用，请联系管理员。", true);
@@ -702,7 +702,7 @@
       }
 
       async function submitForm() {
-        if (!state.canWrite || state.importing) return;
+        if (!state.canSubmit || state.importing) return;
         if (!state.imageItems.length) {
           setStatus("请至少添加一张报账图。", true);
           return;

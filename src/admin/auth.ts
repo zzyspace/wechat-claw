@@ -1,19 +1,24 @@
 import { timingSafeEqual } from "node:crypto";
 
 import type { NextFunction, Request, Response } from "express";
+import type {
+  ReimbursementAccessPrincipal,
+  ReimbursementAccountRole,
+  ReimbursementManagerStore,
+} from "../core/config/reimbursement-access.js";
 
-export type AdminRole = "admin" | "readonly";
-
-export interface AdminSession {
-  username: string;
-  role: AdminRole;
+export interface AdminSession extends ReimbursementAccessPrincipal {
   canWrite: boolean;
+  canSubmit: boolean;
+  canViewAllReports: boolean;
 }
 
-interface ConfiguredAdminAccount {
+export interface ConfiguredAdminAccount {
+  accountId: string;
+  managerStores: ReimbursementManagerStore[];
   username: string;
   password: string;
-  role: AdminRole;
+  role: ReimbursementAccountRole;
 }
 
 function hasValue(value: string | undefined) {
@@ -90,9 +95,11 @@ function sendAdminError(
 }
 
 function createConfiguredAccount(input: {
+  accountId: string;
+  managerStores?: ReimbursementManagerStore[];
   username?: string;
   password?: string;
-  role: AdminRole;
+  role: ReimbursementAccountRole;
 }): ConfiguredAdminAccount | null {
   const username = input.username?.trim();
   const password = input.password?.trim();
@@ -102,6 +109,8 @@ function createConfiguredAccount(input: {
   }
 
   return {
+    accountId: input.accountId,
+    managerStores: input.managerStores ?? [],
     username,
     password,
     role: input.role,
@@ -113,27 +122,28 @@ export function getAdminSession(response: Response): AdminSession | undefined {
 }
 
 export function createAdminAuthMiddleware(input?: {
+  accounts?: ConfiguredAdminAccount[];
   username?: string;
   password?: string;
-  guestUsername?: string;
-  guestPassword?: string;
   realm?: string;
 }) {
   const realm = input?.realm ?? "Wechat Claw Reimbursement Admin";
   const adminAccount = createConfiguredAccount({
+    accountId: "reimbursement-admin",
     username: input?.username,
     password: input?.password,
     role: "admin",
   });
-  const guestAccount = createConfiguredAccount({
-    username: input?.guestUsername,
-    password: input?.guestPassword,
-    role: "readonly",
-  });
   const accounts = [
     adminAccount,
-    guestAccount && guestAccount.username !== adminAccount?.username ? guestAccount : null,
+    ...(input?.accounts ?? []),
   ].filter((account): account is ConfiguredAdminAccount => account !== null);
+  if (new Set(accounts.map((account) => account.accountId)).size !== accounts.length) {
+    throw new Error("Reimbursement accountId values must be unique.");
+  }
+  if (new Set(accounts.map((account) => account.username)).size !== accounts.length) {
+    throw new Error("Reimbursement account usernames must be unique.");
+  }
 
   return (request: Request, response: Response, next: NextFunction) => {
     if (!adminAccount) {
@@ -159,9 +169,13 @@ export function createAdminAuthMiddleware(input?: {
 
     setNoStore(response);
     response.locals.adminSession = {
+      accountId: account.accountId,
+      managerStores: account.managerStores,
       username: account.username,
       role: account.role,
       canWrite: account.role === "admin",
+      canSubmit: true,
+      canViewAllReports: account.role === "admin" || account.role === "partner",
     } satisfies AdminSession;
     next();
   };
@@ -199,15 +213,10 @@ export function createShortcutApiAuthMiddleware(input?: { token?: string }) {
   };
 }
 
-const READ_ONLY_HTTP_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
-
-export function enforceAdminWriteAccess(request: Request, response: Response, next: NextFunction) {
-  const session = getAdminSession(response);
-
-  if (READ_ONLY_HTTP_METHODS.has(request.method) || session?.canWrite) {
+export function enforceAdminRole(request: Request, response: Response, next: NextFunction) {
+  if (getAdminSession(response)?.role === "admin") {
     next();
     return;
   }
-
-  sendAdminError(request, response, 403, "只读账号无权执行删除或其他编辑操作。");
+  sendAdminError(request, response, 403, "当前账号无权使用管理员专属功能。");
 }

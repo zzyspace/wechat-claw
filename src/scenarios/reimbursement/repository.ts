@@ -170,6 +170,9 @@ function mapReportRow(row: {
   ocrText: string | null;
   confidence: number;
   needsReview: number;
+  submittedByAccountId?: string | null;
+  submittedByUsername?: string | null;
+  submittedByRole?: string | null;
   createdAt: string;
   updatedAt: string;
 }): ReimbursementReportRecord {
@@ -191,6 +194,9 @@ function mapReportRow(row: {
     ocrText: row.ocrText,
     confidence: row.confidence,
     needsReview: Boolean(row.needsReview),
+    submittedByAccountId: row.submittedByAccountId ?? undefined,
+    submittedByUsername: row.submittedByUsername ?? undefined,
+    submittedByRole: row.submittedByRole ?? undefined,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -258,6 +264,9 @@ function selectReportById(id: number): ReimbursementReportRecord {
           ocr_text as ocrText,
           confidence,
           needs_review as needsReview,
+          submitted_by_account_id as submittedByAccountId,
+          submitted_by_username as submittedByUsername,
+          submitted_by_role as submittedByRole,
           created_at as createdAt,
           updated_at as updatedAt
         FROM reimbursement_reports
@@ -296,6 +305,9 @@ function findReportById(id: number): ReimbursementReportRecord | null {
           ocr_text as ocrText,
           confidence,
           needs_review as needsReview,
+          submitted_by_account_id as submittedByAccountId,
+          submitted_by_username as submittedByUsername,
+          submitted_by_role as submittedByRole,
           created_at as createdAt,
           updated_at as updatedAt
         FROM reimbursement_reports
@@ -384,8 +396,11 @@ export function saveReimbursementReport(input: ReimbursementReportInput): Reimbu
       ocr_text,
       confidence,
       needs_review,
+      submitted_by_account_id,
+      submitted_by_username,
+      submitted_by_role,
       created_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, datetime('now')))
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, datetime('now')))
   `);
   const insertSource = db.prepare(`
     INSERT INTO reimbursement_report_sources (
@@ -413,6 +428,9 @@ export function saveReimbursementReport(input: ReimbursementReportInput): Reimbu
       input.ocrText,
       input.confidence,
       input.needsReview ? 1 : 0,
+      input.submittedByAccountId ?? null,
+      input.submittedByUsername ?? null,
+      input.submittedByRole ?? null,
       createdAtOverride,
     );
     const createdReportId = Number(result.lastInsertRowid);
@@ -1792,6 +1810,8 @@ export function listAdminReimbursementReports(options?: {
   timeZone?: string;
   limit?: number;
   offset?: number;
+  submittedByAccountId?: string;
+  allowedChannelCodes?: string[];
 }): {
   total: number;
   limit: number;
@@ -1810,6 +1830,23 @@ export function listAdminReimbursementReports(options?: {
   if (options?.channelCode) {
     clauses.push("channel_code = @channelCode");
     params.channelCode = options.channelCode;
+  }
+
+  if (options?.submittedByAccountId) {
+    clauses.push("submitted_by_account_id = @submittedByAccountId");
+    params.submittedByAccountId = options.submittedByAccountId;
+  }
+
+  if (options?.allowedChannelCodes) {
+    if (options.allowedChannelCodes.length === 0) {
+      clauses.push("1 = 0");
+    } else {
+      const placeholders = options.allowedChannelCodes.map((_, index) => `@allowedChannelCode${index}`);
+      clauses.push(`channel_code IN (${placeholders.join(", ")})`);
+      options.allowedChannelCodes.forEach((code, index) => {
+        params[`allowedChannelCode${index}`] = code;
+      });
+    }
   }
 
   if (options?.reporter) {
@@ -1881,6 +1918,9 @@ export function listAdminReimbursementReports(options?: {
           ocr_text as ocrText,
           confidence,
           needs_review as needsReview,
+          submitted_by_account_id as submittedByAccountId,
+          submitted_by_username as submittedByUsername,
+          submitted_by_role as submittedByRole,
           created_at as createdAt,
           updated_at as updatedAt
         FROM reimbursement_reports
@@ -1931,13 +1971,20 @@ export function getAdminReimbursementReportDetail(reportId: number): AdminReimbu
 
 export function findAdminReimbursementAttachment(
   attachmentId: number,
-): ReimbursementSourceAttachmentRecord | null {
+): (ReimbursementSourceAttachmentRecord & {
+  reimbursementReportId: number;
+  reportChannelCode?: string;
+  reportSubmittedByAccountId?: string;
+}) | null {
   const db = getDatabase();
   const row = db
     .prepare(
       `
         SELECT
           ma.id,
+          rr.id as reimbursementReportId,
+          rr.channel_code as reportChannelCode,
+          rr.submitted_by_account_id as reportSubmittedByAccountId,
           ma.raw_message_id as rawMessageId,
           ma.attachment_type as type,
           ma.local_path as localPath,
@@ -1947,19 +1994,24 @@ export function findAdminReimbursementAttachment(
         FROM message_attachments ma
         INNER JOIN reimbursement_report_sources rrs
           ON rrs.raw_message_id = ma.raw_message_id
+        INNER JOIN reimbursement_reports rr
+          ON rr.id = rrs.reimbursement_report_id
         WHERE ma.id = ?
         LIMIT 1
       `,
     )
     .get(attachmentId) as {
-    id: number;
-    rawMessageId: number;
-    type: string;
-    localPath: string;
-    sha256: string;
-    mimeType?: string | null;
-    createdAt: string;
-  } | undefined;
+      id: number;
+      reimbursementReportId: number;
+      reportChannelCode: string | null;
+      reportSubmittedByAccountId: string | null;
+      rawMessageId: number;
+      type: string;
+      localPath: string;
+      sha256: string;
+      mimeType?: string | null;
+      createdAt: string;
+    } | undefined;
 
   if (!row) {
     return null;
@@ -1967,6 +2019,9 @@ export function findAdminReimbursementAttachment(
 
   return {
     id: row.id,
+    reimbursementReportId: row.reimbursementReportId,
+    reportChannelCode: row.reportChannelCode ?? undefined,
+    reportSubmittedByAccountId: row.reportSubmittedByAccountId ?? undefined,
     rawMessageId: row.rawMessageId,
     type: row.type,
     localPath: row.localPath,

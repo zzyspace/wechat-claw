@@ -494,6 +494,9 @@ test("listAdminReimbursementReports filters by search, partial reporter, categor
     primaryRawMessageId: searchMessage.rawMessageId,
     timeZone: "Asia/Shanghai",
     referenceDateTime: "2026-07-22T01:00:00.000Z",
+    submittedByAccountId: "manager-001",
+    submittedByUsername: "manager",
+    submittedByRole: "manager",
   });
   const reviewMessage = saveRawMessage({
     messageExternalId: "reimbursement-admin-list-review-primary",
@@ -526,6 +529,9 @@ test("listAdminReimbursementReports filters by search, partial reporter, categor
     primaryRawMessageId: reviewMessage.rawMessageId,
     timeZone: "Asia/Shanghai",
     referenceDateTime: "2026-07-23T01:00:00.000Z",
+    submittedByAccountId: "manager-002",
+    submittedByUsername: "manager-two",
+    submittedByRole: "manager",
   });
 
   const filtered = listAdminReimbursementReports({
@@ -576,6 +582,24 @@ test("listAdminReimbursementReports filters by search, partial reporter, categor
   });
 
   assert.equal(noteShouldNotMatchOcr.total, 0);
+
+  const managerScoped = listAdminReimbursementReports({
+    submittedByAccountId: "manager-001",
+    allowedChannelCodes: ["reimbursement_admin_list_test"],
+    limit: 20,
+    offset: 0,
+  });
+  assert.equal(managerScoped.total, 1);
+  assert.equal(managerScoped.items[0]?.id, searchReport.id);
+  assert.equal(managerScoped.items[0]?.submittedByUsername, "manager");
+
+  const wrongChannelScope = listAdminReimbursementReports({
+    submittedByAccountId: "manager-001",
+    allowedChannelCodes: ["reimbursement_other_manager"],
+    limit: 20,
+    offset: 0,
+  });
+  assert.equal(wrongChannelScope.total, 0);
 });
 
 test("getAdminReimbursementReportDetail includes source attachments and receipt deliveries", () => {

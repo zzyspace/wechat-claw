@@ -1368,6 +1368,9 @@
         <div class="hero-heading">
           <h1>报账查看后台</h1>
           <div class="hero-actions">
+            <form method="get" action="/reimbursement/submit">
+              <button class="button-primary" type="submit">批量报账</button>
+            </form>
             <button class="button-primary" id="manualImportOpen" type="button" hidden>手工补录</button>
             <button class="button-primary" id="batchImportOpen" type="button" hidden>批量补录</button>
             <button class="theme-toggle" id="themeToggle" type="button">切换主题</button>
@@ -2888,11 +2891,11 @@
         }
 
         state.canWrite = payload.permissions?.canWrite === true;
+        const roleLabel = ({ admin: "管理员", partner: "合伙人", manager: "店长" })[payload.account?.role]
+          || "账号";
         elements.operationColumnHeader.hidden = !state.canWrite;
         elements.accessPill.hidden = false;
-        elements.accessPill.textContent = state.canWrite
-          ? `管理员 ${payload.account?.username || ""}`.trim()
-          : `只读账号 ${payload.account?.username || ""}`.trim();
+        elements.accessPill.textContent = `${roleLabel} ${payload.account?.username || ""}`.trim();
         elements.manualImportOpen.hidden = !state.canWrite;
         elements.batchImportOpen.hidden = !state.canWrite;
       }
@@ -3167,7 +3170,7 @@
 
       async function deleteReport(reportId) {
         if (!state.canWrite) {
-          setStatus("只读账号无权删除报账记录。", true);
+          setStatus("当前账号无权删除报账记录。", true);
           return;
         }
 
