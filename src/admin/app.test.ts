@@ -16,24 +16,23 @@ test("reimbursement nginx keeps shortcut Bearer auth public and protects admin r
     path.resolve(process.cwd(), "deploy/nginx/reimbursement-admin.locations.conf"),
     "utf8",
   );
-  const shortcutIndex = nginx.indexOf("location = /reimbursement/api/shortcut/reports");
-  const protectedApiIndex = nginx.indexOf("location ^~ /reimbursement/api/");
+  const shortcutIndex = nginx.indexOf("location = /expense/api/shortcut/reports");
+  const protectedApiIndex = nginx.indexOf("location ^~ /expense/api/");
   assert.ok(shortcutIndex >= 0);
   assert.ok(protectedApiIndex > shortcutIndex);
   assert.match(
     nginx,
-    /location \^~ \/reimbursement\/api\/ \{[\s\S]*?admin-auth-reimbursement\.inc;/,
+    /location \^~ \/expense\/api\/ \{[\s\S]*?admin-auth-reimbursement\.inc;/,
   );
   assert.match(
     nginx,
-    /location = \/reimbursement \{[\s\S]*?admin-auth-reimbursement\.inc;/,
+    /location = \/expense \{[\s\S]*?admin-auth-reimbursement\.inc;/,
   );
-  for (const route of ["submit", "submit_fuzzy", "submit_peanut", "submit_fuzzyqz"]) {
-    assert.match(
-      nginx,
-      new RegExp(`location = \\/reimbursement\\/${route} \\{[\\s\\S]*?admin-auth-reimbursement\\.inc;`),
-    );
-  }
+  assert.match(
+    nginx,
+    /location = \/expense\/submit \{[\s\S]*?admin-auth-reimbursement\.inc;/,
+  );
+  assert.doesNotMatch(nginx, /submit_(fuzzy|peanut|fuzzyqz)/);
 });
 
 test("wechat-claw deployment leaves the shared Nginx entry to server-infra", () => {
@@ -52,8 +51,8 @@ test("reimbursement admin exposes a POST logout action", () => {
     path.resolve(process.cwd(), "src/admin/public/admin.html"),
     "utf8",
   );
-  assert.match(html, /<form method="post" action="\/admin-logout">/);
-  assert.match(html, /name="returnTo" value="\/reimbursement"/);
+  assert.match(html, /<form method="post" action="\/logout">/);
+  assert.match(html, /name="returnTo" value="\/expense"/);
 });
 
 const stateDir = fs.mkdtempSync(path.join(os.tmpdir(), "wechat-claw-reimbursement-admin-"));
@@ -209,7 +208,7 @@ function createShortcutTestExtractor(onCall: () => void): ReimbursementExtractor
 
 async function waitForBatchImportTask(baseUrl: string, taskId: string) {
   for (let attempt = 0; attempt < 100; attempt += 1) {
-    const response = await fetch(`${baseUrl}/reimbursement/api/batch-reports/${taskId}`, {
+    const response = await fetch(`${baseUrl}/expense/api/batch-reports/${taskId}`, {
       headers: createAdminAuthHeaders(),
     });
     assert.equal(response.status, 200);
@@ -357,15 +356,19 @@ test("createApp returns 503 on admin routes when credentials are not configured"
   const server = await startServer();
 
   try {
-    const healthResponse = await fetch(`${server.baseUrl}/reimbursement/healthz`);
+    const healthResponse = await fetch(`${server.baseUrl}/expense/healthz`);
     assert.equal(healthResponse.status, 200);
     assert.deepEqual(await healthResponse.json(), { ok: true });
 
-    const pageResponse = await fetch(`${server.baseUrl}/reimbursement`);
+    const legacyHealthResponse = await fetch(`${server.baseUrl}/reimbursement/healthz`);
+    assert.equal(legacyHealthResponse.status, 200);
+    assert.deepEqual(await legacyHealthResponse.json(), { ok: true });
+
+    const pageResponse = await fetch(`${server.baseUrl}/expense`);
     assert.equal(pageResponse.status, 503);
     assert.match(await pageResponse.text(), /尚未配置账号密码/);
 
-    const apiResponse = await fetch(`${server.baseUrl}/reimbursement/api/reports`);
+    const apiResponse = await fetch(`${server.baseUrl}/expense/api/reports`);
     assert.equal(apiResponse.status, 503);
     assert.equal((await apiResponse.json()).success, false);
   } finally {
@@ -381,7 +384,7 @@ test("shortcut reimbursement API requires its dedicated bearer token", async () 
 
   try {
     const response = await fetch(
-      `${unconfiguredServer.baseUrl}/reimbursement/api/shortcut/reports`,
+      `${unconfiguredServer.baseUrl}/expense/api/shortcut/reports`,
       {
         method: "POST",
         headers: {
@@ -404,7 +407,7 @@ test("shortcut reimbursement API requires its dedicated bearer token", async () 
 
   try {
     const response = await fetch(
-      `${configuredServer.baseUrl}/reimbursement/api/shortcut/reports`,
+      `${configuredServer.baseUrl}/expense/api/shortcut/reports`,
       {
         method: "POST",
         headers: {
@@ -439,7 +442,7 @@ test("shortcut reimbursement API recognizes, persists, receipts, and deduplicate
 
   try {
     const firstResponse = await fetch(
-      `${server.baseUrl}/reimbursement/api/shortcut/reports`,
+      `${server.baseUrl}/expense/api/shortcut/reports`,
       {
         method: "POST",
         headers,
@@ -469,7 +472,7 @@ test("shortcut reimbursement API recognizes, persists, receipts, and deduplicate
     assert.equal((extraction?.resultJson as { source?: string }).source, "shortcut_api");
 
     const duplicateResponse = await fetch(
-      `${server.baseUrl}/reimbursement/api/shortcut/reports`,
+      `${server.baseUrl}/expense/api/shortcut/reports`,
       {
         method: "POST",
         headers,
@@ -484,7 +487,7 @@ test("shortcut reimbursement API recognizes, persists, receipts, and deduplicate
     assert.equal(extractorCalls, 1);
 
     const conflictResponse = await fetch(
-      `${server.baseUrl}/reimbursement/api/shortcut/reports`,
+      `${server.baseUrl}/expense/api/shortcut/reports`,
       {
         method: "POST",
         headers,
@@ -530,20 +533,20 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
   const server = await startServer();
 
   try {
-    const unauthorizedPage = await fetch(`${server.baseUrl}/reimbursement`);
+    const unauthorizedPage = await fetch(`${server.baseUrl}/expense`);
     assert.equal(unauthorizedPage.status, 401);
     assert.equal(
       unauthorizedPage.headers.get("www-authenticate"),
       'Basic realm="Wechat Claw Reimbursement Admin", charset="UTF-8"',
     );
 
-    const pageResponse = await fetch(`${server.baseUrl}/reimbursement`, {
+    const pageResponse = await fetch(`${server.baseUrl}/expense`, {
       headers: createAdminAuthHeaders(),
     });
     assert.equal(pageResponse.status, 200);
     const pageHtml = await pageResponse.text();
     assert.match(pageHtml, /报账查看后台/);
-    assert.match(pageHtml, /<form method="get" action="\/reimbursement\/submit">/);
+    assert.match(pageHtml, /<form method="get" action="\/expense\/submit">/);
     assert.match(pageHtml, /<button class="button-primary submit-button" type="submit">/);
     assert.match(pageHtml, /<span>新建报账<\/span>/);
     assert.match(pageHtml, /<h2 id="manualImportModalTitle">手工补录<\/h2>/);
@@ -665,7 +668,7 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     assert.match(pageHtml, /fetch\(buildAuthFetchUrl\(`\$\{BASE_PATH\}\/api\/session`\)/);
     assert.doesNotMatch(pageHtml, /<label for="needsReview">需复核<\/label>/);
 
-    const submissionPageResponse = await fetch(`${server.baseUrl}/reimbursement/submit`, {
+    const submissionPageResponse = await fetch(`${server.baseUrl}/expense/submit`, {
       headers: createAdminAuthHeaders(),
     });
     assert.equal(submissionPageResponse.status, 200);
@@ -674,7 +677,7 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     assert.match(submissionPageHtml, /\.topbar \{[^}]*min-height: 52px;[^}]*padding: 7px 12px;[^}]*border-radius: 13px;/s);
     assert.match(submissionPageHtml, /\.hero \{[^}]*margin: 0 -14px 0;/s);
     assert.match(submissionPageHtml, /<h1>新建报账<\/h1>/);
-    assert.match(submissionPageHtml, /class="link-button button-primary records-button" href="\/reimbursement">/);
+    assert.match(submissionPageHtml, /class="link-button button-primary records-button" href="\/expense">/);
     assert.match(submissionPageHtml, /<span>查看报账记录<\/span>/);
     assert.match(submissionPageHtml, /id="themeIcon" aria-hidden="true">🌙<\/span>/);
     assert.match(submissionPageHtml, /elements\.themeIcon\.textContent = normalized === "dark" \? "☀️" : "🌙"/);
@@ -708,18 +711,23 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     assert.match(submissionPageHtml, /api\/batch-reports\/\$\{encodeURIComponent\(taskId\)\}/);
 
     for (const route of ["submit_fuzzy", "submit_peanut", "submit_fuzzyqz"]) {
-      const response = await fetch(`${server.baseUrl}/reimbursement/${route}`, {
+      const response = await fetch(`${server.baseUrl}/expense/${route}`, {
         redirect: "manual",
         headers: createAdminAuthHeaders(),
       });
-      assert.equal(response.status, 302);
-      assert.equal(response.headers.get("location"), "/reimbursement/submit");
+      assert.equal(response.status, 404);
+
+      const legacyResponse = await fetch(`${server.baseUrl}/reimbursement/${route}`, {
+        redirect: "manual",
+        headers: createAdminAuthHeaders(),
+      });
+      assert.equal(legacyResponse.status, 404);
     }
 
-    const unauthorizedSubmissionPage = await fetch(`${server.baseUrl}/reimbursement/submit`);
+    const unauthorizedSubmissionPage = await fetch(`${server.baseUrl}/expense/submit`);
     assert.equal(unauthorizedSubmissionPage.status, 401);
 
-    const adminSessionResponse = await fetch(`${server.baseUrl}/reimbursement/api/session`, {
+    const adminSessionResponse = await fetch(`${server.baseUrl}/expense/api/session`, {
       headers: createAdminAuthHeaders(),
     });
     assert.equal(adminSessionResponse.status, 200);
@@ -738,7 +746,7 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
       },
     });
 
-    const partnerSessionResponse = await fetch(`${server.baseUrl}/reimbursement/api/session`, {
+    const partnerSessionResponse = await fetch(`${server.baseUrl}/expense/api/session`, {
       headers: createAdminAuthHeaders("partner", "partner-secret-pass"),
     });
     assert.equal(partnerSessionResponse.status, 200);
@@ -758,7 +766,7 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     });
 
     const adminSubmissionOptionsResponse = await fetch(
-      `${server.baseUrl}/reimbursement/api/submissions/submit/options`,
+      `${server.baseUrl}/expense/api/submissions/submit/options`,
       { headers: createAdminAuthHeaders() },
     );
     assert.equal(adminSubmissionOptionsResponse.status, 200);
@@ -774,13 +782,13 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
       { code: "reimbursement_fuzzy_qz_manager", name: "Fuzzy泉州店长报账" },
     ]);
     const legacySubmissionOptionsResponse = await fetch(
-      `${server.baseUrl}/reimbursement/api/submissions/submit_fuzzy/options`,
+      `${server.baseUrl}/expense/api/submissions/submit_fuzzy/options`,
       { headers: createAdminAuthHeaders() },
     );
     assert.equal(legacySubmissionOptionsResponse.status, 404);
 
     const manualImportOptionsResponse = await fetch(
-      `${server.baseUrl}/reimbursement/api/manual-import-options`,
+      `${server.baseUrl}/expense/api/manual-import-options`,
       { headers: createAdminAuthHeaders() },
     );
     assert.equal(manualImportOptionsResponse.status, 200);
@@ -804,7 +812,7 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     manualImportForm.set("note", "后台页面补录");
     manualImportForm.set("sentAt", "2026-08-14T10:30");
     manualImportForm.set("image", new Blob(["manual-receipt-image"], { type: "image/png" }), "receipt.png");
-    const manualImportResponse = await fetch(`${server.baseUrl}/reimbursement/api/reports`, {
+    const manualImportResponse = await fetch(`${server.baseUrl}/expense/api/reports`, {
       method: "POST",
       headers: {
         ...createAdminAuthHeaders(),
@@ -822,7 +830,7 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     assert.equal(manualImportPayload.report.evidenceType, "image+text");
 
     const manualImportDetailResponse = await fetch(
-      `${server.baseUrl}/reimbursement/api/reports/${manualImportPayload.report.id}`,
+      `${server.baseUrl}/expense/api/reports/${manualImportPayload.report.id}`,
       { headers: createAdminAuthHeaders() },
     );
     assert.equal(manualImportDetailResponse.status, 200);
@@ -830,7 +838,7 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     assert.equal(manualImportDetail.sources[0]?.attachments.length, 1);
     assert.equal(manualImportDetail.sources[0]?.attachments[0]?.mimeType, "image/png");
     const manualAttachmentResponse = await fetch(
-      `${server.baseUrl}/reimbursement/api/attachments/${manualImportDetail.sources[0]?.attachments[0]?.id}/content`,
+      `${server.baseUrl}/expense/api/attachments/${manualImportDetail.sources[0]?.attachments[0]?.id}/content`,
       { headers: createAdminAuthHeaders() },
     );
     assert.equal(manualAttachmentResponse.status, 200);
@@ -843,7 +851,7 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     batchImportForm.set("sentAt", "2026-08-17T10:30");
     batchImportForm.append("images", new Blob(["batch-image-one"], { type: "image/png" }), "one.png");
     batchImportForm.append("images", new Blob(["batch-image-two"], { type: "image/jpeg" }), "two.jpg");
-    const batchImportResponse = await fetch(`${server.baseUrl}/reimbursement/api/batch-reports`, {
+    const batchImportResponse = await fetch(`${server.baseUrl}/expense/api/batch-reports`, {
       method: "POST",
       headers: {
         ...createAdminAuthHeaders(),
@@ -865,7 +873,7 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     assert.deepEqual(completedBatchTask.items.map((item: { status: string }) => item.status), ["succeeded", "succeeded"]);
     const batchReports = await Promise.all(
       completedBatchTask.items.map(async (item: { reportId: number }) => {
-        const response = await fetch(`${server.baseUrl}/reimbursement/api/reports/${item.reportId}`, {
+        const response = await fetch(`${server.baseUrl}/expense/api/reports/${item.reportId}`, {
           headers: createAdminAuthHeaders(),
         });
         return (await response.json()).report;
@@ -884,7 +892,7 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
       ["第一张备注", "第二张备注"],
     );
     for (const report of batchReports) {
-      const detailResponse = await fetch(`${server.baseUrl}/reimbursement/api/reports/${report.id}`, {
+      const detailResponse = await fetch(`${server.baseUrl}/expense/api/reports/${report.id}`, {
         headers: createAdminAuthHeaders(),
       });
       const detail = (await detailResponse.json()).report;
@@ -899,7 +907,7 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     submissionForm.set("notesJson", JSON.stringify(["店长页面报账"]));
     submissionForm.append("images", new Blob(["manager-image"], { type: "image/png" }), "manager.png");
     const submissionResponse = await fetch(
-      `${server.baseUrl}/reimbursement/api/submissions/submit/batch-reports`,
+      `${server.baseUrl}/expense/api/submissions/submit/batch-reports`,
       {
         method: "POST",
         headers: createAdminAuthHeaders(),
@@ -912,7 +920,7 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
       (await submissionResponse.json()).task.id,
     );
     const submissionReportResponse = await fetch(
-      `${server.baseUrl}/reimbursement/api/reports/${submissionTask.items[0].reportId}`,
+      `${server.baseUrl}/expense/api/reports/${submissionTask.items[0].reportId}`,
       { headers: createAdminAuthHeaders() },
     );
     const submissionReport = (await submissionReportResponse.json()).report;
@@ -926,7 +934,7 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     wrongStoreSubmissionForm.set("notesJson", JSON.stringify([""]));
     wrongStoreSubmissionForm.append("images", new Blob(["wrong-store"], { type: "image/png" }), "wrong.png");
     const wrongStoreSubmissionResponse = await fetch(
-      `${server.baseUrl}/reimbursement/api/submissions/submit/batch-reports`,
+      `${server.baseUrl}/expense/api/submissions/submit/batch-reports`,
       {
         method: "POST",
         headers: createAdminAuthHeaders("manager", "manager-secret-pass"),
@@ -937,7 +945,7 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     assert.equal((await wrongStoreSubmissionResponse.json()).error.field, "channelCode");
 
     const managerOptionsResponse = await fetch(
-      `${server.baseUrl}/reimbursement/api/submissions/submit/options`,
+      `${server.baseUrl}/expense/api/submissions/submit/options`,
       { headers: createAdminAuthHeaders("manager", "manager-secret-pass") },
     );
     assert.equal(managerOptionsResponse.status, 200);
@@ -947,7 +955,7 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     ]);
 
     const partnerOptionsResponse = await fetch(
-      `${server.baseUrl}/reimbursement/api/submissions/submit/options`,
+      `${server.baseUrl}/expense/api/submissions/submit/options`,
       { headers: createAdminAuthHeaders("partner", "partner-secret-pass") },
     );
     assert.equal(partnerOptionsResponse.status, 200);
@@ -963,7 +971,7 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     managerSubmissionForm.set("notesJson", JSON.stringify(["店长本人报账"]));
     managerSubmissionForm.append("images", new Blob(["manager-own-image"], { type: "image/png" }), "own.png");
     const managerSubmissionResponse = await fetch(
-      `${server.baseUrl}/reimbursement/api/submissions/submit/batch-reports`,
+      `${server.baseUrl}/expense/api/submissions/submit/batch-reports`,
       {
         method: "POST",
         headers: createAdminAuthHeaders("manager", "manager-secret-pass"),
@@ -976,18 +984,18 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
       (await managerSubmissionResponse.json()).task.id,
     );
     const managerTaskResponse = await fetch(
-      `${server.baseUrl}/reimbursement/api/batch-reports/${managerTask.id}`,
+      `${server.baseUrl}/expense/api/batch-reports/${managerTask.id}`,
       { headers: createAdminAuthHeaders("manager", "manager-secret-pass") },
     );
     assert.equal(managerTaskResponse.status, 200);
     const otherManagerTaskResponse = await fetch(
-      `${server.baseUrl}/reimbursement/api/batch-reports/${managerTask.id}`,
+      `${server.baseUrl}/expense/api/batch-reports/${managerTask.id}`,
       { headers: createAdminAuthHeaders("manager-two", "manager-two-secret-pass") },
     );
     assert.equal(otherManagerTaskResponse.status, 404);
     const managerReportId = managerTask.items[0].reportId;
     const managerOwnDetailResponse = await fetch(
-      `${server.baseUrl}/reimbursement/api/reports/${managerReportId}`,
+      `${server.baseUrl}/expense/api/reports/${managerReportId}`,
       { headers: createAdminAuthHeaders("manager", "manager-secret-pass") },
     );
     assert.equal(managerOwnDetailResponse.status, 200);
@@ -996,34 +1004,34 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     assert.equal(managerOwnReport.submittedByAccountId, "manager-001");
     assert.equal(managerOwnReport.submittedByRole, "manager");
     const managerHistoricalDetailResponse = await fetch(
-      `${server.baseUrl}/reimbursement/api/reports/${seeded.reportId}`,
+      `${server.baseUrl}/expense/api/reports/${seeded.reportId}`,
       { headers: createAdminAuthHeaders("manager", "manager-secret-pass") },
     );
     assert.equal(managerHistoricalDetailResponse.status, 404);
     const otherManagerDetailResponse = await fetch(
-      `${server.baseUrl}/reimbursement/api/reports/${managerReportId}`,
+      `${server.baseUrl}/expense/api/reports/${managerReportId}`,
       { headers: createAdminAuthHeaders("manager-two", "manager-two-secret-pass") },
     );
     assert.equal(otherManagerDetailResponse.status, 404);
-    const managerListResponse = await fetch(`${server.baseUrl}/reimbursement/api/reports?limit=1000`, {
+    const managerListResponse = await fetch(`${server.baseUrl}/expense/api/reports?limit=1000`, {
       headers: createAdminAuthHeaders("manager", "manager-secret-pass"),
     });
     const managerList = await managerListResponse.json();
     assert.equal(managerList.total, 1);
     assert.deepEqual(managerList.items.map((item: { id: number }) => item.id), [managerReportId]);
-    const otherManagerListResponse = await fetch(`${server.baseUrl}/reimbursement/api/reports?limit=1000`, {
+    const otherManagerListResponse = await fetch(`${server.baseUrl}/expense/api/reports?limit=1000`, {
       headers: createAdminAuthHeaders("manager-two", "manager-two-secret-pass"),
     });
     assert.equal((await otherManagerListResponse.json()).total, 0);
     const managerAttachmentId = managerOwnReport.sources[0]?.attachments[0]?.id;
     assert.ok(managerAttachmentId);
     const managerAttachmentResponse = await fetch(
-      `${server.baseUrl}/reimbursement/api/attachments/${managerAttachmentId}/content`,
+      `${server.baseUrl}/expense/api/attachments/${managerAttachmentId}/content`,
       { headers: createAdminAuthHeaders("manager", "manager-secret-pass") },
     );
     assert.equal(managerAttachmentResponse.status, 200);
     const otherManagerAttachmentResponse = await fetch(
-      `${server.baseUrl}/reimbursement/api/attachments/${managerAttachmentId}/content`,
+      `${server.baseUrl}/expense/api/attachments/${managerAttachmentId}/content`,
       { headers: createAdminAuthHeaders("manager-two", "manager-two-secret-pass") },
     );
     assert.equal(otherManagerAttachmentResponse.status, 404);
@@ -1034,7 +1042,7 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     partnerForbiddenForm.set("notesJson", JSON.stringify([""]));
     partnerForbiddenForm.append("images", new Blob(["partner-forbidden"], { type: "image/png" }), "forbidden.png");
     const partnerForbiddenResponse = await fetch(
-      `${server.baseUrl}/reimbursement/api/submissions/submit/batch-reports`,
+      `${server.baseUrl}/expense/api/submissions/submit/batch-reports`,
       {
         method: "POST",
         headers: createAdminAuthHeaders("partner", "partner-secret-pass"),
@@ -1050,7 +1058,7 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     partnerSubmissionForm.set("notesJson", JSON.stringify(["合伙人报账"]));
     partnerSubmissionForm.append("images", new Blob(["partner-image"], { type: "image/png" }), "partner.png");
     const partnerSubmissionResponse = await fetch(
-      `${server.baseUrl}/reimbursement/api/submissions/submit/batch-reports`,
+      `${server.baseUrl}/expense/api/submissions/submit/batch-reports`,
       {
         method: "POST",
         headers: createAdminAuthHeaders("partner", "partner-secret-pass"),
@@ -1063,7 +1071,7 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
       (await partnerSubmissionResponse.json()).task.id,
     );
     const partnerReportResponse = await fetch(
-      `${server.baseUrl}/reimbursement/api/reports/${partnerTask.items[0].reportId}`,
+      `${server.baseUrl}/expense/api/reports/${partnerTask.items[0].reportId}`,
       { headers: createAdminAuthHeaders("partner", "partner-secret-pass") },
     );
     const partnerReport = (await partnerReportResponse.json()).report;
@@ -1075,7 +1083,7 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     emptyBatchImportForm.set("channelCode", "reimbursement_admin_test");
     emptyBatchImportForm.set("reporter", "无图片测试人");
     emptyBatchImportForm.set("sentAt", "2026-08-17T10:30");
-    const emptyBatchImportResponse = await fetch(`${server.baseUrl}/reimbursement/api/batch-reports`, {
+    const emptyBatchImportResponse = await fetch(`${server.baseUrl}/expense/api/batch-reports`, {
       method: "POST",
       headers: createAdminAuthHeaders(),
       body: emptyBatchImportForm,
@@ -1095,7 +1103,7 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
         `${index}.png`,
       );
     }
-    const oversizedBatchCountResponse = await fetch(`${server.baseUrl}/reimbursement/api/batch-reports`, {
+    const oversizedBatchCountResponse = await fetch(`${server.baseUrl}/expense/api/batch-reports`, {
       method: "POST",
       headers: createAdminAuthHeaders(),
       body: oversizedBatchCountForm,
@@ -1103,7 +1111,7 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     assert.equal(oversizedBatchCountResponse.status, 400);
     assert.match((await oversizedBatchCountResponse.json()).error.message, /最多添加 20 张/);
 
-    const invalidManualImportResponse = await fetch(`${server.baseUrl}/reimbursement/api/reports`, {
+    const invalidManualImportResponse = await fetch(`${server.baseUrl}/expense/api/reports`, {
       method: "POST",
       headers: {
         ...createAdminAuthHeaders(),
@@ -1128,7 +1136,7 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     invalidImageForm.set("expenseCategory", "food");
     invalidImageForm.set("sentAt", "2026-08-14T10:30");
     invalidImageForm.set("image", new Blob(["not-an-image"], { type: "text/plain" }), "receipt.txt");
-    const invalidImageResponse = await fetch(`${server.baseUrl}/reimbursement/api/reports`, {
+    const invalidImageResponse = await fetch(`${server.baseUrl}/expense/api/reports`, {
       method: "POST",
       headers: {
         ...createAdminAuthHeaders(),
@@ -1139,13 +1147,13 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     assert.equal(invalidImageResponse.status, 400);
     assert.equal((await invalidImageResponse.json()).error.field, "image");
 
-    const guestPageResponse = await fetch(`${server.baseUrl}/reimbursement`, {
+    const guestPageResponse = await fetch(`${server.baseUrl}/expense`, {
       headers: createAdminAuthHeaders("partner", "partner-secret-pass"),
     });
     assert.equal(guestPageResponse.status, 200);
 
     const listResponse = await fetch(
-      `${server.baseUrl}/reimbursement/api/reports?search=%E6%B5%8B%E8%AF%95%E8%8F%9C%E5%9C%BA&reporter=Ry&note=%E6%99%9A%E9%A4%90&limit=20`,
+      `${server.baseUrl}/expense/api/reports?search=%E6%B5%8B%E8%AF%95%E8%8F%9C%E5%9C%BA&reporter=Ry&note=%E6%99%9A%E9%A4%90&limit=20`,
       {
         headers: {
           ...createAdminAuthHeaders(),
@@ -1163,7 +1171,7 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     assert.equal(listPayload.items[0]?.billAttachment?.mimeType, "image/jpeg");
     assert.equal(listPayload.items[0]?.billAttachment?.exists, true);
 
-    const guestListResponse = await fetch(`${server.baseUrl}/reimbursement/api/reports?limit=20`, {
+    const guestListResponse = await fetch(`${server.baseUrl}/expense/api/reports?limit=20`, {
       headers: {
         ...createAdminAuthHeaders("partner", "partner-secret-pass"),
         Accept: "application/json",
@@ -1172,7 +1180,7 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     assert.equal(guestListResponse.status, 200);
     assert.equal((await guestListResponse.json()).success, true);
 
-    const detailResponse = await fetch(`${server.baseUrl}/reimbursement/api/reports/${seeded.reportId}`, {
+    const detailResponse = await fetch(`${server.baseUrl}/expense/api/reports/${seeded.reportId}`, {
       headers: {
         ...createAdminAuthHeaders(),
         Accept: "application/json",
@@ -1185,7 +1193,7 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     assert.equal(detailPayload.report.sources[0]?.attachments.length, 1);
     assert.equal(detailPayload.report.sources[0]?.attachments[0]?.exists, true);
 
-    const guestEditResponse = await fetch(`${server.baseUrl}/reimbursement/api/reports/${seeded.reportId}`, {
+    const guestEditResponse = await fetch(`${server.baseUrl}/expense/api/reports/${seeded.reportId}`, {
       method: "PATCH",
       headers: {
         ...createAdminAuthHeaders("partner", "partner-secret-pass"),
@@ -1199,7 +1207,7 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     });
     assert.equal(guestEditResponse.status, 403);
 
-    const editResponse = await fetch(`${server.baseUrl}/reimbursement/api/reports/${seeded.reportId}`, {
+    const editResponse = await fetch(`${server.baseUrl}/expense/api/reports/${seeded.reportId}`, {
       method: "PATCH",
       headers: {
         ...createAdminAuthHeaders(),
@@ -1223,7 +1231,7 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     assert.equal(editPayload.report.createdAt, detailPayload.report.createdAt);
     assert.notEqual(editPayload.report.updatedAt, detailPayload.report.updatedAt);
 
-    const staleEditResponse = await fetch(`${server.baseUrl}/reimbursement/api/reports/${seeded.reportId}`, {
+    const staleEditResponse = await fetch(`${server.baseUrl}/expense/api/reports/${seeded.reportId}`, {
       method: "PATCH",
       headers: {
         ...createAdminAuthHeaders(),
@@ -1238,7 +1246,7 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     assert.equal(staleEditResponse.status, 409);
     assert.match((await staleEditResponse.json()).error.message, /重新加载/);
 
-    const emptyEditResponse = await fetch(`${server.baseUrl}/reimbursement/api/reports/${seeded.reportId}`, {
+    const emptyEditResponse = await fetch(`${server.baseUrl}/expense/api/reports/${seeded.reportId}`, {
       method: "PATCH",
       headers: {
         ...createAdminAuthHeaders(),
@@ -1252,7 +1260,7 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
 
     assert.ok(seeded.existingAttachmentId);
     const attachmentResponse = await fetch(
-      `${server.baseUrl}/reimbursement/api/attachments/${seeded.existingAttachmentId}/content`,
+      `${server.baseUrl}/expense/api/attachments/${seeded.existingAttachmentId}/content`,
       {
         headers: createAdminAuthHeaders(),
       },
@@ -1263,7 +1271,7 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
 
     assert.ok(seeded.missingAttachmentId);
     const missingAttachmentResponse = await fetch(
-      `${server.baseUrl}/reimbursement/api/attachments/${seeded.missingAttachmentId}/content`,
+      `${server.baseUrl}/expense/api/attachments/${seeded.missingAttachmentId}/content`,
       {
         headers: {
           ...createAdminAuthHeaders(),
@@ -1275,7 +1283,7 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     assert.equal((await missingAttachmentResponse.json()).success, false);
 
     const guestDeleteResponse = await fetch(
-      `${server.baseUrl}/reimbursement/api/reports/${seeded.missingReportId}`,
+      `${server.baseUrl}/expense/api/reports/${seeded.missingReportId}`,
       {
         method: "DELETE",
         headers: {
@@ -1292,7 +1300,7 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
       },
     });
 
-    const guestWriteResponse = await fetch(`${server.baseUrl}/reimbursement/api/reports`, {
+    const guestWriteResponse = await fetch(`${server.baseUrl}/expense/api/reports`, {
       method: "POST",
       headers: {
         ...createAdminAuthHeaders("partner", "partner-secret-pass"),
@@ -1302,7 +1310,7 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     assert.equal(guestWriteResponse.status, 403);
 
     const reportAfterGuestDeleteAttempt = await fetch(
-      `${server.baseUrl}/reimbursement/api/reports/${seeded.missingReportId}`,
+      `${server.baseUrl}/expense/api/reports/${seeded.missingReportId}`,
       {
         headers: {
           ...createAdminAuthHeaders("partner", "partner-secret-pass"),
@@ -1312,7 +1320,7 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     );
     assert.equal(reportAfterGuestDeleteAttempt.status, 200);
 
-    const deleteResponse = await fetch(`${server.baseUrl}/reimbursement/api/reports/${seeded.missingReportId}`, {
+    const deleteResponse = await fetch(`${server.baseUrl}/expense/api/reports/${seeded.missingReportId}`, {
       method: "DELETE",
       headers: {
         ...createAdminAuthHeaders(),
@@ -1325,7 +1333,7 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     assert.equal(deletePayload.id, seeded.missingReportId);
 
     const deletedDetailResponse = await fetch(
-      `${server.baseUrl}/reimbursement/api/reports/${seeded.missingReportId}`,
+      `${server.baseUrl}/expense/api/reports/${seeded.missingReportId}`,
       {
         headers: {
           ...createAdminAuthHeaders(),
@@ -1335,7 +1343,7 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     );
     assert.equal(deletedDetailResponse.status, 404);
 
-    const missingDeleteResponse = await fetch(`${server.baseUrl}/reimbursement/api/reports/999999`, {
+    const missingDeleteResponse = await fetch(`${server.baseUrl}/expense/api/reports/999999`, {
       method: "DELETE",
       headers: {
         ...createAdminAuthHeaders(),

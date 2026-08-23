@@ -1465,7 +1465,7 @@
   <body>
     <div class="page">
       <nav class="topbar" aria-label="报账中心导航">
-        <a class="brand-lockup" href="/reimbursement" aria-label="返回报账中心">
+        <a class="brand-lockup" href="/expense" aria-label="返回报账中心">
           <svg viewBox="0 0 32 32" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
             <rect x="6" y="3.5" width="19" height="25" rx="3" />
             <path d="M11 10h9M11 15h9M11 20h5" />
@@ -1476,8 +1476,8 @@
         </a>
         <div class="topbar-actions">
           <button class="theme-toggle" id="themeToggle" type="button" aria-label="切换到深色模式" aria-pressed="false"><span class="theme-icon" id="themeIcon" aria-hidden="true">🌙</span></button>
-          <form method="post" action="/admin-logout">
-            <input type="hidden" name="returnTo" value="/reimbursement" />
+          <form method="post" action="/logout">
+            <input type="hidden" name="returnTo" value="/expense" />
             <button class="logout-button" type="submit">
               <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M10 4H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h5M15 8l4 4-4 4M19 12H9" />
@@ -1493,7 +1493,7 @@
           <h1>报账查看后台</h1>
           <p>查看已入库的报账记录，按门店、报账人、类别、日期和备注文字筛选，并展开详情查看 OCR、原始消息、附件和回执记录。</p>
           <div class="hero-actions">
-            <form method="get" action="/reimbursement/submit">
+            <form method="get" action="/expense/submit">
               <button class="button-primary submit-button" type="submit">
                 <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <rect x="4" y="2.5" width="14" height="19" rx="2" />
@@ -1822,7 +1822,7 @@
     </div>
 
     <script>
-      const BASE_PATH = "/reimbursement";
+      const BASE_PATH = "/expense";
       const DEFAULT_TIME_ZONE = "Asia/Shanghai";
       const THEME_STORAGE_KEY = "reimbursement-admin-theme";
       const BATCH_TASK_STORAGE_KEY = "reimbursement-admin-active-batch-task";

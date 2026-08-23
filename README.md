@@ -90,7 +90,7 @@ WECHATY_ADMIN_PORT=8788
 WECHATY_ADMIN_USERNAME=
 WECHATY_ADMIN_PASSWORD=
 WECHATY_REIMBURSEMENT_ACCOUNTS_JSON='[{"accountId":"partner-001","username":"partner","password":"replace-with-a-strong-password","role":"partner"},{"accountId":"manager-001","username":"manager","password":"replace-with-another-strong-password","role":"manager","managerStores":["fuzzy","fuzzyqz"]}]'
-WECHATY_ADMIN_PUBLIC_HEALTHZ_URL=https://comeover.cn/reimbursement/healthz
+WECHATY_ADMIN_PUBLIC_HEALTHZ_URL=https://comeover.cn/health/expense
 WECHATY_DEBUG_RECEIVED_ROOM_MESSAGE_ENABLED=false
 WECHATY_SELF_CANARY_ENABLED=false
 WECHATY_SELF_CANARY_TARGET_CONTACT_NAME=文件传输助手
@@ -152,10 +152,10 @@ WECHATY_CHANNELS_JSON=[{"code":"loss_a","enabled":true,"scenario":"loss-report",
 - `WECHATY_MANUAL_REIMBURSEMENT_CONTACT_NAME`: 允许通过私聊或报账群发送“补录报账”结构化命令的联系人昵称；未配置时该能力关闭
 - `WECHATY_ADMIN_HOST`: 报账后台监听地址，默认 `127.0.0.1`
 - `WECHATY_ADMIN_PORT`: 报账后台监听端口，默认 `8788`
-- `WECHATY_ADMIN_USERNAME/WECHATY_ADMIN_PASSWORD`: 报账后台 Basic Auth 账号密码；未配置时 `/reimbursement` 会返回 `503`
+- `WECHATY_ADMIN_USERNAME/WECHATY_ADMIN_PASSWORD`: 报账后台 Basic Auth 账号密码；未配置时 `/expense` 会返回 `503`
 - `WECHATY_REIMBURSEMENT_ACCOUNTS_JSON`: 合伙人和店长账号数组；每个账号需要稳定的 `accountId`。`partner` 可提交基础门店并只读查看全部报账；`manager` 可配置一个或多个 `managerStores`，只能提交并查看该账号自己的店长报账
 - `WECHATY_REIMBURSEMENT_SHORTCUT_API_TOKEN`: 快捷指令单图报账接口的独立 Bearer Token；未配置时该接口返回 `503`
-- `WECHATY_ADMIN_PUBLIC_HEALTHZ_URL`: 仅 deploy 脚本使用；应用发布后校验由 `server-infra` 管理的公网入口，默认 `https://comeover.cn/reimbursement/healthz`
+- `WECHATY_ADMIN_PUBLIC_HEALTHZ_URL`: 仅 deploy 脚本使用；应用发布后校验由 `server-infra` 管理的公网入口，默认 `https://comeover.cn/health/expense`
 - `WECHATY_DEBUG_RECEIVED_ROOM_MESSAGE_ENABLED`: 是否发送 `"[wechat-claw] 已收到群消息"` 这类调试摘要，默认 `false`
 - `WECHATY_SUPPRESS_ROOM_TEXT_DELIVERY`: 临时禁止 bot 向任何群聊发送文字，默认 `false`；开启后私聊和后台处理不受影响，群消息链路自检会暂时停用
 - `WECHATY_CHANNELS_JSON`: 推荐的多群配置入口，支持 `loss-report` 和 `reimbursement` 场景
@@ -419,17 +419,18 @@ npm run admin:dev
 
 访问路径：
 
-- 页面：`/reimbursement`
-- 健康检查：`/reimbursement/healthz`
-- 列表接口：`/reimbursement/api/reports`
-- 快捷指令单图报账接口：`POST /reimbursement/api/shortcut/reports`
+- 页面：`/expense`
+- 统一批量报账入口：`/expense/submit`
+- 健康检查：`/health/expense`
+- 列表接口：`/expense/api/reports`
+- 快捷指令单图报账接口：`POST /expense/api/shortcut/reports`
 
 说明：
 
 - 后台默认监听 `127.0.0.1:8788`
 - 建议只开放给本机，由 Nginx 反代到外网
-- `/reimbursement` 使用 Basic Auth；未配置 `WECHATY_ADMIN_USERNAME/WECHATY_ADMIN_PASSWORD` 时会返回 `503`
-- `/reimbursement/submit` 是统一报账入口；服务端按 `admin`、`partner`、`manager` 角色返回并校验可提交门店，旧店长专属地址会跳转到统一入口
+- `/expense` 使用 Basic Auth；未配置 `WECHATY_ADMIN_USERNAME/WECHATY_ADMIN_PASSWORD` 时会返回 `503`
+- `/expense/submit` 是唯一统一报账入口；服务端按 `admin`、`partner`、`manager` 角色返回并校验可提交门店
 - `WECHATY_ADMIN_GUEST_USERNAME/WECHATY_ADMIN_GUEST_PASSWORD` 已废弃且不会授予登录权限
 - 店长报账以不可编辑的 `submitted_by_account_id` 记录账号所有权；同门店的不同店长互不可见，历史微信群报账因没有该字段暂不向店长展示
 - 修改管理员或角色账号配置后，执行 `sudo systemctl restart wechat-claw-reimbursement-admin.service admin-auth-gateway.service` 使新配置生效
@@ -437,7 +438,7 @@ npm run admin:dev
 - 快捷指令接口会同步调用现有报账模型并写入正式报账链路；成功响应中的 `receipt` 可直接交给“显示结果”动作
 - `deploy/deploy-wechat-claw.sh` 现在会自动：
   - 安装 [deploy/wechat-claw-reimbursement-admin.service](/Users/ryan/DataDisk/Work/AI/wechat-claw/deploy/wechat-claw-reimbursement-admin.service)
-  - 重启并校验 `127.0.0.1:8788/reimbursement/healthz`
+  - 重启并校验 `127.0.0.1:8788/health/expense`
   - 校验 `WECHATY_ADMIN_PUBLIC_HEALTHZ_URL`
 - [deploy/nginx/reimbursement-admin.locations.conf](/Users/ryan/DataDisk/Work/AI/wechat-claw/deploy/nginx/reimbursement-admin.locations.conf) 是迁移前兼容快照；生产 Nginx 路由由独立的 `server-infra` 项目统一发布。业务部署不会写入或 reload Nginx。
 

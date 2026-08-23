@@ -53,7 +53,8 @@ import {
   getAdminSession,
 } from "./auth.js";
 
-const ADMIN_BASE_PATH = "/reimbursement";
+const ADMIN_BASE_PATH = "/expense";
+const LEGACY_ADMIN_BASE_PATH = "/reimbursement";
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 1000;
 const MAX_MANUAL_IMPORT_IMAGE_BYTES = 20 * 1024 * 1024;
@@ -64,7 +65,6 @@ const MAX_SHORTCUT_REPORTER_LENGTH = 100;
 const SHORTCUT_API_PATH = `${ADMIN_BASE_PATH}/api/shortcut/reports`;
 const SHORTCUT_MESSAGE_TYPE = "shortcut_api";
 const IDEMPOTENCY_KEY_PATTERN = /^[\x20-\x7e]{8,256}$/;
-const LEGACY_REIMBURSEMENT_SUBMISSION_PAGES = ["submit_fuzzy", "submit_peanut", "submit_fuzzyqz"];
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
 const defaultStaticDir = path.join(currentDir, "public");
 
@@ -580,9 +580,18 @@ export function createApp(input?: {
   }
 
   app.disable("x-powered-by");
+  app.use((request, _response, next) => {
+    if (
+      request.url === LEGACY_ADMIN_BASE_PATH ||
+      request.url.startsWith(`${LEGACY_ADMIN_BASE_PATH}/`)
+    ) {
+      request.url = `${ADMIN_BASE_PATH}${request.url.slice(LEGACY_ADMIN_BASE_PATH.length)}`;
+    }
+    next();
+  });
   app.use(express.json({ limit: "32kb" }));
 
-  app.get(`${ADMIN_BASE_PATH}/healthz`, (_request, response) => {
+  app.get(["/health/expense", `${ADMIN_BASE_PATH}/healthz`], (_request, response) => {
     response.status(200).json({ ok: true });
   });
 
@@ -593,15 +602,6 @@ export function createApp(input?: {
   app.get([`${ADMIN_BASE_PATH}/submit`, `${ADMIN_BASE_PATH}/submit/`], adminAuth, (_request, response) => {
     response.sendFile(path.join(staticDir, "submit.html"));
   });
-  app.get(
-    LEGACY_REIMBURSEMENT_SUBMISSION_PAGES.flatMap((page) => [
-      `${ADMIN_BASE_PATH}/${page}`,
-      `${ADMIN_BASE_PATH}/${page}/`,
-    ]),
-    adminAuth,
-    (_request, response) => response.redirect(302, `${ADMIN_BASE_PATH}/submit`),
-  );
-
   app.post(
     SHORTCUT_API_PATH,
     shortcutApiAuth,
@@ -1162,6 +1162,7 @@ export function createApp(input?: {
 export {
   ADMIN_BASE_PATH,
   DEFAULT_LIMIT,
+  LEGACY_ADMIN_BASE_PATH,
   MAX_BATCH_IMPORT_IMAGES,
   MAX_LIMIT,
   SHORTCUT_API_PATH,

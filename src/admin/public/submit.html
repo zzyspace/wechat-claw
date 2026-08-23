@@ -448,7 +448,7 @@
   <body>
     <main class="page">
       <nav class="topbar" aria-label="报账中心导航">
-        <a class="brand-lockup" href="/reimbursement" aria-label="返回报账中心">
+        <a class="brand-lockup" href="/expense" aria-label="返回报账中心">
           <svg viewBox="0 0 32 32" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
             <rect x="6" y="3.5" width="19" height="25" rx="3" />
             <path d="M11 10h9M11 15h9M11 20h5" />
@@ -459,8 +459,8 @@
         </a>
         <div class="topbar-actions">
           <button class="theme-toggle" id="themeToggle" type="button" aria-label="切换到深色模式" aria-pressed="false"><span class="theme-icon" id="themeIcon" aria-hidden="true">🌙</span></button>
-          <form method="post" action="/admin-logout">
-            <input id="logoutReturnTo" type="hidden" name="returnTo" value="/reimbursement/submit" />
+          <form method="post" action="/logout">
+            <input id="logoutReturnTo" type="hidden" name="returnTo" value="/expense/submit" />
             <button class="logout-button" type="submit">
               <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M10 4H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h5M15 8l4 4-4 4M19 12H9" />
@@ -475,7 +475,7 @@
         <div class="hero-copy">
           <h1>新建报账</h1>
           <p>上传多张票据，系统自动识别并<br />生成独立报账记录</p>
-          <a class="link-button button-primary records-button" href="/reimbursement">
+          <a class="link-button button-primary records-button" href="/expense">
             <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <rect x="4" y="2.5" width="14" height="19" rx="2" />
               <path d="M8 8h6M8 12h6M8 16h3" />
@@ -560,7 +560,7 @@
     </main>
 
     <script>
-      const BASE_PATH = "/reimbursement";
+      const BASE_PATH = "/expense";
       const SUBMISSION_PAGE = "submit";
       const TASK_STORAGE_KEY = "reimbursement-active-submission-task:submit";
       const THEME_STORAGE_KEY = "reimbursement-admin-theme";

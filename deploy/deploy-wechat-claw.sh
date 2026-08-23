@@ -109,8 +109,8 @@ ADMIN_HEALTHZ_HOST="${ADMIN_HOST}"
 if [[ "${ADMIN_HEALTHZ_HOST}" == "0.0.0.0" ]]; then
   ADMIN_HEALTHZ_HOST="127.0.0.1"
 fi
-ADMIN_HEALTHZ_NODE_URL="http://${ADMIN_HEALTHZ_HOST}:${ADMIN_PORT}/reimbursement/healthz"
-PUBLIC_WEB_HEALTHZ_URL="${WECHATY_ADMIN_PUBLIC_HEALTHZ_URL:-${WECHATY_ADMIN_NGINX_HEALTHZ_URL:-https://comeover.cn/reimbursement/healthz}}"
+ADMIN_HEALTHZ_NODE_URL="http://${ADMIN_HEALTHZ_HOST}:${ADMIN_PORT}/health/expense"
+PUBLIC_WEB_HEALTHZ_URL="${WECHATY_ADMIN_PUBLIC_HEALTHZ_URL:-${WECHATY_ADMIN_NGINX_HEALTHZ_URL:-https://comeover.cn/health/expense}}"
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 service_source="${script_dir}/wechat-claw.service"
