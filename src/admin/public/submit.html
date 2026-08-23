@@ -99,7 +99,6 @@
       }
 
       .theme-toggle {
-        position: relative;
         width: 42px;
         min-width: 42px;
         padding: 0;
@@ -108,32 +107,14 @@
         background: var(--surface-muted);
       }
 
-      .theme-toggle::before {
-        width: 17px;
-        height: 17px;
-        border: 2px solid currentColor;
-        border-radius: 50%;
-        content: "";
-        transform: translate(2px, -1px);
-      }
-
-      :root:not([data-theme="dark"]) .theme-toggle::after {
-        position: absolute;
-        width: 16px;
-        height: 16px;
-        border-radius: 50%;
-        background: var(--surface);
-        content: "";
-        transform: translate(6px, -5px);
-      }
-
-      :root[data-theme="dark"] .theme-toggle::before {
+      .theme-icon {
         display: grid;
         place-items: center;
-        border: 0;
-        content: "☀";
-        font-size: 21px;
-        transform: none;
+        width: 24px;
+        height: 24px;
+        font-family: "Apple Color Emoji", "Segoe UI Emoji", sans-serif;
+        font-size: 20px;
+        line-height: 1;
       }
 
       .page {
@@ -183,10 +164,10 @@
       .hero {
         position: relative;
         display: grid;
-        min-height: 430px;
+        min-height: 215px;
         align-items: center;
         margin: -20px -14px 0;
-        padding: 68px 48px 42px;
+        padding: 18px 48px 10px;
         overflow: hidden;
       }
 
@@ -194,9 +175,7 @@
         position: absolute;
         inset: 0;
         z-index: -1;
-        background:
-          radial-gradient(circle at 83% 42%, rgba(104, 181, 255, 0.26), transparent 28%),
-          radial-gradient(circle at 28% 38%, rgba(207, 231, 255, 0.82), transparent 43%);
+        background: radial-gradient(circle at 83% 42%, rgba(104, 181, 255, 0.26), transparent 28%);
         content: "";
       }
 
@@ -207,21 +186,21 @@
       }
 
       h1 {
-        margin: 0 0 22px;
-        font-size: clamp(34px, 6vw, 50px);
+        margin: 0 0 10px;
+        font-size: clamp(34px, 5vw, 44px);
         line-height: 1.08;
         letter-spacing: -0.04em;
       }
 
       .hero p {
-        margin: 0 0 24px;
+        margin: 0 0 12px;
         color: var(--ink-soft);
-        font-size: 17px;
-        line-height: 1.75;
+        font-size: 15px;
+        line-height: 1.55;
       }
 
       .records-button {
-        min-height: 52px;
+        min-height: 44px;
         gap: 10px;
         padding: 0 20px;
         border: 0;
@@ -234,8 +213,8 @@
 
       .hero-art {
         position: absolute;
-        right: 30px;
-        width: min(46%, 390px);
+        right: 48px;
+        width: min(34%, 240px);
         filter: drop-shadow(0 22px 23px rgba(40, 100, 175, 0.18));
       }
 
@@ -429,6 +408,17 @@
       }
 
       @media (max-width: 680px) {
+        @supports (-webkit-touch-callout: none) {
+          .field input[type="datetime-local"] {
+            padding-inline: 0;
+          }
+
+          .field input[type="datetime-local"]::-webkit-date-and-time-value {
+            padding-inline-start: 14px;
+            text-align: left;
+          }
+        }
+
         .page { width: min(100% - 16px, 920px); padding-top: 8px; }
         .topbar { min-height: 52px; padding: 7px 12px; border-radius: 13px; }
         .brand-lockup { gap: 8px; font-size: 15px; }
@@ -465,7 +455,7 @@
           <span>报账中心</span>
         </a>
         <div class="topbar-actions">
-          <button class="theme-toggle" id="themeToggle" type="button" aria-label="切换到深色模式" aria-pressed="false"></button>
+          <button class="theme-toggle" id="themeToggle" type="button" aria-label="切换到深色模式" aria-pressed="false"><span class="theme-icon" id="themeIcon" aria-hidden="true">🌙</span></button>
           <form method="post" action="/admin-logout">
             <input id="logoutReturnTo" type="hidden" name="returnTo" value="/reimbursement/submit" />
             <button class="logout-button" type="submit">
@@ -602,6 +592,7 @@
         resetButton: document.getElementById("resetButton"),
         submitButton: document.getElementById("submitButton"),
         themeToggle: document.getElementById("themeToggle"),
+        themeIcon: document.getElementById("themeIcon"),
         logoutReturnTo: document.getElementById("logoutReturnTo"),
       };
 
@@ -961,6 +952,7 @@
         const normalized = theme === "dark" ? "dark" : "light";
         document.documentElement.dataset.theme = normalized;
         document.documentElement.style.colorScheme = normalized;
+        elements.themeIcon.textContent = normalized === "dark" ? "☀️" : "🌙";
         elements.themeToggle.setAttribute("aria-label", normalized === "dark" ? "切换到浅色模式" : "切换到深色模式");
         elements.themeToggle.setAttribute("aria-pressed", String(normalized === "dark"));
         if (persist) {

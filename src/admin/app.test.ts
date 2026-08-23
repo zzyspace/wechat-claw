@@ -666,8 +666,11 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     assert.match(submissionPageHtml, /<h1>新建报账<\/h1>/);
     assert.match(submissionPageHtml, /class="link-button button-primary records-button" href="\/reimbursement">/);
     assert.match(submissionPageHtml, /<span>查看报账记录<\/span>/);
-    assert.match(submissionPageHtml, /class="theme-toggle" id="themeToggle"[^>]*><\/button>/);
+    assert.match(submissionPageHtml, /id="themeIcon" aria-hidden="true">🌙<\/span>/);
+    assert.match(submissionPageHtml, /elements\.themeIcon\.textContent = normalized === "dark" \? "☀️" : "🌙"/);
     assert.match(submissionPageHtml, /<svg class="hero-art"/);
+    assert.match(submissionPageHtml, /\.field input\[type="datetime-local"\] \{\s*padding-inline: 0;/);
+    assert.match(submissionPageHtml, /input\[type="datetime-local"\]::-webkit-date-and-time-value \{\s*padding-inline-start: 14px;\s*text-align: left;/);
     assert.match(submissionPageHtml, /id="reporter" type="text" readonly aria-readonly="true"/);
     assert.match(submissionPageHtml, /id="submitButton" type="submit">确认提交/);
     assert.match(submissionPageHtml, /function uploadSubmission/);
