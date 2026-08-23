@@ -105,10 +105,10 @@
         display: flex;
         align-items: center;
         justify-content: space-between;
-        min-height: 70px;
-        padding: 10px 18px;
+        min-height: 52px;
+        padding: 7px 12px;
         border: 1px solid var(--line);
-        border-radius: 20px;
+        border-radius: 13px;
         background: var(--surface);
         box-shadow: 0 12px 32px rgba(30, 70, 120, 0.08);
         backdrop-filter: blur(20px);
@@ -117,32 +117,32 @@
       .brand-lockup {
         display: inline-flex;
         align-items: center;
-        gap: 12px;
+        gap: 8px;
         color: var(--ink);
-        font-size: 20px;
+        font-size: 15px;
         font-weight: 700;
         text-decoration: none;
       }
 
-      .brand-lockup svg { width: 28px; height: 28px; color: var(--brand); }
+      .brand-lockup svg { width: 22px; height: 22px; color: var(--brand); }
 
       .topbar-actions {
         display: flex;
         align-items: center;
-        gap: 10px;
+        gap: 6px;
       }
 
       .topbar-actions form { margin: 0; }
-      .topbar-actions button { min-height: 42px; }
+      .topbar-actions button { min-height: 36px; border-radius: 10px; }
 
       .theme-toggle {
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        width: 42px;
-        min-width: 42px;
+        width: 36px;
+        min-width: 36px;
         padding: 0;
-        flex: 0 0 42px;
+        flex: 0 0 36px;
         background: var(--surface-muted);
         border-color: transparent;
       }
@@ -160,19 +160,21 @@
       .logout-button {
         display: inline-flex;
         align-items: center;
-        gap: 8px;
+        gap: 6px;
+        padding: 0 9px;
         border-color: transparent;
         background: var(--surface-muted);
+        font-size: 14px;
         white-space: nowrap;
       }
 
-      .logout-button svg { width: 20px; height: 20px; }
+      .logout-button svg { width: 18px; height: 18px; }
 
       .hero {
         display: grid;
         align-content: center;
         min-height: 215px;
-        margin: -20px -14px 0;
+        margin: 0 -14px 0;
         padding: 24px 48px 18px;
         overflow: hidden;
       }
@@ -545,6 +547,22 @@
         min-width: 0;
         background: var(--surface-input);
         color: var(--ink);
+      }
+
+      .controls-grid .field select {
+        height: 46px;
+        padding-right: 42px;
+        appearance: none;
+        -webkit-appearance: none;
+        background-image:
+          linear-gradient(45deg, transparent 50%, var(--ink-soft) 50%),
+          linear-gradient(135deg, var(--ink-soft) 50%, transparent 50%);
+        background-position:
+          calc(100% - 18px) 50%,
+          calc(100% - 13px) 50%;
+        background-repeat: no-repeat;
+        background-size: 5px 5px;
+        line-height: normal;
       }
 
       .field textarea {

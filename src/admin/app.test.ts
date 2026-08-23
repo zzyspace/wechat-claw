@@ -615,6 +615,8 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     assert.match(pageHtml, /<th>金额<\/th>\s*<th>类别<\/th>\s*<th>备注<\/th>/);
     assert.match(pageHtml, /<meta name="color-scheme" content="light dark"/);
     assert.match(pageHtml, /<nav class="topbar" aria-label="报账中心导航">/);
+    assert.match(pageHtml, /\.topbar \{[^}]*min-height: 52px;[^}]*padding: 7px 12px;[^}]*border-radius: 13px;/s);
+    assert.match(pageHtml, /\.hero \{[^}]*margin: 0 -14px 0;/s);
     assert.match(pageHtml, /<span>报账中心<\/span>/);
     assert.match(pageHtml, /id="themeIcon" aria-hidden="true">🌙<\/span>/);
     assert.match(pageHtml, /elements\.themeIcon\.textContent = normalizedTheme === "dark" \? "☀️" : "🌙"/);
@@ -628,6 +630,8 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     assert.match(pageHtml, /placeholder="支持部分匹配，如 补票 \/ 平账"/);
     assert.match(pageHtml, /\.field \{[^}]*min-width: 0;/s);
     assert.match(pageHtml, /\.field input,\s*\.field select,\s*\.field textarea \{[^}]*min-width: 0;/s);
+    assert.match(pageHtml, /\.controls-grid \.field select \{[^}]*height: 46px;[^}]*-webkit-appearance: none;/s);
+    assert.match(pageHtml, /background-position:\s*calc\(100% - 18px\) 50%,\s*calc\(100% - 13px\) 50%;/);
     assert.match(pageHtml, /@supports \(-webkit-touch-callout: none\)/);
     assert.match(pageHtml, /\.field input\[type="date"\] \{\s*padding-inline: 0;/);
     assert.match(pageHtml, /::-webkit-date-and-time-value \{\s*padding-inline-start: 14px;/);
@@ -667,6 +671,8 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     assert.equal(submissionPageResponse.status, 200);
     const submissionPageHtml = await submissionPageResponse.text();
     assert.match(submissionPageHtml, /<nav class="topbar" aria-label="报账中心导航">/);
+    assert.match(submissionPageHtml, /\.topbar \{[^}]*min-height: 52px;[^}]*padding: 7px 12px;[^}]*border-radius: 13px;/s);
+    assert.match(submissionPageHtml, /\.hero \{[^}]*margin: 0 -14px 0;/s);
     assert.match(submissionPageHtml, /<h1>新建报账<\/h1>/);
     assert.match(submissionPageHtml, /class="link-button button-primary records-button" href="\/reimbursement">/);
     assert.match(submissionPageHtml, /<span>查看报账记录<\/span>/);
