@@ -544,7 +544,8 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     const pageHtml = await pageResponse.text();
     assert.match(pageHtml, /报账查看后台/);
     assert.match(pageHtml, /<form method="get" action="\/reimbursement\/submit">/);
-    assert.match(pageHtml, /<button class="button-primary" type="submit">提交报账<\/button>/);
+    assert.match(pageHtml, /<button class="button-primary submit-button" type="submit">/);
+    assert.match(pageHtml, /<span>新建报账<\/span>/);
     assert.match(pageHtml, /<h2 id="manualImportModalTitle">手工补录<\/h2>/);
     assert.match(pageHtml, /id="manualImportOpen"[^>]*hidden>手工补录<\/button>/);
     assert.match(pageHtml, /id="manualImportModal" hidden/);
@@ -613,9 +614,12 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     assert.match(pageHtml, /报账 #\$\{item\.id\} 附件预览 \(\$\{previewAmount\} \| \$\{previewCategory\}\)/);
     assert.match(pageHtml, /<th>金额<\/th>\s*<th>类别<\/th>\s*<th>备注<\/th>/);
     assert.match(pageHtml, /<meta name="color-scheme" content="light dark"/);
-    assert.match(pageHtml, /id="themeToggle"/);
-    assert.match(pageHtml, /id="themeToggle"[^>]*>☾<\/button>/);
-    assert.match(pageHtml, /elements\.themeToggle\.textContent = normalizedTheme === "dark" \? "☀" : "☾"/);
+    assert.match(pageHtml, /<nav class="topbar" aria-label="报账中心导航">/);
+    assert.match(pageHtml, /<span>报账中心<\/span>/);
+    assert.match(pageHtml, /id="themeIcon" aria-hidden="true">🌙<\/span>/);
+    assert.match(pageHtml, /elements\.themeIcon\.textContent = normalizedTheme === "dark" \? "☀️" : "🌙"/);
+    assert.match(pageHtml, /class="button-primary submit-button" type="submit"/);
+    assert.doesNotMatch(pageHtml, /class="hero-art"/);
     assert.match(pageHtml, /:root\[data-theme="dark"\]/);
     assert.match(pageHtml, /window\.localStorage\.setItem\(THEME_STORAGE_KEY, normalizedTheme\)/);
     assert.match(pageHtml, /systemThemePreference\.addEventListener\("change"/);

@@ -96,20 +96,105 @@
       .page {
         width: min(1420px, calc(100vw - 28px));
         margin: 0 auto;
-        padding: 28px 0 48px;
+        padding: 14px 0 48px;
       }
 
-      .hero {
-        display: grid;
-        gap: 14px;
-        margin-bottom: 18px;
-      }
-
-      .hero-heading {
+      .topbar {
+        position: relative;
+        z-index: 2;
         display: flex;
         align-items: center;
         justify-content: space-between;
-        gap: 18px;
+        min-height: 70px;
+        padding: 10px 18px;
+        border: 1px solid var(--line);
+        border-radius: 20px;
+        background: var(--surface);
+        box-shadow: 0 12px 32px rgba(30, 70, 120, 0.08);
+        backdrop-filter: blur(20px);
+      }
+
+      .brand-lockup {
+        display: inline-flex;
+        align-items: center;
+        gap: 12px;
+        color: var(--ink);
+        font-size: 20px;
+        font-weight: 700;
+        text-decoration: none;
+      }
+
+      .brand-lockup svg { width: 28px; height: 28px; color: var(--brand); }
+
+      .topbar-actions {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .topbar-actions form { margin: 0; }
+      .topbar-actions button { min-height: 42px; }
+
+      .theme-toggle {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 42px;
+        min-width: 42px;
+        padding: 0;
+        flex: 0 0 42px;
+        background: var(--surface-muted);
+        border-color: transparent;
+      }
+
+      .theme-icon {
+        display: grid;
+        place-items: center;
+        width: 24px;
+        height: 24px;
+        font-family: "Apple Color Emoji", "Segoe UI Emoji", sans-serif;
+        font-size: 20px;
+        line-height: 1;
+      }
+
+      .logout-button {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        border-color: transparent;
+        background: var(--surface-muted);
+        white-space: nowrap;
+      }
+
+      .logout-button svg { width: 20px; height: 20px; }
+
+      .hero {
+        display: grid;
+        align-content: center;
+        min-height: 215px;
+        margin: -20px -14px 0;
+        padding: 24px 48px 18px;
+        overflow: hidden;
+      }
+
+      .hero-copy {
+        display: grid;
+        justify-items: start;
+      }
+
+      h1 {
+        margin: 0 0 10px;
+        font-size: clamp(34px, 5vw, 44px);
+        line-height: 1.08;
+        letter-spacing: -0.05em;
+      }
+
+      .hero p {
+        margin: 0 0 14px;
+        max-width: 760px;
+        color: var(--ink-soft);
+        font-size: 15px;
+        line-height: 1.55;
       }
 
       .hero-actions {
@@ -117,54 +202,21 @@
         align-items: center;
         gap: 10px;
         flex-wrap: wrap;
-        justify-content: flex-end;
       }
 
-      .hero-actions form {
-        margin: 0;
-      }
+      .hero-actions form { margin: 0; }
+      .hero-actions button { min-height: 44px; }
 
-      .theme-toggle {
-        flex: 0 0 auto;
-        min-height: 40px;
-        padding: 0 14px;
-        background: var(--surface-muted);
-        border-color: var(--eyebrow-border);
-      }
-
-      #themeToggle {
-        width: 40px;
-        padding: 0;
-        font-size: 20px;
-        line-height: 1;
-      }
-
-      .eyebrow {
+      .submit-button {
         display: inline-flex;
-        width: fit-content;
-        padding: 8px 12px;
-        border-radius: 999px;
-        background: var(--surface-muted);
-        border: 1px solid var(--eyebrow-border);
-        color: var(--ink-soft);
-        font-size: 12px;
-        font-weight: 700;
-        letter-spacing: 0.04em;
+        align-items: center;
+        gap: 9px;
+        padding-inline: 18px;
+        box-shadow: 0 12px 26px rgba(0, 122, 255, 0.18);
       }
 
-      h1 {
-        margin: 0;
-        font-size: clamp(30px, 4vw, 46px);
-        line-height: 0.98;
-        letter-spacing: -0.05em;
-      }
-
-      .hero p {
-        margin: 0;
-        max-width: 760px;
-        color: var(--ink-soft);
-        line-height: 1.7;
-      }
+      .submit-button svg { width: 20px; height: 20px; }
+      .submit-button .chevron { width: 16px; margin-left: 2px; }
 
       .panel {
         background: var(--surface);
@@ -1301,8 +1353,22 @@
       @media (max-width: 620px) {
         .page {
           width: min(100vw - 18px, 100%);
-          padding-top: 18px;
+          padding-top: 8px;
         }
+
+        .topbar { min-height: 52px; padding: 7px 12px; border-radius: 13px; }
+        .brand-lockup { gap: 8px; font-size: 15px; }
+        .brand-lockup svg { width: 22px; height: 22px; }
+        .topbar-actions { gap: 6px; }
+        .topbar-actions button { min-height: 36px; border-radius: 10px; }
+        .theme-toggle { width: 36px; min-width: 36px; flex-basis: 36px; }
+        .logout-button { gap: 6px; padding: 0 9px; font-size: 14px; }
+        .logout-button svg { width: 18px; height: 18px; }
+        .hero { min-height: 238px; margin: -10px -9px 0; padding: 39px 23px 24px; }
+        h1 { margin-bottom: 14px; font-size: clamp(29px, 8.5vw, 38px); }
+        .hero p { margin-bottom: 18px; font-size: 13px; line-height: 1.75; }
+        .hero-actions button { min-height: 40px; border-radius: 10px; font-size: 14px; }
+        .submit-button { padding-inline: 13px; }
 
         @supports (-webkit-touch-callout: none) {
           .field input[type="date"] {
@@ -1370,25 +1436,52 @@
   </head>
   <body>
     <div class="page">
-      <div class="hero">
-        <span class="eyebrow">WECHAT CLAW / REIMBURSEMENT</span>
-        <div class="hero-heading">
+      <nav class="topbar" aria-label="报账中心导航">
+        <a class="brand-lockup" href="/reimbursement" aria-label="返回报账中心">
+          <svg viewBox="0 0 32 32" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="6" y="3.5" width="19" height="25" rx="3" />
+            <path d="M11 10h9M11 15h9M11 20h5" />
+            <circle cx="23.5" cy="23.5" r="4" fill="var(--surface)" />
+            <path d="M23.5 21.5v4M21.5 23.5h4" />
+          </svg>
+          <span>报账中心</span>
+        </a>
+        <div class="topbar-actions">
+          <button class="theme-toggle" id="themeToggle" type="button" aria-label="切换到深色模式" aria-pressed="false"><span class="theme-icon" id="themeIcon" aria-hidden="true">🌙</span></button>
+          <form method="post" action="/admin-logout">
+            <input type="hidden" name="returnTo" value="/reimbursement" />
+            <button class="logout-button" type="submit">
+              <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M10 4H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h5M15 8l4 4-4 4M19 12H9" />
+              </svg>
+              <span>退出登录</span>
+            </button>
+          </form>
+        </div>
+      </nav>
+
+      <header class="hero">
+        <div class="hero-copy">
           <h1>报账查看后台</h1>
+          <p>查看已入库的报账记录，按门店、报账人、类别、日期和备注文字筛选，并展开详情查看 OCR、原始消息、附件和回执记录。</p>
           <div class="hero-actions">
             <form method="get" action="/reimbursement/submit">
-              <button class="button-primary" type="submit">提交报账</button>
+              <button class="button-primary submit-button" type="submit">
+                <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="4" y="2.5" width="14" height="19" rx="2" />
+                  <path d="M8 8h6M8 12h6M8 16h3" />
+                  <circle cx="18" cy="18" r="3" fill="var(--brand)" />
+                  <path d="M18 16.5v3M16.5 18h3" />
+                </svg>
+                <span>新建报账</span>
+                <svg class="chevron" viewBox="0 0 20 20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m7 4 6 6-6 6" /></svg>
+              </button>
             </form>
             <button class="button-primary" id="manualImportOpen" type="button" hidden>手工补录</button>
             <button class="button-primary" id="batchImportOpen" type="button" hidden>批量补录</button>
-            <button class="theme-toggle" id="themeToggle" type="button" aria-label="切换到深色模式" aria-pressed="false">☾</button>
-            <form method="post" action="/admin-logout">
-              <input type="hidden" name="returnTo" value="/reimbursement" />
-              <button class="theme-toggle" type="submit">退出登录</button>
-            </form>
           </div>
         </div>
-        <p>查看已入库的报账记录，按门店、报账人、类别、日期和备注文字筛选，并展开详情查看 OCR、原始消息、附件和回执记录。</p>
-      </div>
+      </header>
 
       <div class="panel controls">
         <form id="filters">
@@ -1782,6 +1875,7 @@
         batchImportCancel: document.getElementById("batchImportCancel"),
         batchImportStatus: document.getElementById("batchImportStatus"),
         themeToggle: document.getElementById("themeToggle"),
+        themeIcon: document.getElementById("themeIcon"),
         resetFilters: document.getElementById("resetFilters"),
         totalPill: document.getElementById("totalPill"),
         pagePill: document.getElementById("pagePill"),
@@ -1834,7 +1928,7 @@
         const normalizedTheme = theme === "dark" ? "dark" : "light";
         document.documentElement.dataset.theme = normalizedTheme;
         document.documentElement.style.colorScheme = normalizedTheme;
-        elements.themeToggle.textContent = normalizedTheme === "dark" ? "☀" : "☾";
+        elements.themeIcon.textContent = normalizedTheme === "dark" ? "☀️" : "🌙";
         elements.themeToggle.setAttribute("aria-label", normalizedTheme === "dark" ? "切换到浅色模式" : "切换到深色模式");
         elements.themeToggle.setAttribute("aria-pressed", String(normalizedTheme === "dark"));
 
