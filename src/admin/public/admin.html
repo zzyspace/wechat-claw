@@ -1389,11 +1389,21 @@
         .submit-button { padding-inline: 13px; }
 
         @supports (-webkit-touch-callout: none) {
-          .field input[type="date"] {
+          #createdDateFrom,
+          #createdDateTo {
+            height: 46px;
+            min-height: 46px;
+            max-height: 46px;
             padding-inline: 0;
+            line-height: normal;
           }
 
-          .field input[type="date"]::-webkit-date-and-time-value {
+          #createdDateFrom::-webkit-date-and-time-value,
+          #createdDateTo::-webkit-date-and-time-value {
+            display: flex;
+            align-items: center;
+            height: 44px;
+            min-height: 44px;
             padding-inline-start: 14px;
             text-align: left;
           }

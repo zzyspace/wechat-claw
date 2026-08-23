@@ -633,8 +633,8 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     assert.match(pageHtml, /\.controls-grid \.field select \{[^}]*height: 46px;[^}]*-webkit-appearance: none;/s);
     assert.match(pageHtml, /background-position:\s*calc\(100% - 18px\) 50%,\s*calc\(100% - 13px\) 50%;/);
     assert.match(pageHtml, /@supports \(-webkit-touch-callout: none\)/);
-    assert.match(pageHtml, /\.field input\[type="date"\] \{\s*padding-inline: 0;/);
-    assert.match(pageHtml, /::-webkit-date-and-time-value \{\s*padding-inline-start: 14px;/);
+    assert.match(pageHtml, /#createdDateFrom,\s*#createdDateTo \{\s*height: 46px;\s*min-height: 46px;\s*max-height: 46px;/);
+    assert.match(pageHtml, /#createdDateFrom::-webkit-date-and-time-value,\s*#createdDateTo::-webkit-date-and-time-value \{\s*display: flex;\s*align-items: center;\s*height: 44px;/);
     assert.match(pageHtml, /renderRemarkContent\(item\.note, "-"\)/);
     assert.match(pageHtml, /tag note-pill/);
     assert.match(pageHtml, /function hasSelectedTextWithin\(element\)/);
