@@ -627,6 +627,12 @@ export function createApp(input?: {
           maxLength: MAX_SHORTCUT_REPORTER_LENGTH,
           required: true,
         });
+        const submittedBy = (config.reimbursementAccounts ?? []).find(
+          (account) =>
+            account.role === "manager" &&
+            account.username === reporter &&
+            getAllowedSubmissionChannelCodes(account).includes(channel.code),
+        );
         const note = parseShortcutText(request.body?.note, {
           field: "note",
           label: "备注",
@@ -694,6 +700,9 @@ export function createApp(input?: {
             reporter,
             sentAt,
             source: "shortcut_api",
+            submittedByAccountId: submittedBy?.accountId,
+            submittedByUsername: submittedBy?.username,
+            submittedByRole: submittedBy?.role,
             timeZone: config.timeZone,
           },
           input?.reimbursementExtractor,

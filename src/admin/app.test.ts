@@ -159,12 +159,13 @@ async function startServer(reimbursementExtractor?: ReimbursementExtractor) {
 }
 
 function createShortcutForm(input?: {
+  channelCode?: string;
   image?: string;
   note?: string;
   reporter?: string;
 }) {
   const form = new FormData();
-  form.set("channelCode", "reimbursement_admin_test");
+  form.set("channelCode", input?.channelCode ?? "reimbursement_admin_test");
   form.set("reporter", input?.reporter ?? "张三");
   form.set("note", input?.note ?? "午餐采购");
   form.set(
@@ -497,6 +498,86 @@ test("shortcut reimbursement API recognizes, persists, receipts, and deduplicate
     assert.equal(conflictResponse.status, 409);
     assert.match((await conflictResponse.json()).error.message, /另一份报账内容/);
     assert.equal(extractorCalls, 1);
+  } finally {
+    await server.close();
+  }
+});
+
+test("shortcut reimbursement API attributes matching manager uploads for manager visibility", async () => {
+  applyEnv({
+    WECHATY_ADMIN_USERNAME: "admin",
+    WECHATY_ADMIN_PASSWORD: "secret-pass",
+    WECHATY_REIMBURSEMENT_ACCOUNTS_JSON: JSON.stringify([
+      {
+        accountId: "shortcut-manager-001",
+        username: "shortcut-manager",
+        password: "manager-secret-pass",
+        role: "manager",
+        managerStores: ["fuzzy"],
+      },
+    ]),
+    WECHATY_REIMBURSEMENT_SHORTCUT_API_TOKEN: "shortcut-secret",
+  });
+  const server = await startServer(createShortcutTestExtractor(() => {}));
+
+  try {
+    const response = await fetch(`${server.baseUrl}/expense/api/shortcut/reports`, {
+      method: "POST",
+      headers: {
+        Authorization: "Bearer shortcut-secret",
+        "Idempotency-Key": "shortcut-manager-visible-0001",
+      },
+      body: createShortcutForm({
+        channelCode: "reimbursement_fuzzy_manager",
+        image: "manager-shortcut-image",
+        reporter: "shortcut-manager",
+      }),
+    });
+    assert.equal(response.status, 201);
+    const reportId = (await response.json()).report.id;
+
+    const detailResponse = await fetch(`${server.baseUrl}/expense/api/reports/${reportId}`, {
+      headers: createAdminAuthHeaders("shortcut-manager", "manager-secret-pass"),
+    });
+    assert.equal(detailResponse.status, 200);
+    const report = (await detailResponse.json()).report;
+    assert.equal(report.reporter, "shortcut-manager");
+    assert.equal(report.submittedByAccountId, "shortcut-manager-001");
+    assert.equal(report.submittedByUsername, "shortcut-manager");
+    assert.equal(report.submittedByRole, "manager");
+
+    const listResponse = await fetch(`${server.baseUrl}/expense/api/reports?limit=1000`, {
+      headers: createAdminAuthHeaders("shortcut-manager", "manager-secret-pass"),
+    });
+    assert.equal(listResponse.status, 200);
+    assert.deepEqual(
+      (await listResponse.json()).items.map((item: { id: number }) => item.id),
+      [reportId],
+    );
+
+    const otherStoreResponse = await fetch(`${server.baseUrl}/expense/api/shortcut/reports`, {
+      method: "POST",
+      headers: {
+        Authorization: "Bearer shortcut-secret",
+        "Idempotency-Key": "shortcut-manager-hidden-other-store-0001",
+      },
+      body: createShortcutForm({
+        channelCode: "reimbursement_peanut_manager",
+        image: "other-store-shortcut-image",
+        reporter: "shortcut-manager",
+      }),
+    });
+    assert.equal(otherStoreResponse.status, 201);
+    const otherStoreReportId = (await otherStoreResponse.json()).report.id;
+    const otherStoreReport = getAdminReimbursementReportDetail(otherStoreReportId);
+    assert(otherStoreReport);
+    assert.equal(otherStoreReport.submittedByAccountId, undefined);
+
+    const otherStoreDetailResponse = await fetch(
+      `${server.baseUrl}/expense/api/reports/${otherStoreReportId}`,
+      { headers: createAdminAuthHeaders("shortcut-manager", "manager-secret-pass") },
+    );
+    assert.equal(otherStoreDetailResponse.status, 404);
   } finally {
     await server.close();
   }
