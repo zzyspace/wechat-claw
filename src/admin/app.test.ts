@@ -662,10 +662,12 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     });
     assert.equal(submissionPageResponse.status, 200);
     const submissionPageHtml = await submissionPageResponse.text();
-    assert.match(submissionPageHtml, /<h1>批量报账<\/h1>/);
-    assert.match(submissionPageHtml, /class="link-button button-primary" href="\/reimbursement">查看报账<\/a>/);
-    assert.match(submissionPageHtml, /class="theme-toggle" id="themeToggle"[^>]*>☾<\/button>/);
-    assert.match(submissionPageHtml, /elements\.themeToggle\.textContent = normalized === "dark" \? "☀" : "☾"/);
+    assert.match(submissionPageHtml, /<nav class="topbar" aria-label="报账中心导航">/);
+    assert.match(submissionPageHtml, /<h1>新建报账<\/h1>/);
+    assert.match(submissionPageHtml, /class="link-button button-primary records-button" href="\/reimbursement">/);
+    assert.match(submissionPageHtml, /<span>查看报账记录<\/span>/);
+    assert.match(submissionPageHtml, /class="theme-toggle" id="themeToggle"[^>]*><\/button>/);
+    assert.match(submissionPageHtml, /<svg class="hero-art"/);
     assert.match(submissionPageHtml, /id="reporter" type="text" readonly aria-readonly="true"/);
     assert.match(submissionPageHtml, /id="submitButton" type="submit">确认提交/);
     assert.match(submissionPageHtml, /function uploadSubmission/);
