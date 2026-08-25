@@ -702,6 +702,14 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     assert.match(pageHtml, /\.topbar \{[^}]*min-height: 52px;[^}]*padding: 7px 12px;[^}]*border-radius: 13px;/s);
     assert.match(pageHtml, /\.hero \{[^}]*margin: 0 -14px 0;/s);
     assert.match(pageHtml, /<span>报账中心<\/span>/);
+    assert.match(pageHtml, /id="centerSwitcher" hidden/);
+    assert.match(pageHtml, /href="\/expense" aria-current="page"/);
+    assert.match(pageHtml, /href="\/invoice"/);
+    assert.match(pageHtml, /href="\/staff"/);
+    assert.match(pageHtml, /\.center-switcher-option\[aria-current="page"\] \{ background: var\(--brand-soft\); \}/);
+    assert.match(pageHtml, /M8 7V5\.5A2\.5 2\.5 0 0 1 10\.5 3H22/);
+    assert.match(pageHtml, /elements\.centerSwitcher\.hidden = state\.accountRole !== "admin"/);
+    assert.match(pageHtml, /elements\.centerSwitcherBackdrop\.addEventListener\("click"/);
     assert.match(pageHtml, /id="themeIcon" aria-hidden="true">🌙<\/span>/);
     assert.match(pageHtml, /elements\.themeIcon\.textContent = normalizedTheme === "dark" \? "☀️" : "🌙"/);
     assert.match(pageHtml, /class="button-primary submit-button" type="submit"/);

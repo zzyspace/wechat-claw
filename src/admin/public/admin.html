@@ -99,6 +99,9 @@
         padding: 14px 0 48px;
       }
 
+      body.switcher-open { overflow: hidden; }
+      body.switcher-open .topbar { z-index: 21; }
+
       .topbar {
         position: relative;
         z-index: 2;
@@ -114,17 +117,25 @@
         backdrop-filter: blur(20px);
       }
 
-      .brand-lockup {
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        color: var(--ink);
-        font-size: 15px;
-        font-weight: 700;
-        text-decoration: none;
-      }
-
-      .brand-lockup svg { width: 22px; height: 22px; color: var(--brand); }
+      .center-switcher { position: relative; z-index: 22; }
+      .center-switcher[hidden] { display: none; }
+      .center-switcher-trigger { display: inline-flex; align-items: center; gap: 8px; min-height: 36px; padding: 0 7px; border: 0; border-radius: 10px; background: transparent; color: var(--ink); font-size: 15px; font-weight: 700; cursor: pointer; }
+      .center-switcher-trigger:hover { background: var(--surface-muted); }
+      .center-switcher-trigger:focus-visible { outline: 3px solid var(--brand-soft); outline-offset: 2px; }
+      .center-switcher-trigger .center-icon { width: 22px; height: 22px; color: var(--brand); }
+      .center-switcher-chevron { width: 15px; height: 15px; transition: transform .18s ease; }
+      .center-switcher.is-open .center-switcher-chevron { transform: rotate(180deg); }
+      .center-switcher-backdrop { position: fixed; z-index: 20; inset: 0; border: 0; background: rgba(28, 28, 30, .28); backdrop-filter: blur(2px); cursor: default; }
+      .center-switcher-menu { position: absolute; z-index: 22; top: calc(100% + 10px); left: 0; width: min(286px, calc(100vw - 32px)); padding: 8px; border: 1px solid var(--line); border-radius: 20px; background: var(--surface-strong); box-shadow: 0 24px 60px rgba(28, 28, 30, .22); }
+      .center-switcher-menu[hidden], .center-switcher-backdrop[hidden] { display: none; }
+      .center-switcher-option { display: grid; grid-template-columns: 30px 1fr 20px; align-items: center; gap: 12px; min-height: 62px; padding: 0 14px; border-radius: 14px; color: var(--ink); font-size: 16px; font-weight: 650; text-decoration: none; }
+      .center-switcher-option:hover, .center-switcher-option:focus-visible { background: var(--surface-muted); outline: none; }
+      .center-switcher-option[aria-current="page"] { background: var(--brand-soft); }
+      .center-switcher-option svg { width: 27px; height: 27px; }
+      .center-switcher-option[data-center="expense"] svg { color: #3478f6; }
+      .center-switcher-option[data-center="invoice"] svg { color: #34b978; }
+      .center-switcher-option[data-center="staff"] svg { color: #f0a52b; }
+      .center-switcher-check { color: var(--brand); font-size: 22px; font-weight: 800; text-align: center; }
 
       .topbar-actions {
         display: flex;
@@ -1375,8 +1386,8 @@
         }
 
         .topbar { min-height: 52px; padding: 7px 12px; border-radius: 13px; }
-        .brand-lockup { gap: 8px; font-size: 15px; }
-        .brand-lockup svg { width: 22px; height: 22px; }
+        .center-switcher-trigger { gap: 8px; font-size: 15px; }
+        .center-switcher-trigger .center-icon { width: 22px; height: 22px; }
         .topbar-actions { gap: 6px; }
         .topbar-actions button { min-height: 36px; border-radius: 10px; }
         .theme-toggle { width: 36px; min-width: 36px; flex-basis: 36px; }
@@ -1465,15 +1476,18 @@
   <body>
     <div class="page">
       <nav class="topbar" aria-label="报账中心导航">
-        <a class="brand-lockup" href="/expense" aria-label="返回报账中心">
-          <svg viewBox="0 0 32 32" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="6" y="3.5" width="19" height="25" rx="3" />
-            <path d="M11 10h9M11 15h9M11 20h5" />
-            <circle cx="23.5" cy="23.5" r="4" fill="var(--surface)" />
-            <path d="M23.5 21.5v4M21.5 23.5h4" />
-          </svg>
-          <span>报账中心</span>
-        </a>
+        <div class="center-switcher" id="centerSwitcher" hidden>
+          <button class="center-switcher-trigger" id="centerSwitcherTrigger" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="centerSwitcherMenu">
+            <svg class="center-icon" viewBox="0 0 32 32" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="7" width="22" height="19" rx="4" fill="currentColor" fill-opacity=".16"/><path d="M8 7V5.5A2.5 2.5 0 0 1 10.5 3H22"/><path d="M10 13h8"/><path d="m12 17 2.2 2.2 3.5-3.7"/><circle cx="24" cy="24" r="4" fill="currentColor" stroke="none"/><path d="M24 22v4M22 24h4" stroke="white" stroke-width="1.8"/></svg>
+            <span>报账中心</span>
+            <svg class="center-switcher-chevron" viewBox="0 0 20 20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 7 5 5 5-5"/></svg>
+          </button>
+          <div class="center-switcher-menu" id="centerSwitcherMenu" role="menu" hidden>
+            <a class="center-switcher-option" data-center="expense" role="menuitem" href="/expense" aria-current="page"><svg viewBox="0 0 32 32" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="7" width="22" height="19" rx="4" fill="currentColor" fill-opacity=".16"/><path d="M8 7V5.5A2.5 2.5 0 0 1 10.5 3H22"/><path d="M10 13h8"/><path d="m12 17 2.2 2.2 3.5-3.7"/><circle cx="24" cy="24" r="4" fill="currentColor" stroke="none"/><path d="M24 22v4M22 24h4" stroke="white" stroke-width="1.8"/></svg><span>报账中心</span><span class="center-switcher-check" aria-hidden="true">✓</span></a>
+            <a class="center-switcher-option" data-center="invoice" role="menuitem" href="/invoice"><svg viewBox="0 0 32 32" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="3.5" width="18" height="25" rx="3"/><path d="M11 9h10M11 14h8M11 19h5"/><circle cx="23" cy="23.5" r="4"/><path d="m21.3 23.5 1.2 1.2 2.2-2.5"/></svg><span>发票中心</span><span></span></a>
+            <a class="center-switcher-option" data-center="staff" role="menuitem" href="/staff"><svg viewBox="0 0 32 32" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="16" cy="10" r="5"/><path d="M6.5 27c.8-6.2 4-9.2 9.5-9.2s8.7 3 9.5 9.2"/></svg><span>员工中心</span><span></span></a>
+          </div>
+        </div>
         <div class="topbar-actions">
           <button class="theme-toggle" id="themeToggle" type="button" aria-label="切换到深色模式" aria-pressed="false"><span class="theme-icon" id="themeIcon" aria-hidden="true">🌙</span></button>
           <form method="post" action="/logout">
@@ -1487,6 +1501,7 @@
           </form>
         </div>
       </nav>
+      <button class="center-switcher-backdrop" id="centerSwitcherBackdrop" type="button" aria-label="关闭后台选择列表" hidden></button>
 
       <header class="hero">
         <div class="hero-copy">
@@ -1902,6 +1917,10 @@
         batchImportSubmit: document.getElementById("batchImportSubmit"),
         batchImportCancel: document.getElementById("batchImportCancel"),
         batchImportStatus: document.getElementById("batchImportStatus"),
+        centerSwitcher: document.getElementById("centerSwitcher"),
+        centerSwitcherTrigger: document.getElementById("centerSwitcherTrigger"),
+        centerSwitcherMenu: document.getElementById("centerSwitcherMenu"),
+        centerSwitcherBackdrop: document.getElementById("centerSwitcherBackdrop"),
         themeToggle: document.getElementById("themeToggle"),
         themeIcon: document.getElementById("themeIcon"),
         resetFilters: document.getElementById("resetFilters"),
@@ -2168,6 +2187,25 @@
         elements.filterReporter.readOnly = true;
         elements.filterReporter.placeholder = "当前登录账号";
         elements.reporterFilterLabel.textContent = "报账人（当前账号）";
+      }
+
+      function closeCenterSwitcher({ restoreFocus = false } = {}) {
+        elements.centerSwitcher.classList.remove("is-open");
+        elements.centerSwitcherTrigger.setAttribute("aria-expanded", "false");
+        elements.centerSwitcherMenu.hidden = true;
+        elements.centerSwitcherBackdrop.hidden = true;
+        document.body.classList.remove("switcher-open");
+        if (restoreFocus) elements.centerSwitcherTrigger.focus();
+      }
+
+      function openCenterSwitcher() {
+        if (state.accountRole !== "admin") return;
+        elements.centerSwitcher.classList.add("is-open");
+        elements.centerSwitcherTrigger.setAttribute("aria-expanded", "true");
+        elements.centerSwitcherMenu.hidden = false;
+        elements.centerSwitcherBackdrop.hidden = false;
+        document.body.classList.add("switcher-open");
+        elements.centerSwitcherMenu.querySelector("[aria-current='page']")?.focus();
       }
 
       function restoreRoleScopedFilterValues() {
@@ -3068,6 +3106,7 @@
 
         state.canWrite = payload.permissions?.canWrite === true;
         configureReportFiltersForAccount(payload.account);
+        elements.centerSwitcher.hidden = state.accountRole !== "admin";
         const roleLabel = ({ admin: "管理员", partner: "合伙人", manager: "管理" })[payload.account?.role]
           || "账号";
         elements.operationColumnHeader.hidden = !state.canWrite;
@@ -3399,6 +3438,12 @@
         applyTheme(nextTheme, true);
       });
 
+      elements.centerSwitcherTrigger.addEventListener("click", () => {
+        if (elements.centerSwitcher.classList.contains("is-open")) closeCenterSwitcher();
+        else openCenterSwitcher();
+      });
+      elements.centerSwitcherBackdrop.addEventListener("click", () => closeCenterSwitcher({ restoreFocus: true }));
+
       systemThemePreference.addEventListener("change", (event) => {
         if (!readSavedTheme()) {
           applyTheme(event.matches ? "dark" : "light");
@@ -3695,6 +3740,10 @@
       });
 
       document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape" && elements.centerSwitcher.classList.contains("is-open")) {
+          closeCenterSwitcher({ restoreFocus: true });
+          return;
+        }
         if (!elements.attachmentPreviewModal.hidden && event.key === "ArrowLeft") {
           navigateAttachmentPreview(-1);
           return;
