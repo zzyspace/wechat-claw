@@ -120,7 +120,7 @@
       .center-switcher { position: relative; z-index: 22; }
       .center-switcher-trigger { display: inline-flex; align-items: center; gap: 8px; min-height: 36px; padding: 0 7px; border: 0; border-radius: 10px; background: transparent; color: var(--ink); font-size: 15px; font-weight: 700; cursor: pointer; }
       .center-switcher-trigger:hover { background: var(--surface-muted); }
-      .center-switcher-trigger:disabled { cursor: default; }
+      .center-switcher-trigger:disabled { color: var(--ink); opacity: 1; cursor: default; -webkit-text-fill-color: var(--ink); }
       .center-switcher-trigger:disabled:hover { background: transparent; }
       .center-switcher-trigger:focus-visible { outline: 3px solid var(--brand-soft); outline-offset: 2px; }
       .center-switcher-trigger .center-icon { width: 22px; height: 22px; color: var(--brand); }

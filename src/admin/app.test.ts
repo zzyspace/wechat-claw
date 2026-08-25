@@ -706,6 +706,7 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     assert.match(pageHtml, /id="centerSwitcherTrigger"[^>]*disabled/);
     assert.match(pageHtml, /id="centerSwitcherChevron"[^>]*hidden/);
     assert.match(pageHtml, /\.center-switcher-chevron\[hidden\] \{ display: none; \}/);
+    assert.match(pageHtml, /\.center-switcher-trigger:disabled \{ color: var\(--ink\); opacity: 1;/);
     assert.match(pageHtml, /href="\/expense" aria-current="page"/);
     assert.match(pageHtml, /href="\/invoice"/);
     assert.match(pageHtml, /href="\/staff"/);
