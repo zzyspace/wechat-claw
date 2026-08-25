@@ -118,12 +118,14 @@
       }
 
       .center-switcher { position: relative; z-index: 22; }
-      .center-switcher[hidden] { display: none; }
       .center-switcher-trigger { display: inline-flex; align-items: center; gap: 8px; min-height: 36px; padding: 0 7px; border: 0; border-radius: 10px; background: transparent; color: var(--ink); font-size: 15px; font-weight: 700; cursor: pointer; }
       .center-switcher-trigger:hover { background: var(--surface-muted); }
+      .center-switcher-trigger:disabled { cursor: default; }
+      .center-switcher-trigger:disabled:hover { background: transparent; }
       .center-switcher-trigger:focus-visible { outline: 3px solid var(--brand-soft); outline-offset: 2px; }
       .center-switcher-trigger .center-icon { width: 22px; height: 22px; color: var(--brand); }
       .center-switcher-chevron { width: 15px; height: 15px; transition: transform .18s ease; }
+      .center-switcher-chevron[hidden] { display: none; }
       .center-switcher.is-open .center-switcher-chevron { transform: rotate(180deg); }
       .center-switcher-backdrop { position: fixed; z-index: 20; inset: 0; border: 0; background: rgba(28, 28, 30, .28); backdrop-filter: blur(2px); cursor: default; }
       .center-switcher-menu { position: absolute; z-index: 22; top: calc(100% + 10px); left: 0; width: min(286px, calc(100vw - 32px)); padding: 8px; border: 1px solid var(--line); border-radius: 20px; background: var(--surface-strong); box-shadow: 0 24px 60px rgba(28, 28, 30, .22); }
@@ -1476,11 +1478,11 @@
   <body>
     <div class="page">
       <nav class="topbar" aria-label="报账中心导航">
-        <div class="center-switcher" id="centerSwitcher" hidden>
-          <button class="center-switcher-trigger" id="centerSwitcherTrigger" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="centerSwitcherMenu">
+        <div class="center-switcher" id="centerSwitcher">
+          <button class="center-switcher-trigger" id="centerSwitcherTrigger" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="centerSwitcherMenu" disabled>
             <svg class="center-icon" viewBox="0 0 32 32" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="7" width="22" height="19" rx="4" fill="currentColor" fill-opacity=".16"/><path d="M8 7V5.5A2.5 2.5 0 0 1 10.5 3H22"/><path d="M10 13h8"/><path d="m12 17 2.2 2.2 3.5-3.7"/><circle cx="24" cy="24" r="4" fill="currentColor" stroke="none"/><path d="M24 22v4M22 24h4" stroke="white" stroke-width="1.8"/></svg>
             <span>报账中心</span>
-            <svg class="center-switcher-chevron" viewBox="0 0 20 20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 7 5 5 5-5"/></svg>
+            <svg class="center-switcher-chevron" id="centerSwitcherChevron" viewBox="0 0 20 20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" hidden><path d="m5 7 5 5 5-5"/></svg>
           </button>
           <div class="center-switcher-menu" id="centerSwitcherMenu" role="menu" hidden>
             <a class="center-switcher-option" data-center="expense" role="menuitem" href="/expense" aria-current="page"><svg viewBox="0 0 32 32" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="7" width="22" height="19" rx="4" fill="currentColor" fill-opacity=".16"/><path d="M8 7V5.5A2.5 2.5 0 0 1 10.5 3H22"/><path d="M10 13h8"/><path d="m12 17 2.2 2.2 3.5-3.7"/><circle cx="24" cy="24" r="4" fill="currentColor" stroke="none"/><path d="M24 22v4M22 24h4" stroke="white" stroke-width="1.8"/></svg><span>报账中心</span><span class="center-switcher-check" aria-hidden="true">✓</span></a>
@@ -1919,6 +1921,7 @@
         batchImportStatus: document.getElementById("batchImportStatus"),
         centerSwitcher: document.getElementById("centerSwitcher"),
         centerSwitcherTrigger: document.getElementById("centerSwitcherTrigger"),
+        centerSwitcherChevron: document.getElementById("centerSwitcherChevron"),
         centerSwitcherMenu: document.getElementById("centerSwitcherMenu"),
         centerSwitcherBackdrop: document.getElementById("centerSwitcherBackdrop"),
         themeToggle: document.getElementById("themeToggle"),
@@ -3106,7 +3109,9 @@
 
         state.canWrite = payload.permissions?.canWrite === true;
         configureReportFiltersForAccount(payload.account);
-        elements.centerSwitcher.hidden = state.accountRole !== "admin";
+        const canSwitchCenters = state.accountRole === "admin";
+        elements.centerSwitcherTrigger.disabled = !canSwitchCenters;
+        elements.centerSwitcherChevron.toggleAttribute("hidden", !canSwitchCenters);
         const roleLabel = ({ admin: "管理员", partner: "合伙人", manager: "管理" })[payload.account?.role]
           || "账号";
         elements.operationColumnHeader.hidden = !state.canWrite;
