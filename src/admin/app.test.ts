@@ -678,6 +678,9 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     assert.match(pageHtml, /pollBatchImportTask\(task\.id\)/);
     assert.match(pageHtml, /elements\.batchImportOpen\.hidden = !state\.canWrite/);
     assert.match(pageHtml, /<label for="channelCode">门店<\/label>/);
+    assert.match(pageHtml, /<option value="200" selected>200<\/option>/);
+    assert.match(pageHtml, /const DEFAULT_PAGE_LIMIT = 200;/);
+    assert.match(pageHtml, /limit: DEFAULT_PAGE_LIMIT/);
     assert.match(pageHtml, /<option value="">全部<\/option>/);
     assert.match(pageHtml, /<option value="reimbursement_fuzzy">Fuzzy<\/option>/);
     assert.match(pageHtml, /<option value="reimbursement_fuzzy_manager">Fuzzy店长报账群<\/option>/);

@@ -1571,9 +1571,9 @@
               <label for="limit">每页条数</label>
               <select id="limit" name="limit">
                 <option value="20">20</option>
-                <option value="50" selected>50</option>
+                <option value="50">50</option>
                 <option value="100">100</option>
-                <option value="200">200</option>
+                <option value="200" selected>200</option>
                 <option value="400">400</option>
                 <option value="600">600</option>
                 <option value="800">800</option>
@@ -1841,6 +1841,7 @@
     <script>
       const BASE_PATH = "/expense";
       const DEFAULT_TIME_ZONE = "Asia/Shanghai";
+      const DEFAULT_PAGE_LIMIT = 200;
       const THEME_STORAGE_KEY = "reimbursement-admin-theme";
       const BATCH_TASK_STORAGE_KEY = "reimbursement-admin-active-batch-task";
       const DETAIL_CLICK_DELAY_MS = 300;
@@ -1855,7 +1856,7 @@
       let pendingDetailTimer = null;
       const state = {
         items: [],
-        limit: 50,
+        limit: DEFAULT_PAGE_LIMIT,
         offset: 0,
         total: 0,
         selectedReportId: null,
@@ -2694,7 +2695,7 @@
           expenseCategory: String(formData.get("expenseCategory") || "").trim(),
           createdDateFrom: String(formData.get("createdDateFrom") || "").trim(),
           createdDateTo: String(formData.get("createdDateTo") || "").trim(),
-          limit: String(formData.get("limit") || state.limit || 50).trim(),
+          limit: String(formData.get("limit") || state.limit || DEFAULT_PAGE_LIMIT).trim(),
         };
       }
 
@@ -2730,7 +2731,7 @@
         const filters = readFilters();
 
         for (const [key, value] of Object.entries(filters)) {
-          if (value && value !== "all" && !(key === "limit" && value === "50")) {
+          if (value && value !== "all" && !(key === "limit" && value === String(DEFAULT_PAGE_LIMIT))) {
             params.set(key, value);
           }
         }
@@ -2754,7 +2755,7 @@
         if (filters.expenseCategory) params.set("expenseCategory", filters.expenseCategory);
         if (filters.createdDateFrom) params.set("createdDateFrom", filters.createdDateFrom);
         if (filters.createdDateTo) params.set("createdDateTo", filters.createdDateTo);
-        params.set("limit", filters.limit || "50");
+        params.set("limit", filters.limit || String(DEFAULT_PAGE_LIMIT));
         params.set("offset", String(state.offset));
 
         return params;
@@ -3054,7 +3055,7 @@
           state.offset = 0;
         }
 
-        state.limit = Number.parseInt(readFilters().limit || "50", 10) || 50;
+        state.limit = Number.parseInt(readFilters().limit || String(DEFAULT_PAGE_LIMIT), 10) || DEFAULT_PAGE_LIMIT;
         updateUrl();
         setStatus("正在加载报账列表...");
 
