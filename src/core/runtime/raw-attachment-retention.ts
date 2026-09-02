@@ -3,7 +3,7 @@ import path from "node:path";
 
 import type { AppConfig } from "../config/env.js";
 import type { Logger } from "../logging/logger.js";
-import { getRawStorageDir, getReimbursementRawStorageDir } from "./state-paths.js";
+import { getRawStorageDir } from "./state-paths.js";
 import { addDaysToDateString, formatZonedDate } from "./timezone.js";
 import { startCronScheduler } from "./cron-scheduler.js";
 
@@ -27,7 +27,9 @@ export function cleanupExpiredRawAttachments(input: {
   now?: Date;
 }): RawAttachmentCleanupResult {
   const now = input.now ?? new Date();
-  const rawDirs = [getRawStorageDir(input.config), getReimbursementRawStorageDir(input.config)];
+  // Reimbursement attachments are business evidence and must be retained permanently.
+  // This retention job only manages non-reimbursement raw message attachments.
+  const rawDirs = [getRawStorageDir(input.config)];
   const retentionDays = input.config.attachmentRetentionDays;
 
   if (retentionDays <= 0) {

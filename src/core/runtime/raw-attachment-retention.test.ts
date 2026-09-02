@@ -86,30 +86,30 @@ test("cleanupExpiredRawAttachments deletes day directories older than the retent
   assert.equal(fs.existsSync(keptDayDir), true);
 });
 
-test("cleanupExpiredRawAttachments also cleans reimbursement raw directories", () => {
+test("cleanupExpiredRawAttachments permanently retains reimbursement raw directories", () => {
   const stateDir = fs.mkdtempSync(path.join(os.tmpdir(), "wechat-claw-attachment-retention-"));
   process.env.WECHATY_STATE_DIR = stateDir;
   const config = createConfig(stateDir, 60);
   const reimbursementRawDir = getReimbursementRawStorageDir(config);
   const oldDayDir = path.join(reimbursementRawDir, "2026", "03", "20");
-  const keptDayDir = path.join(reimbursementRawDir, "2026", "03", "23");
+  const recentDayDir = path.join(reimbursementRawDir, "2026", "03", "23");
 
   fs.mkdirSync(oldDayDir, { recursive: true });
-  fs.mkdirSync(keptDayDir, { recursive: true });
+  fs.mkdirSync(recentDayDir, { recursive: true });
   fs.writeFileSync(path.join(oldDayDir, "old.jpg"), "a", "utf8");
-  fs.writeFileSync(path.join(keptDayDir, "keep.jpg"), "b", "utf8");
+  fs.writeFileSync(path.join(recentDayDir, "recent.jpg"), "b", "utf8");
 
   const result = cleanupExpiredRawAttachments({
     config,
     now: new Date("2026-05-21T12:00:00.000Z"),
   });
 
-  assert.equal(result.deletedDayDirectoryCount, 1);
-  assert.equal(result.deletedFileCount, 1);
-  assert.equal(result.scannedDayDirectoryCount, 2);
-  assert(result.rawDirs.includes(reimbursementRawDir));
-  assert.equal(fs.existsSync(oldDayDir), false);
-  assert.equal(fs.existsSync(keptDayDir), true);
+  assert.equal(result.deletedDayDirectoryCount, 0);
+  assert.equal(result.deletedFileCount, 0);
+  assert.equal(result.scannedDayDirectoryCount, 0);
+  assert.equal(result.rawDirs.includes(reimbursementRawDir), false);
+  assert.equal(fs.existsSync(oldDayDir), true);
+  assert.equal(fs.existsSync(recentDayDir), true);
 });
 
 test("cleanupExpiredRawAttachments removes empty month and year directories after deleting expired data", () => {

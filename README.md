@@ -159,7 +159,7 @@ WECHATY_CHANNELS_JSON=[{"code":"loss_a","enabled":true,"scenario":"loss-report",
 - `WECHATY_DEBUG_RECEIVED_ROOM_MESSAGE_ENABLED`: 是否发送 `"[wechat-claw] 已收到群消息"` 这类调试摘要，默认 `false`
 - `WECHATY_SUPPRESS_ROOM_TEXT_DELIVERY`: 临时禁止 bot 向任何群聊发送文字，默认 `false`；开启后私聊和后台处理不受影响，群消息链路自检会暂时停用
 - `WECHATY_CHANNELS_JSON`: 推荐的多群配置入口，支持 `loss-report` 和 `reimbursement` 场景
-- `WECHATY_ATTACHMENT_RETENTION_DAYS`: 图片附件保留天数，默认 `60` 天；会清理 `raw/` 和 `reimbursement/raw/` 下更早的历史目录，设为 `0` 可关闭
+- `WECHATY_ATTACHMENT_RETENTION_DAYS`: 普通原始图片附件保留天数，默认 `60` 天；只清理 `raw/` 下更早的历史目录，设为 `0` 可关闭。报账附件目录 `reimbursement/raw/` 永久保留，不参与自动清理
 - `WECHATY_COLD_START_IGNORE_WINDOW_SECONDS`: 冷启动忽略窗口，默认 `60` 秒；会忽略发送时间早于“bot 启动时间 - 窗口”的历史消息，设为 `0` 可关闭
 - `WECHATY_SUMMARY_PROMPT_TEMPLATE`: 总结提示词模板，可自定义
 - `WECHATY_LOSS_MERGE_WINDOW_SECONDS`: 同一人图文消息合并窗口，默认 `60` 秒；报损和报账第一版共用这个窗口
@@ -876,7 +876,7 @@ sudo bash deploy/clear-wechat-claw-db.sh --yes
 
 - 这个脚本只清空 SQLite 里的业务数据，不会删除数据库文件本身
 - 它也不会直接删除 `WECHATY_STATE_DIR/raw/` 里的历史图片附件文件
-- 如果启用了 `WECHATY_ATTACHMENT_RETENTION_DAYS`，bot 运行后会按保留天数自动清理更早的 raw 图片目录
+- 如果启用了 `WECHATY_ATTACHMENT_RETENTION_DAYS`，bot 运行后只会按保留天数自动清理更早的普通 `raw/` 图片目录；报账附件目录 `reimbursement/raw/` 永久保留
 - 如果你连附件文件也想一起清理，建议先确认是否还需要保留原始取证材料，再单独删除
 - 如果服务名或数据库路径不是默认值，可以执行 `sudo bash deploy/clear-wechat-claw-db.sh --help`
 
