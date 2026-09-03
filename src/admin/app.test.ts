@@ -728,7 +728,7 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     assert.match(pageHtml, /systemThemePreference\.addEventListener\("change"/);
     assert.match(pageHtml, /placeholder="支持部分匹配，如 Ry \/ 张"/);
     assert.match(pageHtml, /<label for="note">备注<\/label>/);
-    assert.match(pageHtml, /placeholder="支持部分匹配，如 补票 \/ 平账"/);
+    assert.match(pageHtml, /placeholder="支持部分匹配；输入 !平 表示不含“平”"/);
     assert.match(pageHtml, /\.field \{[^}]*min-width: 0;/s);
     assert.match(pageHtml, /\.field input,\s*\.field select,\s*\.field textarea \{[^}]*min-width: 0;/s);
     assert.match(pageHtml, /\.controls-grid \.field select \{[^}]*height: 46px;[^}]*-webkit-appearance: none;/s);

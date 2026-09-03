@@ -1826,6 +1826,17 @@ export function listAdminReimbursementReports(options?: {
   const clauses: string[] = [];
   const params: Record<string, number | string> = {};
   const search = options?.search?.trim() ?? "";
+  let noteFilter = options?.note?.trim() ?? "";
+  let excludeNoteFilter = false;
+
+  if (noteFilter.startsWith("!")) {
+    const exclusion = noteFilter.slice(1).trim();
+
+    if (exclusion) {
+      noteFilter = exclusion;
+      excludeNoteFilter = true;
+    }
+  }
 
   if (options?.channelCode) {
     clauses.push("channel_code = @channelCode");
@@ -1859,9 +1870,9 @@ export function listAdminReimbursementReports(options?: {
     params.expenseCategory = options.expenseCategory;
   }
 
-  if (options?.note) {
-    clauses.push("IFNULL(note, '') LIKE @note ESCAPE '\\'");
-    params.note = `%${escapeLikePattern(options.note)}%`;
+  if (noteFilter) {
+    clauses.push(`IFNULL(note, '') ${excludeNoteFilter ? "NOT LIKE" : "LIKE"} @note ESCAPE '\\'`);
+    params.note = `%${escapeLikePattern(noteFilter)}%`;
   }
 
   if (options?.createdDateFrom) {

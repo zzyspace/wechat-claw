@@ -533,6 +533,38 @@ test("listAdminReimbursementReports filters by search, partial reporter, categor
     submittedByUsername: "manager-two",
     submittedByRole: "manager",
   });
+  const blankNoteMessage = saveRawMessage({
+    messageExternalId: "reimbursement-admin-list-blank-note-primary",
+    channelCode: "reimbursement_admin_list_test",
+    channelName: "报账后台列表测试群",
+    senderName: "小王",
+    messageType: "7",
+    textContent: "(非文本消息)",
+    eventReceivedAt: "2026-07-24T01:00:00.000Z",
+    dedupeKey: "reimbursement-admin-list-blank-note-primary",
+    attachments: [],
+  });
+  const blankNoteReport = saveReimbursementReport({
+    channelCode: "reimbursement_admin_list_test",
+    channelName: "报账后台列表测试群",
+    reporter: "小王",
+    amount: 20,
+    currency: "CNY",
+    expenseCategory: "other",
+    voucherDate: "2026-07-24",
+    voucherDateSource: "message",
+    note: "",
+    evidenceType: "text",
+    merchant: null,
+    documentNo: null,
+    voucherType: null,
+    ocrText: "",
+    confidence: 0.8,
+    needsReview: false,
+    primaryRawMessageId: blankNoteMessage.rawMessageId,
+    timeZone: "Asia/Shanghai",
+    referenceDateTime: "2026-07-24T01:00:00.000Z",
+  });
 
   const filtered = listAdminReimbursementReports({
     search: "测试菜场",
@@ -574,6 +606,18 @@ test("listAdminReimbursementReports filters by search, partial reporter, categor
 
   assert.equal(noteOnlySearch.total, 1);
   assert.equal(noteOnlySearch.items[0]?.id, reviewReport.id);
+
+  const excludedNoteSearch = listAdminReimbursementReports({
+    channelCode: "reimbursement_admin_list_test",
+    note: "!待补",
+    limit: 20,
+    offset: 0,
+  });
+
+  assert.deepEqual(
+    new Set(excludedNoteSearch.items.map((item) => item.id)),
+    new Set([searchReport.id, blankNoteReport.id]),
+  );
 
   const noteShouldNotMatchOcr = listAdminReimbursementReports({
     note: "待确认",
