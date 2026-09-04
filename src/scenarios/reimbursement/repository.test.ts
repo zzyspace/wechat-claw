@@ -654,6 +654,55 @@ test("listAdminReimbursementReports filters by search, partial reporter, categor
   });
   assert.deepEqual(combinedExclusionSearch.items.map((item) => item.id), [blankNoteReport.id]);
 
+  const reporterOrSearch = listAdminReimbursementReports({
+    channelCode: "reimbursement_admin_list_test",
+    reporter: "Ry||小李",
+    limit: 20,
+    offset: 0,
+  });
+  assert.deepEqual(
+    new Set(reporterOrSearch.items.map((item) => item.id)),
+    new Set([searchReport.id, reviewReport.id]),
+  );
+
+  const reporterAndExclusionSearch = listAdminReimbursementReports({
+    channelCode: "reimbursement_admin_list_test",
+    reporter: "!小李&!小王",
+    limit: 20,
+    offset: 0,
+  });
+  assert.deepEqual(reporterAndExclusionSearch.items.map((item) => item.id), [searchReport.id]);
+
+  const categoryOrSearch = listAdminReimbursementReports({
+    channelCode: "reimbursement_admin_list_test",
+    expenseCategory: "食材||其他",
+    limit: 20,
+    offset: 0,
+  });
+  assert.deepEqual(
+    new Set(categoryOrSearch.items.map((item) => item.id)),
+    new Set([searchReport.id, reviewReport.id, blankNoteReport.id]),
+  );
+
+  const categoryExclusionSearch = listAdminReimbursementReports({
+    channelCode: "reimbursement_admin_list_test",
+    expenseCategory: "!食材",
+    limit: 20,
+    offset: 0,
+  });
+  assert.deepEqual(
+    new Set(categoryExclusionSearch.items.map((item) => item.id)),
+    new Set([reviewReport.id, blankNoteReport.id]),
+  );
+
+  const impossibleCategoryAndSearch = listAdminReimbursementReports({
+    channelCode: "reimbursement_admin_list_test",
+    expenseCategory: "食材&其他",
+    limit: 20,
+    offset: 0,
+  });
+  assert.equal(impossibleCategoryAndSearch.total, 0);
+
   const noteShouldNotMatchOcr = listAdminReimbursementReports({
     note: "待确认",
     limit: 20,

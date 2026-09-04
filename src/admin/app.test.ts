@@ -726,7 +726,8 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     assert.match(pageHtml, /:root\[data-theme="dark"\]/);
     assert.match(pageHtml, /window\.localStorage\.setItem\(THEME_STORAGE_KEY, normalizedTheme\)/);
     assert.match(pageHtml, /systemThemePreference\.addEventListener\("change"/);
-    assert.match(pageHtml, /placeholder="支持部分匹配，如 Ry \/ 张"/);
+    assert.match(pageHtml, /placeholder="支持 !排除、&与、\|\|或，如 张\|\|李"/);
+    assert.match(pageHtml, /placeholder="支持 !、&、\|\|，如 食材\|\|房租"/);
     assert.match(pageHtml, /<label for="note">备注<\/label>/);
     assert.match(pageHtml, /placeholder="支持 !排除、&与、\|\|或，如 采购&!平"/);
     assert.match(pageHtml, /\.field \{[^}]*min-width: 0;/s);
@@ -1273,9 +1274,17 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     assert.equal(listPayload.items[0]?.billAttachment?.mimeType, "image/jpeg");
     assert.equal(listPayload.items[0]?.billAttachment?.exists, true);
 
-    for (const invalidNoteFilter of ["采购|待补", "采购&", "||采购", "(采购||待补)"]) {
-      const invalidNoteFilterResponse = await fetch(
-        `${server.baseUrl}/expense/api/reports?note=${encodeURIComponent(invalidNoteFilter)}`,
+    for (const invalidFilter of [
+      { field: "note", value: "采购|待补", message: /备注筛选格式无效/ },
+      { field: "note", value: "采购&", message: /备注筛选格式无效/ },
+      { field: "note", value: "||采购", message: /备注筛选格式无效/ },
+      { field: "note", value: "(采购||待补)", message: /备注筛选格式无效/ },
+      { field: "reporter", value: "张|李", message: /报账人筛选格式无效/ },
+      { field: "expenseCategory", value: "食材&", message: /类别筛选格式无效/ },
+      { field: "expenseCategory", value: "不存在", message: /类别筛选值无效/ },
+    ]) {
+      const invalidFilterResponse = await fetch(
+        `${server.baseUrl}/expense/api/reports?${invalidFilter.field}=${encodeURIComponent(invalidFilter.value)}`,
         {
           headers: {
             ...createAdminAuthHeaders(),
@@ -1283,10 +1292,10 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
           },
         },
       );
-      assert.equal(invalidNoteFilterResponse.status, 400);
-      const invalidNoteFilterPayload = await invalidNoteFilterResponse.json();
-      assert.equal(invalidNoteFilterPayload.error.field, "note");
-      assert.match(invalidNoteFilterPayload.error.message, /备注筛选格式无效/);
+      assert.equal(invalidFilterResponse.status, 400);
+      const invalidFilterPayload = await invalidFilterResponse.json();
+      assert.equal(invalidFilterPayload.error.field, invalidFilter.field);
+      assert.match(invalidFilterPayload.error.message, invalidFilter.message);
     }
 
     const guestListResponse = await fetch(`${server.baseUrl}/expense/api/reports?limit=20`, {

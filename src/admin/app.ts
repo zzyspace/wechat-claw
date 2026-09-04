@@ -42,9 +42,11 @@ import {
   getAdminReimbursementReportDetail,
   getReimbursementReportByRawMessageId,
   listAdminReimbursementReports,
-  ReimbursementNoteFilterSyntaxError,
+  ReimbursementFilterValidationError,
   updateAdminReimbursementReport,
+  validateReimbursementExpenseCategoryFilter,
   validateReimbursementNoteFilter,
+  validateReimbursementReporterFilter,
 } from "../scenarios/reimbursement/repository.js";
 import { buildReimbursementReceiptText } from "../scenarios/reimbursement/receipt.js";
 import { getRawMessageByMessageExternalId } from "../core/storage/raw-message-repository.js";
@@ -394,28 +396,41 @@ function resolveStaticDir(staticDir?: string) {
 function parseReportListQuery(query: Record<string, unknown>) {
   const createdDateFrom = parseDateFilter(query.createdDateFrom, "createdDateFrom");
   const createdDateTo = parseDateFilter(query.createdDateTo, "createdDateTo");
+  const reporter = trimString(query.reporter);
   const note = trimString(query.note);
+  const expenseCategory = trimString(query.expenseCategory);
 
   if (createdDateFrom && createdDateTo && createdDateFrom > createdDateTo) {
     throw new AdminValidationError("createdDateFrom 不能晚于 createdDateTo。", "createdDateFrom");
   }
 
-  try {
-    validateReimbursementNoteFilter(note);
-  } catch (error) {
-    if (error instanceof ReimbursementNoteFilterSyntaxError) {
-      throw new AdminValidationError(error.message, "note");
-    }
+  for (const filter of [
+    { field: "reporter", value: reporter, validate: validateReimbursementReporterFilter },
+    { field: "note", value: note, validate: validateReimbursementNoteFilter },
+    {
+      field: "expenseCategory",
+      value: expenseCategory.toLowerCase() === "all" ? "" : expenseCategory,
+      validate: validateReimbursementExpenseCategoryFilter,
+    },
+  ]) {
+    try {
+      filter.validate(filter.value);
+    } catch (error) {
+      if (error instanceof ReimbursementFilterValidationError) {
+        throw new AdminValidationError(error.message, filter.field);
+      }
 
-    throw error;
+      throw error;
+    }
   }
 
   return {
     search: trimString(query.search) || undefined,
     channelCode: trimString(query.channelCode) || undefined,
-    reporter: trimString(query.reporter) || undefined,
+    reporter: reporter || undefined,
     note: note || undefined,
-    expenseCategory: parseExpenseCategory(query.expenseCategory),
+    expenseCategory:
+      expenseCategory && expenseCategory.toLowerCase() !== "all" ? expenseCategory : undefined,
     createdDateFrom: createdDateFrom || undefined,
     createdDateTo: createdDateTo || undefined,
     limit: parseLimit(query.limit),

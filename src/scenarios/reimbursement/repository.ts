@@ -6,6 +6,7 @@ import {
   DEFAULT_REIMBURSEMENT_EXPENSE_CATEGORY,
   getReimbursementExpenseCategoryLabel,
   mergeReimbursementExpenseCategory,
+  normalizeReimbursementExpenseCategory,
 } from "./categories.js";
 import type {
   AdminReimbursementListAttachmentPreview,
@@ -237,19 +238,19 @@ function escapeLikePattern(value: string) {
   return value.replaceAll("\\", "\\\\").replaceAll("%", "\\%").replaceAll("_", "\\_");
 }
 
-interface ReimbursementNoteFilterTerm {
+interface ReimbursementFilterTerm {
   exclude: boolean;
   value: string;
 }
 
-export class ReimbursementNoteFilterSyntaxError extends Error {
-  constructor() {
-    super("备注筛选格式无效，请使用 ! 表示排除、& 表示与、|| 表示或。");
-    this.name = "ReimbursementNoteFilterSyntaxError";
+export class ReimbursementFilterValidationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ReimbursementFilterValidationError";
   }
 }
 
-function parseReimbursementNoteFilter(input: string): ReimbursementNoteFilterTerm[][] {
+function parseReimbursementFilter(input: string, label: string): ReimbursementFilterTerm[][] {
   const normalized = input.trim();
 
   if (!normalized) {
@@ -257,26 +258,34 @@ function parseReimbursementNoteFilter(input: string): ReimbursementNoteFilterTer
   }
 
   if (normalized.includes("(") || normalized.includes(")")) {
-    throw new ReimbursementNoteFilterSyntaxError();
+    throw new ReimbursementFilterValidationError(
+      `${label}筛选格式无效，请使用 ! 表示排除、& 表示与、|| 表示或。`,
+    );
   }
 
   return normalized.split("||").map((orGroup) => {
     if (!orGroup.trim() || orGroup.includes("|")) {
-      throw new ReimbursementNoteFilterSyntaxError();
+      throw new ReimbursementFilterValidationError(
+        `${label}筛选格式无效，请使用 ! 表示排除、& 表示与、|| 表示或。`,
+      );
     }
 
     return orGroup.split("&").map((rawTerm) => {
       const term = rawTerm.trim();
 
       if (!term) {
-        throw new ReimbursementNoteFilterSyntaxError();
+        throw new ReimbursementFilterValidationError(
+          `${label}筛选格式无效，请使用 ! 表示排除、& 表示与、|| 表示或。`,
+        );
       }
 
       const exclude = term.startsWith("!");
       const value = (exclude ? term.slice(1) : term).trim();
 
       if (!value) {
-        throw new ReimbursementNoteFilterSyntaxError();
+        throw new ReimbursementFilterValidationError(
+          `${label}筛选格式无效，请使用 ! 表示排除、& 表示与、|| 表示或。`,
+        );
       }
 
       return { exclude, value };
@@ -284,8 +293,50 @@ function parseReimbursementNoteFilter(input: string): ReimbursementNoteFilterTer
   });
 }
 
+export function validateReimbursementReporterFilter(input: string) {
+  parseReimbursementFilter(input, "报账人");
+}
+
 export function validateReimbursementNoteFilter(input: string) {
-  parseReimbursementNoteFilter(input);
+  parseReimbursementFilter(input, "备注");
+}
+
+export function validateReimbursementExpenseCategoryFilter(input: string) {
+  const expression = parseReimbursementFilter(input, "类别");
+
+  for (const term of expression.flat()) {
+    if (!normalizeReimbursementExpenseCategory(term.value)) {
+      throw new ReimbursementFilterValidationError(`类别筛选值无效：${term.value}`);
+    }
+  }
+}
+
+function buildReimbursementFilterSql(input: {
+  column: "expense_category" | "note" | "reporter";
+  expression: ReimbursementFilterTerm[][];
+  normalizeValue?: (value: string) => string;
+  parameterPrefix: string;
+  params: Record<string, number | string>;
+  valueMode: "contains" | "exact";
+}) {
+  const orClauses = input.expression.map((andGroup, groupIndex) => {
+    const andClauses = andGroup.map((term, termIndex) => {
+      const parameterName = `${input.parameterPrefix}${groupIndex}_${termIndex}`;
+      const normalizedValue = input.normalizeValue?.(term.value) ?? term.value;
+
+      if (input.valueMode === "contains") {
+        input.params[parameterName] = `%${escapeLikePattern(normalizedValue)}%`;
+        return `IFNULL(${input.column}, '') ${term.exclude ? "NOT LIKE" : "LIKE"} @${parameterName} ESCAPE '\\'`;
+      }
+
+      input.params[parameterName] = normalizedValue;
+      return `IFNULL(${input.column}, '') ${term.exclude ? "!=" : "="} @${parameterName}`;
+    });
+
+    return `(${andClauses.join(" AND ")})`;
+  });
+
+  return `(${orClauses.join(" OR ")})`;
 }
 
 function formatUtcDateForDatabase(date: Date) {
@@ -1855,7 +1906,7 @@ export function listAdminReimbursementReports(options?: {
   channelCode?: string;
   reporter?: string;
   note?: string;
-  expenseCategory?: ReimbursementExpenseCategory;
+  expenseCategory?: string;
   createdDateFrom?: string;
   createdDateTo?: string;
   timeZone?: string;
@@ -1877,7 +1928,12 @@ export function listAdminReimbursementReports(options?: {
   const clauses: string[] = [];
   const params: Record<string, number | string> = {};
   const search = options?.search?.trim() ?? "";
-  const noteFilterExpression = parseReimbursementNoteFilter(options?.note ?? "");
+  const reporterFilterExpression = parseReimbursementFilter(options?.reporter ?? "", "报账人");
+  const noteFilterExpression = parseReimbursementFilter(options?.note ?? "", "备注");
+  const expenseCategoryFilterExpression = parseReimbursementFilter(
+    options?.expenseCategory ?? "",
+    "类别",
+  );
 
   if (options?.channelCode) {
     clauses.push("channel_code = @channelCode");
@@ -1901,28 +1957,43 @@ export function listAdminReimbursementReports(options?: {
     }
   }
 
-  if (options?.reporter) {
-    clauses.push("reporter LIKE @reporter ESCAPE '\\'");
-    params.reporter = `%${escapeLikePattern(options.reporter)}%`;
+  if (reporterFilterExpression.length > 0) {
+    clauses.push(buildReimbursementFilterSql({
+      column: "reporter",
+      expression: reporterFilterExpression,
+      parameterPrefix: "reporter",
+      params,
+      valueMode: "contains",
+    }));
   }
 
-  if (options?.expenseCategory) {
-    clauses.push("expense_category = @expenseCategory");
-    params.expenseCategory = options.expenseCategory;
+  if (expenseCategoryFilterExpression.length > 0) {
+    clauses.push(buildReimbursementFilterSql({
+      column: "expense_category",
+      expression: expenseCategoryFilterExpression,
+      normalizeValue(value) {
+        const category = normalizeReimbursementExpenseCategory(value);
+
+        if (!category) {
+          throw new ReimbursementFilterValidationError(`类别筛选值无效：${value}`);
+        }
+
+        return category;
+      },
+      parameterPrefix: "expenseCategory",
+      params,
+      valueMode: "exact",
+    }));
   }
 
   if (noteFilterExpression.length > 0) {
-    const orClauses = noteFilterExpression.map((andGroup, groupIndex) => {
-      const andClauses = andGroup.map((term, termIndex) => {
-        const parameterName = `note${groupIndex}_${termIndex}`;
-        params[parameterName] = `%${escapeLikePattern(term.value)}%`;
-        return `IFNULL(note, '') ${term.exclude ? "NOT LIKE" : "LIKE"} @${parameterName} ESCAPE '\\'`;
-      });
-
-      return `(${andClauses.join(" AND ")})`;
-    });
-
-    clauses.push(`(${orClauses.join(" OR ")})`);
+    clauses.push(buildReimbursementFilterSql({
+      column: "note",
+      expression: noteFilterExpression,
+      parameterPrefix: "note",
+      params,
+      valueMode: "contains",
+    }));
   }
 
   if (options?.createdDateFrom) {
