@@ -738,6 +738,7 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     assert.match(pageHtml, /#createdDateFrom::-webkit-date-and-time-value,\s*#createdDateTo::-webkit-date-and-time-value \{\s*display: flex;\s*align-items: center;\s*height: 44px;/);
     assert.match(pageHtml, /renderRemarkContent\(item\.note, "-"\)/);
     assert.match(pageHtml, /tag note-pill/);
+    assert.match(pageHtml, /\/\[平农\]\/gu/);
     assert.match(pageHtml, /function hasSelectedTextWithin\(element\)/);
     assert.match(pageHtml, /selection\.getRangeAt\(index\)\.intersectsNode\(element\)/);
     assert.match(pageHtml, /if \(event\.detail > 1 \|\| hasSelectedTextWithin\(trigger\)\) \{\s*return;\s*\}/);

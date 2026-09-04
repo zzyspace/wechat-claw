@@ -2062,15 +2062,10 @@
 
       function renderRemarkContent(value, fallback = "(空)") {
         const text = compactText(value, fallback);
-
-        if (!text.includes("平")) {
-          return escapeHtml(text);
-        }
-
-        return text
-          .split("平")
-          .map((part) => escapeHtml(part))
-          .join('<span class="tag note-pill">平</span>');
+        return escapeHtml(text).replace(
+          /[平农]/gu,
+          (character) => `<span class="tag note-pill">${character}</span>`,
+        );
       }
 
       function getCategoryTagClass(categoryCode) {
