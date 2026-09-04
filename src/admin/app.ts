@@ -42,7 +42,9 @@ import {
   getAdminReimbursementReportDetail,
   getReimbursementReportByRawMessageId,
   listAdminReimbursementReports,
+  ReimbursementNoteFilterSyntaxError,
   updateAdminReimbursementReport,
+  validateReimbursementNoteFilter,
 } from "../scenarios/reimbursement/repository.js";
 import { buildReimbursementReceiptText } from "../scenarios/reimbursement/receipt.js";
 import { getRawMessageByMessageExternalId } from "../core/storage/raw-message-repository.js";
@@ -392,16 +394,27 @@ function resolveStaticDir(staticDir?: string) {
 function parseReportListQuery(query: Record<string, unknown>) {
   const createdDateFrom = parseDateFilter(query.createdDateFrom, "createdDateFrom");
   const createdDateTo = parseDateFilter(query.createdDateTo, "createdDateTo");
+  const note = trimString(query.note);
 
   if (createdDateFrom && createdDateTo && createdDateFrom > createdDateTo) {
     throw new AdminValidationError("createdDateFrom 不能晚于 createdDateTo。", "createdDateFrom");
+  }
+
+  try {
+    validateReimbursementNoteFilter(note);
+  } catch (error) {
+    if (error instanceof ReimbursementNoteFilterSyntaxError) {
+      throw new AdminValidationError(error.message, "note");
+    }
+
+    throw error;
   }
 
   return {
     search: trimString(query.search) || undefined,
     channelCode: trimString(query.channelCode) || undefined,
     reporter: trimString(query.reporter) || undefined,
-    note: trimString(query.note) || undefined,
+    note: note || undefined,
     expenseCategory: parseExpenseCategory(query.expenseCategory),
     createdDateFrom: createdDateFrom || undefined,
     createdDateTo: createdDateTo || undefined,

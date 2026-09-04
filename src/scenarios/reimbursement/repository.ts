@@ -237,6 +237,57 @@ function escapeLikePattern(value: string) {
   return value.replaceAll("\\", "\\\\").replaceAll("%", "\\%").replaceAll("_", "\\_");
 }
 
+interface ReimbursementNoteFilterTerm {
+  exclude: boolean;
+  value: string;
+}
+
+export class ReimbursementNoteFilterSyntaxError extends Error {
+  constructor() {
+    super("备注筛选格式无效，请使用 ! 表示排除、& 表示与、|| 表示或。");
+    this.name = "ReimbursementNoteFilterSyntaxError";
+  }
+}
+
+function parseReimbursementNoteFilter(input: string): ReimbursementNoteFilterTerm[][] {
+  const normalized = input.trim();
+
+  if (!normalized) {
+    return [];
+  }
+
+  if (normalized.includes("(") || normalized.includes(")")) {
+    throw new ReimbursementNoteFilterSyntaxError();
+  }
+
+  return normalized.split("||").map((orGroup) => {
+    if (!orGroup.trim() || orGroup.includes("|")) {
+      throw new ReimbursementNoteFilterSyntaxError();
+    }
+
+    return orGroup.split("&").map((rawTerm) => {
+      const term = rawTerm.trim();
+
+      if (!term) {
+        throw new ReimbursementNoteFilterSyntaxError();
+      }
+
+      const exclude = term.startsWith("!");
+      const value = (exclude ? term.slice(1) : term).trim();
+
+      if (!value) {
+        throw new ReimbursementNoteFilterSyntaxError();
+      }
+
+      return { exclude, value };
+    });
+  });
+}
+
+export function validateReimbursementNoteFilter(input: string) {
+  parseReimbursementNoteFilter(input);
+}
+
 function formatUtcDateForDatabase(date: Date) {
   return date.toISOString().slice(0, 19).replace("T", " ");
 }
@@ -1826,17 +1877,7 @@ export function listAdminReimbursementReports(options?: {
   const clauses: string[] = [];
   const params: Record<string, number | string> = {};
   const search = options?.search?.trim() ?? "";
-  let noteFilter = options?.note?.trim() ?? "";
-  let excludeNoteFilter = false;
-
-  if (noteFilter.startsWith("!")) {
-    const exclusion = noteFilter.slice(1).trim();
-
-    if (exclusion) {
-      noteFilter = exclusion;
-      excludeNoteFilter = true;
-    }
-  }
+  const noteFilterExpression = parseReimbursementNoteFilter(options?.note ?? "");
 
   if (options?.channelCode) {
     clauses.push("channel_code = @channelCode");
@@ -1870,9 +1911,18 @@ export function listAdminReimbursementReports(options?: {
     params.expenseCategory = options.expenseCategory;
   }
 
-  if (noteFilter) {
-    clauses.push(`IFNULL(note, '') ${excludeNoteFilter ? "NOT LIKE" : "LIKE"} @note ESCAPE '\\'`);
-    params.note = `%${escapeLikePattern(noteFilter)}%`;
+  if (noteFilterExpression.length > 0) {
+    const orClauses = noteFilterExpression.map((andGroup, groupIndex) => {
+      const andClauses = andGroup.map((term, termIndex) => {
+        const parameterName = `note${groupIndex}_${termIndex}`;
+        params[parameterName] = `%${escapeLikePattern(term.value)}%`;
+        return `IFNULL(note, '') ${term.exclude ? "NOT LIKE" : "LIKE"} @${parameterName} ESCAPE '\\'`;
+      });
+
+      return `(${andClauses.join(" AND ")})`;
+    });
+
+    clauses.push(`(${orClauses.join(" OR ")})`);
   }
 
   if (options?.createdDateFrom) {

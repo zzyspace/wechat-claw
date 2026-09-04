@@ -619,6 +619,41 @@ test("listAdminReimbursementReports filters by search, partial reporter, categor
     new Set([searchReport.id, blankNoteReport.id]),
   );
 
+  const andNoteSearch = listAdminReimbursementReports({
+    channelCode: "reimbursement_admin_list_test",
+    note: "午餐 & 采购",
+    limit: 20,
+    offset: 0,
+  });
+  assert.deepEqual(andNoteSearch.items.map((item) => item.id), [searchReport.id]);
+
+  const orNoteSearch = listAdminReimbursementReports({
+    channelCode: "reimbursement_admin_list_test",
+    note: "采购||待补",
+    limit: 20,
+    offset: 0,
+  });
+  assert.deepEqual(
+    new Set(orNoteSearch.items.map((item) => item.id)),
+    new Set([searchReport.id, reviewReport.id]),
+  );
+
+  const precedenceNoteSearch = listAdminReimbursementReports({
+    channelCode: "reimbursement_admin_list_test",
+    note: "采购 || 待补 & !票",
+    limit: 20,
+    offset: 0,
+  });
+  assert.deepEqual(precedenceNoteSearch.items.map((item) => item.id), [searchReport.id]);
+
+  const combinedExclusionSearch = listAdminReimbursementReports({
+    channelCode: "reimbursement_admin_list_test",
+    note: "!待补&!采购",
+    limit: 20,
+    offset: 0,
+  });
+  assert.deepEqual(combinedExclusionSearch.items.map((item) => item.id), [blankNoteReport.id]);
+
   const noteShouldNotMatchOcr = listAdminReimbursementReports({
     note: "待确认",
     limit: 20,

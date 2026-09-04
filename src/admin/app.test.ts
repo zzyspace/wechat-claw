@@ -728,7 +728,7 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     assert.match(pageHtml, /systemThemePreference\.addEventListener\("change"/);
     assert.match(pageHtml, /placeholder="支持部分匹配，如 Ry \/ 张"/);
     assert.match(pageHtml, /<label for="note">备注<\/label>/);
-    assert.match(pageHtml, /placeholder="支持部分匹配；输入 !平 表示不含“平”"/);
+    assert.match(pageHtml, /placeholder="支持 !排除、&与、\|\|或，如 采购&!平"/);
     assert.match(pageHtml, /\.field \{[^}]*min-width: 0;/s);
     assert.match(pageHtml, /\.field input,\s*\.field select,\s*\.field textarea \{[^}]*min-width: 0;/s);
     assert.match(pageHtml, /\.controls-grid \.field select \{[^}]*height: 46px;[^}]*-webkit-appearance: none;/s);
@@ -1268,6 +1268,22 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     assert.equal(listPayload.items[0]?.billAttachment?.id, seeded.existingAttachmentId);
     assert.equal(listPayload.items[0]?.billAttachment?.mimeType, "image/jpeg");
     assert.equal(listPayload.items[0]?.billAttachment?.exists, true);
+
+    for (const invalidNoteFilter of ["采购|待补", "采购&", "||采购", "(采购||待补)"]) {
+      const invalidNoteFilterResponse = await fetch(
+        `${server.baseUrl}/expense/api/reports?note=${encodeURIComponent(invalidNoteFilter)}`,
+        {
+          headers: {
+            ...createAdminAuthHeaders(),
+            Accept: "application/json",
+          },
+        },
+      );
+      assert.equal(invalidNoteFilterResponse.status, 400);
+      const invalidNoteFilterPayload = await invalidNoteFilterResponse.json();
+      assert.equal(invalidNoteFilterPayload.error.field, "note");
+      assert.match(invalidNoteFilterPayload.error.message, /备注筛选格式无效/);
+    }
 
     const guestListResponse = await fetch(`${server.baseUrl}/expense/api/reports?limit=20`, {
       headers: {
