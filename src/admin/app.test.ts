@@ -739,6 +739,9 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     assert.match(pageHtml, /renderRemarkContent\(item\.note, "-"\)/);
     assert.match(pageHtml, /tag note-pill/);
     assert.match(pageHtml, /\/\[平农\]\/gu/);
+    assert.match(pageHtml, /character === "农" \? " note-pill-farm" : ""/);
+    assert.match(pageHtml, /\.tag\.note-pill-farm \{[^}]*color: #15803d;[^}]*background: rgba\(34, 197, 94, 0\.14\);/s);
+    assert.match(pageHtml, /:root\[data-theme="dark"\] \.tag\.note-pill-farm \{[^}]*color: #69dc8d;/s);
     assert.match(pageHtml, /function hasSelectedTextWithin\(element\)/);
     assert.match(pageHtml, /selection\.getRangeAt\(index\)\.intersectsNode\(element\)/);
     assert.match(pageHtml, /if \(event\.detail > 1 \|\| hasSelectedTextWithin\(trigger\)\) \{\s*return;\s*\}/);

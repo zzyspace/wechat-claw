@@ -838,6 +838,12 @@
         border-color: rgba(255, 159, 10, 0.24);
       }
 
+      .tag.note-pill-farm {
+        color: #15803d;
+        background: rgba(34, 197, 94, 0.14);
+        border-color: rgba(34, 197, 94, 0.18);
+      }
+
       .bill-link,
       .bill-placeholder {
         display: inline-flex;
@@ -1060,6 +1066,10 @@
       :root[data-theme="dark"] .tag.reporter-3,
       :root[data-theme="dark"] .tag.reporter-9 {
         color: #ffc266;
+      }
+
+      :root[data-theme="dark"] .tag.note-pill-farm {
+        color: #69dc8d;
       }
 
       :root[data-theme="dark"] .tag.category-food,
@@ -2064,7 +2074,7 @@
         const text = compactText(value, fallback);
         return escapeHtml(text).replace(
           /[平农]/gu,
-          (character) => `<span class="tag note-pill">${character}</span>`,
+          (character) => `<span class="tag note-pill${character === "农" ? " note-pill-farm" : ""}">${character}</span>`,
         );
       }
 
