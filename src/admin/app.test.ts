@@ -714,7 +714,9 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     assert.match(pageHtml, /href="\/invoice"/);
     assert.match(pageHtml, /href="\/staff"/);
     assert.match(pageHtml, /\.center-switcher-option\[aria-current="page"\] \{ background: var\(--brand-soft\); \}/);
+    assert.match(pageHtml, /\.center-switcher-option\[data-management\] svg \{ color: #a78bfa; \}/);
     assert.match(pageHtml, /M8 7V5\.5A2\.5 2\.5 0 0 1 10\.5 3H22/);
+    assert.match(pageHtml, /link\.innerHTML = '[^']+<span>账号管理<\/span><span><\/span>'/);
     assert.match(pageHtml, /allowed\.includes\(link\.dataset\.center\)/);
     assert.match(pageHtml, /elements\.centerSwitcherBackdrop\.addEventListener\("click"/);
     assert.match(pageHtml, /id="themeIcon" aria-hidden="true">🌙<\/span>/);

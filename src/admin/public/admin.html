@@ -137,6 +137,7 @@
       .center-switcher-option[data-center="expense"] svg { color: #3478f6; }
       .center-switcher-option[data-center="invoice"] svg { color: #34b978; }
       .center-switcher-option[data-center="staff"] svg { color: #f0a52b; }
+      .center-switcher-option[data-management] svg { color: #a78bfa; }
       .center-switcher-check { color: var(--brand); font-size: 22px; font-weight: 800; text-align: center; }
 
       .topbar-actions {
@@ -3119,7 +3120,13 @@
           const allowed = payload.apps || [];
           for (const link of menu.querySelectorAll("[data-center]")) link.hidden = !allowed.includes(link.dataset.center);
           if (payload.canManageAccounts && !menu.querySelector('[data-management]')) {
-            const link = document.createElement("a"); link.href = "/auth/accounts"; link.className = "center-switcher-option"; link.dataset.management = "true"; link.setAttribute("role", "menuitem"); link.textContent = "账号管理"; menu.appendChild(link);
+            const link = document.createElement("a");
+            link.href = "/auth/accounts";
+            link.className = "center-switcher-option";
+            link.dataset.management = "true";
+            link.setAttribute("role", "menuitem");
+            link.innerHTML = '<svg viewBox="0 0 32 32" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="9.5" r="4.25" fill="currentColor" fill-opacity=".16"/><path d="M4.5 25.5c.65-5.8 3.15-8.5 7.5-8.5 3.25 0 5.45 1.5 6.65 4.55"/><circle cx="23.25" cy="22.75" r="3.25" fill="currentColor" fill-opacity=".16"/><path d="M23.25 17.5v1.15M23.25 26.85V28M18 22.75h1.15M27.35 22.75h1.15M19.55 19.05l.8.8M26.15 25.65l.8.8M26.95 19.05l-.8.8M20.35 25.65l-.8.8"/><circle cx="23.25" cy="22.75" r="1.05" fill="currentColor" stroke="none"/></svg><span>账号管理</span><span></span>';
+            menu.appendChild(link);
           }
           trigger.disabled = allowed.filter((app) => app !== currentApp).length === 0 && !payload.canManageAccounts;
         } catch { /* Keep the current center label, with switching disabled. */ }
