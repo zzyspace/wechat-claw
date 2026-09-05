@@ -1049,4 +1049,4 @@ Deploy the updated Gateway in legacy mode before changing the shared staff
 Nginx route. Enable unified mode across Gateway and all three backends in one
 coordinated maintenance window after account mapping and UI validation.
 Account-management navigation and permission-aware controls are implemented locally.
-Production cutover remains pending.
+Unified authentication was enabled and verified in production on 2026-09-06.
