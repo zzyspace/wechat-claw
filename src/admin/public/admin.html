@@ -1483,7 +1483,8 @@
           width: calc(100vw - 16px);
         }
       }
-    </style>
+    [hidden] { display: none !important; }
+</style>
   </head>
   <body>
     <div class="page">
@@ -1520,7 +1521,7 @@
           <h1>报账查看后台</h1>
           <p>查看已入库的报账记录，按门店、报账人、类别、日期和备注文字筛选，并展开详情查看 OCR、原始消息、附件和回执记录。</p>
           <div class="hero-actions">
-            <form method="get" action="/expense/submit">
+            <form method="get" action="/expense/submit" id="newReportForm" hidden>
               <button class="button-primary submit-button" type="submit">
                 <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <rect x="4" y="2.5" width="14" height="19" rx="2" />
@@ -1873,6 +1874,7 @@
         attachmentPreviewReportId: null,
         timeZone: DEFAULT_TIME_ZONE,
         canWrite: false,
+        canEdit: false, canDelete: false, canImport: false, canAttachment: false, unifiedAuthorization: false,
         accountRole: "",
         accountUsername: "",
         managerStores: [],
@@ -2176,7 +2178,7 @@
         state.accountUsername = String(account?.username || "");
         state.managerStores = Array.isArray(account?.managerStores) ? account.managerStores : [];
 
-        if (state.accountRole !== "manager") {
+        if (state.unifiedAuthorization || state.accountRole !== "manager") {
           return;
         }
 
@@ -2208,7 +2210,7 @@
       }
 
       function openCenterSwitcher() {
-        if (state.accountRole !== "admin") return;
+        if (elements.centerSwitcherTrigger.disabled) return;
         elements.centerSwitcher.classList.add("is-open");
         elements.centerSwitcherTrigger.setAttribute("aria-expanded", "true");
         elements.centerSwitcherMenu.hidden = false;
@@ -2218,6 +2220,7 @@
       }
 
       function restoreRoleScopedFilterValues() {
+        if (state.unifiedAuthorization) return;
         if (state.accountRole === "manager") {
           elements.filterChannelCode.value = "";
           elements.filterReporter.value = state.accountUsername;
@@ -2616,6 +2619,7 @@
       }
 
       function openManualImportModal() {
+        if (!state.canImport) return;
         resetManualImportForm();
         elements.manualImportModal.hidden = false;
         window.setTimeout(() => elements.manualChannelCode.focus(), 0);
@@ -2643,6 +2647,7 @@
       }
 
       function openBatchImportModal() {
+        if (!state.canImport) return;
         resetBatchImportForm();
         elements.batchImportModal.hidden = false;
         window.setTimeout(() => elements.batchChannelCode.focus(), 0);
@@ -2783,7 +2788,7 @@
           row.classList.toggle("is-selected", item.id === state.selectedReportId);
           const isDeleting = state.deletingIds.has(item.id);
           const operationCell = state.canWrite
-            ? `<td><div class="operation-buttons"><button type="button" data-edit-id="${item.id}">编辑</button><button class="button-danger" type="button" data-delete-id="${item.id}" ${isDeleting ? "disabled" : ""}>${isDeleting ? "删除中" : "删除"}</button></div></td>`
+            ? `<td><div class="operation-buttons">${state.canEdit ? `<button type="button" data-edit-id="${item.id}">编辑</button>` : ""}${state.canDelete ? `<button class="button-danger" type="button" data-delete-id="${item.id}" ${isDeleting ? "disabled" : ""}>${isDeleting ? "删除中" : "删除"}</button>` : ""}</div></td>`
             : "";
           row.innerHTML = `
             <td>${renderStoreCell(item)}</td>
@@ -2792,7 +2797,7 @@
             <td>${renderAmountCell(item)}</td>
             <td>${renderCategoryTag(item.expenseCategory, item.expenseCategoryLabel)}</td>
             <td class="note-cell"><span class="note-content">${renderRemarkContent(item.note, "-")}</span></td>
-            <td class="column-bill">${renderBillAttachment(item)}</td>
+            <td class="column-bill">${state.canAttachment ? renderBillAttachment(item) : "无附件权限"}</td>
             <td><span class="tag ${item.needsReview ? "warn" : "ok"}">${item.needsReview ? "需复核" : "已确认"}</span></td>
             <td>${escapeHtml(formatTimestamp(item.updatedAt))}</td>
             <td><button type="button" data-report-id="${item.id}">#${item.id}</button></td>
@@ -2870,6 +2875,7 @@
       }
 
       function openAttachmentPreviewModal(reportId) {
+        if (!state.canAttachment) return;
         const previewableItems = getPreviewableReportItems();
         const previewIndex = previewableItems.findIndex((item) => item.id === reportId);
 
@@ -3101,6 +3107,26 @@
         }
       }
 
+
+      async function loadAuthorizedCenters(container, trigger, menu, currentApp) {
+        container.hidden = false;
+        trigger.disabled = true;
+        trigger.querySelector(".center-switcher-chevron")?.setAttribute("hidden", "");
+        try {
+          const response = await fetch("/auth/api/session", { headers: { Accept: "application/json" } });
+          const payload = await response.json();
+          if (!response.ok) return;
+          const allowed = payload.apps || [];
+          for (const link of menu.querySelectorAll("[data-center]")) link.hidden = !allowed.includes(link.dataset.center);
+          if (payload.canManageAccounts && !menu.querySelector('[data-management]')) {
+            const link = document.createElement("a"); link.href = "/auth/accounts"; link.className = "center-switcher-option"; link.dataset.management = "true"; link.setAttribute("role", "menuitem"); link.textContent = "账号管理"; menu.appendChild(link);
+          }
+          trigger.disabled = allowed.filter((app) => app !== currentApp).length === 0 && !payload.canManageAccounts;
+        } catch { /* Keep the current center label, with switching disabled. */ }
+        const arrow = trigger.querySelector(".center-switcher-chevron");
+        if (arrow) arrow.hidden = trigger.disabled;
+      }
+
       async function loadSession() {
         const response = await fetch(buildAuthFetchUrl(`${BASE_PATH}/api/session`), {
           headers: {
@@ -3113,18 +3139,31 @@
           throw new Error(payload?.error?.message || "账号权限加载失败");
         }
 
-        state.canWrite = payload.permissions?.canWrite === true;
+        document.getElementById("newReportForm").hidden = payload.permissions?.canSubmit !== true;
+        state.canEdit = payload.permissions?.canEdit ?? payload.permissions?.canWrite === true;
+        state.canDelete = payload.permissions?.canDelete ?? payload.permissions?.canWrite === true;
+        state.canImport = payload.permissions?.canImport ?? payload.permissions?.canWrite === true;
+        state.canAttachment = payload.permissions?.canAttachment ?? true;
+        state.canWrite = state.canEdit || state.canDelete;
+        state.unifiedAuthorization = Boolean(payload.authorization);
+
         configureReportFiltersForAccount(payload.account);
-        const canSwitchCenters = state.accountRole === "admin";
-        elements.centerSwitcherTrigger.disabled = !canSwitchCenters;
-        elements.centerSwitcherChevron.toggleAttribute("hidden", !canSwitchCenters);
+        await loadAuthorizedCenters(elements.centerSwitcher, elements.centerSwitcherTrigger, elements.centerSwitcherMenu, "expense");
+        elements.centerSwitcherChevron.toggleAttribute("hidden", elements.centerSwitcherTrigger.disabled);
+        if (payload.authorization) {
+          elements.filterReporter.readOnly = false;
+          elements.filterReporter.placeholder = "筛选报账人";
+          elements.reporterFilterLabel.textContent = "报账人";
+          const allowed = payload.authorization.allowedChannelCodes;
+          if (allowed) elements.filterChannelCode.replaceChildren(new Option("全部（权限内）", ""), ...allowed.map((code) => new Option(STORE_LABELS_BY_CHANNEL_CODE.get(code) || code, code)));
+        }
         const roleLabel = ({ admin: "管理员", partner: "合伙人", manager: "管理" })[payload.account?.role]
           || "账号";
         elements.operationColumnHeader.hidden = !state.canWrite;
         elements.accessPill.hidden = false;
         elements.accessPill.textContent = `${roleLabel} ${payload.account?.username || ""}`.trim();
-        elements.manualImportOpen.hidden = !state.canWrite;
-        elements.batchImportOpen.hidden = !state.canWrite;
+        elements.manualImportOpen.hidden = !state.canImport;
+        elements.batchImportOpen.hidden = !state.canImport;
       }
 
       async function loadManualImportOptions() {
@@ -3166,7 +3205,7 @@
       }
 
       async function submitManualImport() {
-        if (!state.canWrite || state.importing) {
+        if (!state.canImport || state.importing) {
           return;
         }
 
@@ -3224,7 +3263,7 @@
       }
 
       async function submitBatchImport() {
-        if (!state.canWrite || state.importing) {
+        if (!state.canImport || state.importing) {
           return;
         }
 
@@ -3281,7 +3320,7 @@
       }
 
       function openEditReportModal(reportId) {
-        if (!state.canWrite || state.savingReport) {
+        if (!state.canEdit || state.savingReport) {
           return;
         }
 
@@ -3319,7 +3358,7 @@
 
       async function submitEditReport() {
         const original = state.editingReport;
-        if (!state.canWrite || state.savingReport || !original) {
+        if (!state.canEdit || state.savingReport || !original) {
           return;
         }
 
@@ -3396,7 +3435,7 @@
       }
 
       async function deleteReport(reportId) {
-        if (!state.canWrite) {
+        if (!state.canDelete) {
           setStatus("当前账号无权删除报账记录。", true);
           return;
         }
@@ -3684,7 +3723,7 @@
         const editButton = target.closest("button[data-edit-id]");
         if (editButton) {
           const reportId = Number.parseInt(editButton.getAttribute("data-edit-id") || "", 10);
-          if (state.canWrite && Number.isFinite(reportId) && reportId > 0) {
+          if (state.canEdit && Number.isFinite(reportId) && reportId > 0) {
             openEditReportModal(reportId);
           }
           return;
@@ -3692,7 +3731,7 @@
 
         const deleteButton = target.closest("button[data-delete-id]");
         if (deleteButton) {
-          if (!state.canWrite) {
+          if (!state.canDelete) {
             return;
           }
 
@@ -3793,11 +3832,11 @@
       async function initialize() {
         try {
           await loadSession();
-          if (state.canWrite) {
+          if (state.canImport) {
             await loadManualImportOptions();
           }
           await loadReports();
-          if (state.canWrite) {
+          if (state.canImport) {
             resumeStoredBatchImportTask();
           }
         } catch (error) {

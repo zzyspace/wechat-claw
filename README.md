@@ -1036,3 +1036,17 @@ WECHATY_LOSS_EXTRACTION_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/
 - `deliveryTargets` 里的联系人昵称或群名是否完全一致
 - 机器人号是否真的在目标群里
 - 如果只是想改这个字段，优先使用 `deploy/edit-wechat-claw-channels-json.sh`
+
+## Unified admin authorization (opt-in)
+
+The admin service defaults to `ADMIN_AUTH_MODE=legacy`. In `unified` mode it
+resolves the Cookie against the loopback Gateway on every request, enforces
+application permissions and data scopes, and never falls back to Basic Auth.
+Set the backend-only `ADMIN_AUTH_GATEWAY_URL` and `ADMIN_AUTH_INTERNAL_TOKEN`
+in `/etc/admin-auth-internal.env`; select the mode in
+`/etc/admin-auth-expense-mode.env`. Only the admin service consumes these overrides.
+Deploy the updated Gateway in legacy mode before changing the shared staff
+Nginx route. Enable unified mode across Gateway and all three backends in one
+coordinated maintenance window after account mapping and UI validation.
+Account-management navigation and permission-aware controls are implemented locally.
+Production cutover remains pending.

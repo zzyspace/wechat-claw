@@ -1,3 +1,4 @@
+import type { ReimbursementAccessPrincipal } from "../../core/config/reimbursement-access.js";
 import crypto from "node:crypto";
 
 import { saveScenarioExtraction, type ScenarioExtractionRecord } from "../../core/scenarios/scenario-extraction-repository.js";
@@ -15,6 +16,7 @@ const MANUAL_IMPORT_FALLBACK_TEXT = "(手工补录)";
 const DEFAULT_TIME_ZONE = "Asia/Shanghai";
 
 export interface ManualReimbursementImportInput {
+  submittedBy?: ReimbursementAccessPrincipal;
   amount: number;
   channelCode: string;
   channelName: string;
@@ -92,6 +94,9 @@ export function importManualReimbursementReport(
     confidence: 1,
     needsReview: false,
     primaryRawMessageId: saveResult.rawMessageId,
+    submittedByAccountId: input.submittedBy?.accountId,
+    submittedByUsername: input.submittedBy?.username,
+    submittedByRole: input.submittedBy?.role,
     timeZone: input.timeZone,
     referenceDateTime: input.sentAt,
   });

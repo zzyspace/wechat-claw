@@ -1,3 +1,4 @@
+import type { ExpensePolicy } from "./authorization.js";
 import { timingSafeEqual } from "node:crypto";
 
 import type { NextFunction, Request, Response } from "express";
@@ -8,6 +9,7 @@ import type {
 } from "../core/config/reimbursement-access.js";
 
 export interface AdminSession extends ReimbursementAccessPrincipal {
+  authorization?: ExpensePolicy;
   canWrite: boolean;
   canSubmit: boolean;
   canViewAllReports: boolean;

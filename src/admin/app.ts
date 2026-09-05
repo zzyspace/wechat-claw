@@ -1,3 +1,5 @@
+import { createGatewayAuth, gatewayAuthConfig, type GatewayAuthConfig } from "./gateway-auth.js";
+import { hasPermission, requirePermission, submissionChannels, canViewResource, reportAccessScope } from "./authorization.js";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
@@ -53,7 +55,6 @@ import { getRawMessageByMessageExternalId } from "../core/storage/raw-message-re
 import {
   createAdminAuthMiddleware,
   createShortcutApiAuthMiddleware,
-  enforceAdminRole,
   getAdminSession,
 } from "./auth.js";
 
@@ -438,28 +439,6 @@ function parseReportListQuery(query: Record<string, unknown>) {
   };
 }
 
-function canAccessSubmittedResource(
-  principal: ReimbursementAccessPrincipal,
-  resource: { channelCode?: string; submittedByAccountId?: string },
-) {
-  if (principal.role === "admin" || principal.role === "partner") {
-    return true;
-  }
-  return (
-    resource.submittedByAccountId === principal.accountId &&
-    Boolean(resource.channelCode) &&
-    getAllowedSubmissionChannelCodes(principal).includes(resource.channelCode as string)
-  );
-}
-
-function getReportAccessScope(principal: ReimbursementAccessPrincipal) {
-  if (principal.role !== "manager") return {};
-  return {
-    submittedByAccountId: principal.accountId,
-    allowedChannelCodes: getAllowedSubmissionChannelCodes(principal),
-  };
-}
-
 function sendNotFound(_request: express.Request, response: express.Response) {
   response.status(404).type("text/plain; charset=utf-8").send("Not found");
 }
@@ -468,9 +447,12 @@ export function createApp(input?: {
   config?: AppConfig;
   reimbursementExtractor?: ReimbursementExtractor;
   staticDir?: string;
+  gatewayAuth?: GatewayAuthConfig;
 }) {
   const config = input?.config ?? getAppConfig();
-  if (config.reimbursementAccountsParseError) {
+  const gateway = input?.gatewayAuth ? gatewayAuthConfig({ ADMIN_AUTH_MODE: input.gatewayAuth.mode,
+    ADMIN_AUTH_GATEWAY_URL: input.gatewayAuth.url, ADMIN_AUTH_INTERNAL_TOKEN: input.gatewayAuth.token }) : gatewayAuthConfig();
+  if (gateway.mode === "legacy" && config.reimbursementAccountsParseError) {
     throw new Error(config.reimbursementAccountsParseError);
   }
   const staticDir = resolveStaticDir(input?.staticDir);
@@ -494,7 +476,7 @@ export function createApp(input?: {
       callback(null, true);
     },
   });
-  const adminAuth = createAdminAuthMiddleware({
+  const adminAuth = gateway.mode === "unified" ? createGatewayAuth(gateway) : createAdminAuthMiddleware({
     username: config.adminUsername,
     password: config.adminPassword,
     accounts: config.reimbursementAccounts ?? [],
@@ -608,6 +590,7 @@ export function createApp(input?: {
   }
 
   app.disable("x-powered-by");
+  app.set("trust proxy", "loopback");
   app.use((request, _response, next) => {
     if (
       request.url === LEGACY_ADMIN_BASE_PATH ||
@@ -623,11 +606,11 @@ export function createApp(input?: {
     response.status(200).json({ ok: true });
   });
 
-  app.get([`${ADMIN_BASE_PATH}`, `${ADMIN_BASE_PATH}/`], adminAuth, (_request, response) => {
+  app.get([`${ADMIN_BASE_PATH}`, `${ADMIN_BASE_PATH}/`], adminAuth, requirePermission("report:view"), (_request, response) => {
     response.sendFile(path.join(staticDir, "admin.html"));
   });
 
-  app.get([`${ADMIN_BASE_PATH}/submit`, `${ADMIN_BASE_PATH}/submit/`], adminAuth, (_request, response) => {
+  app.get([`${ADMIN_BASE_PATH}/submit`, `${ADMIN_BASE_PATH}/submit/`], adminAuth, requirePermission("report:submit"), (_request, response) => {
     response.sendFile(path.join(staticDir, "submit.html"));
   });
   app.post(
@@ -754,12 +737,22 @@ export function createApp(input?: {
   );
 
   app.use(`${ADMIN_BASE_PATH}/api`, adminAuth);
+  const checkReport: express.RequestHandler = (request, response, next) => {
+    const session = getAdminSession(response);
+    const report = getAdminReimbursementReportDetail(Number(request.params.id));
+    if (!session || !report || !canViewResource(session, report)) {
+      response.status(404).json({ success: false, error: { message: "报账记录不存在。" } });
+      return;
+    }
+    next();
+  };
 
   app.get(`${ADMIN_BASE_PATH}/api/session`, (_request, response) => {
     const session = getAdminSession(response);
 
     response.status(200).json({
       success: true,
+      ...(session?.authorization ? { authorization: reportAccessScope(session) } : {}),
       account: {
         accountId: session?.accountId,
         managerStores: session?.managerStores,
@@ -767,6 +760,12 @@ export function createApp(input?: {
         role: session?.role,
       },
       permissions: {
+        ...(session?.authorization ? {
+          canAttachment: hasPermission(session, "attachment:view"),
+          canEdit: hasPermission(session, "report:edit"),
+          canDelete: hasPermission(session, "report:delete"),
+          canImport: hasPermission(session, "report:import"),
+        } : {}),
         canWrite: session?.canWrite === true,
         canSubmit: session?.canSubmit === true,
         canViewAllReports: session?.canViewAllReports === true,
@@ -774,7 +773,7 @@ export function createApp(input?: {
     });
   });
 
-  app.get(`${ADMIN_BASE_PATH}/api/submissions/:submissionPage/options`, (request, response) => {
+  app.get(`${ADMIN_BASE_PATH}/api/submissions/:submissionPage/options`, requirePermission("report:submit"), (request, response) => {
     if (!isUnifiedSubmissionPage(request.params.submissionPage)) {
       response.status(404).json({
         success: false,
@@ -790,12 +789,14 @@ export function createApp(input?: {
     }
     const configuredChannelCodes = new Set(
       config.channels
-        .filter((channel) => channel.enabled && channel.scenario === "reimbursement")
+        .filter((channel) => channel.enabled && channel.scenario === "reimbursement" &&
+          (!getAdminSession(response)?.authorization || submissionChannels(getAdminSession(response)!).includes(channel.code)))
         .map((channel) => channel.code),
     );
 
     response.status(200).json({
       success: true,
+      ...(session?.authorization ? { authorization: reportAccessScope(session) } : {}),
       account: {
         accountId: session.accountId,
         managerStores: session.managerStores,
@@ -803,21 +804,28 @@ export function createApp(input?: {
         role: session.role,
       },
       permissions: {
+        ...(session?.authorization ? {
+          canAttachment: hasPermission(session, "attachment:view"),
+          canEdit: hasPermission(session, "report:edit"),
+          canDelete: hasPermission(session, "report:delete"),
+          canImport: hasPermission(session, "report:import"),
+        } : {}),
         canWrite: session?.canWrite === true,
         canSubmit: session.canSubmit,
       },
-      channels: getAllowedSubmissionChannelCodes(session)
+      channels: submissionChannels(session)
         .filter((code) => configuredChannelCodes.has(code))
         .map((code) => ({ code, name: REIMBURSEMENT_SUBMISSION_CHANNEL_LABELS.get(code) ?? code })),
       timeZone: config.timeZone,
     });
   });
 
-  app.get(`${ADMIN_BASE_PATH}/api/manual-import-options`, enforceAdminRole, (_request, response) => {
+  app.get(`${ADMIN_BASE_PATH}/api/manual-import-options`, requirePermission("report:import"), (_request, response) => {
     response.status(200).json({
       success: true,
       channels: config.channels
-        .filter((channel) => channel.enabled && channel.scenario === "reimbursement")
+        .filter((channel) => channel.enabled && channel.scenario === "reimbursement" &&
+          (!getAdminSession(response)?.authorization || submissionChannels(getAdminSession(response)!).includes(channel.code)))
         .map((channel) => ({
           code: channel.code,
           name: channel.match.value,
@@ -832,7 +840,7 @@ export function createApp(input?: {
 
   app.post(
     `${ADMIN_BASE_PATH}/api/reports`,
-    enforceAdminRole,
+    requirePermission("report:import"),
     manualImportImageUpload.single("image"),
     (request, response, next) => {
       try {
@@ -841,7 +849,7 @@ export function createApp(input?: {
           (item) => item.enabled && item.scenario === "reimbursement" && item.code === channelCode,
         );
 
-        if (!channel) {
+        if (!channel || (getAdminSession(response)?.authorization && !submissionChannels(getAdminSession(response)!).includes(channel.code))) {
           throw new AdminValidationError("请选择有效的报账门店。", "channelCode");
         }
 
@@ -874,6 +882,7 @@ export function createApp(input?: {
           sentAt,
           timeZone: config.timeZone,
           attachments,
+          submittedBy: getAdminSession(response)?.authorization ? getAdminSession(response) : undefined,
         });
 
         response.status(201).json({
@@ -888,15 +897,17 @@ export function createApp(input?: {
 
   app.post(
     `${ADMIN_BASE_PATH}/api/batch-reports`,
-    enforceAdminRole,
+    requirePermission("report:import"),
     batchImportImageUpload.array("images", MAX_BATCH_IMPORT_IMAGES),
     (request, response, next) => createBatchReportTask(request, response, next, {
       submittedBy: getAdminSession(response),
+      ...(getAdminSession(response)?.authorization ? { allowedChannelCodes: new Set(submissionChannels(getAdminSession(response)!)) } : {}),
     }),
   );
 
   app.post(
     `${ADMIN_BASE_PATH}/api/submissions/:submissionPage/batch-reports`,
+    requirePermission("report:submit"),
     batchImportImageUpload.array("images", MAX_BATCH_IMPORT_IMAGES),
     (request, response, next) => {
       if (!isUnifiedSubmissionPage(request.params.submissionPage)) {
@@ -917,7 +928,7 @@ export function createApp(input?: {
         response.status(401).json({ success: false, error: { message: "需要登录。" } });
         return;
       }
-      const allowedChannelCodes = new Set(getAllowedSubmissionChannelCodes(session));
+      const allowedChannelCodes = new Set(submissionChannels(session));
       void createBatchReportTask(request, response, next, {
         allowedChannelCodes,
         reporter: session.username,
@@ -935,11 +946,13 @@ export function createApp(input?: {
       if (
         !task ||
         !session ||
-        (session.role !== "admin" && task.submittedByAccountId !== session.accountId) ||
-        (session.role === "manager" && !canAccessSubmittedResource(session, {
-          channelCode: task.channelCode,
-          submittedByAccountId: task.submittedByAccountId,
-        }))
+        (session.authorization ? (
+          (!hasPermission(session, "task:view:any") && task.submittedByAccountId !== session.accountId) ||
+          !(hasPermission(session, "report:view") && canViewResource(session, task) ||
+            (task.submittedByAccountId === session.accountId &&
+              (hasPermission(session, "report:submit") || hasPermission(session, "report:import")) && submissionChannels(session).includes(task.channelCode)))
+        ) : ((session.role !== "admin" && task.submittedByAccountId !== session.accountId) ||
+          (session.role === "manager" && !canViewResource(session, task))))
       ) {
         response.status(404).json({
           success: false,
@@ -959,7 +972,7 @@ export function createApp(input?: {
     }
   });
 
-  app.get(`${ADMIN_BASE_PATH}/api/reports`, (request, response, next) => {
+  app.get(`${ADMIN_BASE_PATH}/api/reports`, requirePermission("report:view"), (request, response, next) => {
     try {
       const session = getAdminSession(response);
       if (!session) {
@@ -969,7 +982,7 @@ export function createApp(input?: {
       const result = listAdminReimbursementReports(
         {
           ...parseReportListQuery(request.query as Record<string, unknown>),
-          ...getReportAccessScope(session),
+          ...reportAccessScope(session),
           timeZone: config.timeZone,
         },
       );
@@ -983,13 +996,13 @@ export function createApp(input?: {
     }
   });
 
-  app.get(`${ADMIN_BASE_PATH}/api/reports/:id`, (request, response, next) => {
+  app.get(`${ADMIN_BASE_PATH}/api/reports/:id`, requirePermission("report:view"), (request, response, next) => {
     try {
       const reportId = parsePositiveInteger(request.params.id, "id");
       const report = getAdminReimbursementReportDetail(reportId);
       const session = getAdminSession(response);
 
-      if (!report || !session || !canAccessSubmittedResource(session, {
+      if (!report || !session || !canViewResource(session, {
         channelCode: report.channelCode,
         submittedByAccountId: report.submittedByAccountId,
       })) {
@@ -1012,7 +1025,7 @@ export function createApp(input?: {
     }
   });
 
-  app.patch(`${ADMIN_BASE_PATH}/api/reports/:id`, enforceAdminRole, (request, response, next) => {
+  app.patch(`${ADMIN_BASE_PATH}/api/reports/:id`, requirePermission("report:edit"), checkReport, (request, response, next) => {
     try {
       const reportId = parsePositiveInteger(request.params.id, "id");
       const expectedUpdatedAt = parseRequiredString(request.body?.updatedAt, "updatedAt", "更新时间");
@@ -1071,7 +1084,7 @@ export function createApp(input?: {
     }
   });
 
-  app.delete(`${ADMIN_BASE_PATH}/api/reports/:id`, enforceAdminRole, (request, response, next) => {
+  app.delete(`${ADMIN_BASE_PATH}/api/reports/:id`, requirePermission("report:delete"), checkReport, (request, response, next) => {
     try {
       const reportId = parsePositiveInteger(request.params.id, "id");
       const deleted = deleteReimbursementReport(reportId);
@@ -1095,7 +1108,7 @@ export function createApp(input?: {
     }
   });
 
-  app.get(`${ADMIN_BASE_PATH}/api/attachments/:attachmentId/content`, (request, response, next) => {
+  app.get(`${ADMIN_BASE_PATH}/api/attachments/:attachmentId/content`, requirePermission("attachment:view"), (request, response, next) => {
     try {
       const attachmentId = parsePositiveInteger(request.params.attachmentId, "attachmentId");
       const attachment = findAdminReimbursementAttachment(attachmentId);
@@ -1105,7 +1118,7 @@ export function createApp(input?: {
         !attachment ||
         !attachment.exists ||
         !session ||
-        !canAccessSubmittedResource(session, {
+        !canViewResource(session, {
           channelCode: attachment.reportChannelCode,
           submittedByAccountId: attachment.reportSubmittedByAccountId,
         })

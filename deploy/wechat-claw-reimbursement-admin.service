@@ -7,6 +7,9 @@ Type=simple
 User=wechatclaw
 WorkingDirectory=/opt/wechat-claw/current
 EnvironmentFile=/etc/wechat-claw.env
+# Shared transport secret and per-application migration mode.
+EnvironmentFile=-/etc/admin-auth-internal.env
+EnvironmentFile=-/etc/admin-auth-expense-mode.env
 ExecStart=/usr/bin/node dist/admin/server.js
 Restart=always
 RestartSec=5

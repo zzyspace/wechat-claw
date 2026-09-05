@@ -627,7 +627,7 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     assert.equal(pageResponse.status, 200);
     const pageHtml = await pageResponse.text();
     assert.match(pageHtml, /报账查看后台/);
-    assert.match(pageHtml, /<form method="get" action="\/expense\/submit">/);
+    assert.match(pageHtml, /<form method="get" action="\/expense\/submit"[^>]*hidden>/);
     assert.match(pageHtml, /<button class="button-primary submit-button" type="submit">/);
     assert.match(pageHtml, /<span>新建报账<\/span>/);
     assert.match(pageHtml, /<h2 id="manualImportModalTitle">手工补录<\/h2>/);
@@ -654,7 +654,7 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     assert.match(pageHtml, /fetch\(buildAuthFetchUrl\(`\$\{BASE_PATH\}\/api\/manual-import-options`\)/);
     assert.match(pageHtml, /method: "POST"/);
     assert.match(pageHtml, /body: formData/);
-    assert.match(pageHtml, /elements\.manualImportOpen\.hidden = !state\.canWrite/);
+    assert.match(pageHtml, /elements\.manualImportOpen\.hidden = !state\.canImport/);
     assert.match(pageHtml, /id="batchImportOpen"[^>]*hidden>批量补录<\/button>/);
     assert.match(pageHtml, /<h2 id="batchImportModalTitle">批量补录<\/h2>/);
     assert.match(pageHtml, /每张报账图将分别调用原有模型识别，并各自生成一条报账记录/);
@@ -676,7 +676,7 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     assert.match(pageHtml, /正在识别：已完成 \$\{task\.completedCount\}\/\$\{task\.totalCount\}/);
     assert.match(pageHtml, /BATCH_TASK_STORAGE_KEY/);
     assert.match(pageHtml, /pollBatchImportTask\(task\.id\)/);
-    assert.match(pageHtml, /elements\.batchImportOpen\.hidden = !state\.canWrite/);
+    assert.match(pageHtml, /elements\.batchImportOpen\.hidden = !state\.canImport/);
     assert.match(pageHtml, /<label for="channelCode">门店<\/label>/);
     assert.match(pageHtml, /<option value="200" selected>200<\/option>/);
     assert.match(pageHtml, /const DEFAULT_PAGE_LIMIT = 200;/);
@@ -715,9 +715,7 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     assert.match(pageHtml, /href="\/staff"/);
     assert.match(pageHtml, /\.center-switcher-option\[aria-current="page"\] \{ background: var\(--brand-soft\); \}/);
     assert.match(pageHtml, /M8 7V5\.5A2\.5 2\.5 0 0 1 10\.5 3H22/);
-    assert.match(pageHtml, /const canSwitchCenters = state\.accountRole === "admin"/);
-    assert.match(pageHtml, /elements\.centerSwitcherTrigger\.disabled = !canSwitchCenters/);
-    assert.match(pageHtml, /elements\.centerSwitcherChevron\.toggleAttribute\("hidden", !canSwitchCenters\)/);
+    assert.match(pageHtml, /allowed\.includes\(link\.dataset\.center\)/);
     assert.match(pageHtml, /elements\.centerSwitcherBackdrop\.addEventListener\("click"/);
     assert.match(pageHtml, /id="themeIcon" aria-hidden="true">🌙<\/span>/);
     assert.match(pageHtml, /elements\.themeIcon\.textContent = normalizedTheme === "dark" \? "☀️" : "🌙"/);
