@@ -1,5 +1,5 @@
 import { createGatewayAuth, gatewayAuthConfig, type GatewayAuthConfig } from "./gateway-auth.js";
-import { hasPermission, requirePermission, submissionChannels, canViewResource, reportAccessScope } from "./authorization.js";
+import { actionChannels, hasPermission, requirePermission, submissionChannels, canViewResource, reportAccessScope } from "./authorization.js";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
@@ -825,7 +825,7 @@ export function createApp(input?: {
       success: true,
       channels: config.channels
         .filter((channel) => channel.enabled && channel.scenario === "reimbursement" &&
-          (!getAdminSession(response)?.authorization || submissionChannels(getAdminSession(response)!).includes(channel.code)))
+          (!getAdminSession(response)?.authorization || actionChannels(getAdminSession(response)!, "report:import").includes(channel.code)))
         .map((channel) => ({
           code: channel.code,
           name: channel.match.value,
@@ -849,7 +849,7 @@ export function createApp(input?: {
           (item) => item.enabled && item.scenario === "reimbursement" && item.code === channelCode,
         );
 
-        if (!channel || (getAdminSession(response)?.authorization && !submissionChannels(getAdminSession(response)!).includes(channel.code))) {
+        if (!channel || (getAdminSession(response)?.authorization && !actionChannels(getAdminSession(response)!, "report:import").includes(channel.code))) {
           throw new AdminValidationError("请选择有效的报账门店。", "channelCode");
         }
 
@@ -901,7 +901,7 @@ export function createApp(input?: {
     batchImportImageUpload.array("images", MAX_BATCH_IMPORT_IMAGES),
     (request, response, next) => createBatchReportTask(request, response, next, {
       submittedBy: getAdminSession(response),
-      ...(getAdminSession(response)?.authorization ? { allowedChannelCodes: new Set(submissionChannels(getAdminSession(response)!)) } : {}),
+      ...(getAdminSession(response)?.authorization ? { allowedChannelCodes: new Set(actionChannels(getAdminSession(response)!, "report:import")) } : {}),
     }),
   );
 
@@ -950,7 +950,8 @@ export function createApp(input?: {
           (!hasPermission(session, "task:view:any") && task.submittedByAccountId !== session.accountId) ||
           !(hasPermission(session, "report:view") && canViewResource(session, task) ||
             (task.submittedByAccountId === session.accountId &&
-              (hasPermission(session, "report:submit") || hasPermission(session, "report:import")) && submissionChannels(session).includes(task.channelCode)))
+              (hasPermission(session, "report:submit") && submissionChannels(session).includes(task.channelCode) ||
+                hasPermission(session, "report:import") && actionChannels(session, "report:import").includes(task.channelCode))))
         ) : ((session.role !== "admin" && task.submittedByAccountId !== session.accountId) ||
           (session.role === "manager" && !canViewResource(session, task))))
       ) {

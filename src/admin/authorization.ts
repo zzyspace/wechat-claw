@@ -8,7 +8,7 @@ const CHANNEL_STORES: Record<string, string> = {
 };
 const PERMISSIONS = ["report:view", "attachment:view", "report:submit", "report:edit", "report:delete", "report:import", "task:view:any"];
 export interface ExpenseScope { ownership?: "self" | "any"; stores: "all" | string[]; channels: "all" | string[] }
-export interface ExpensePolicy { permissions: string[]; viewScope: ExpenseScope; submitScope: ExpenseScope }
+export interface ExpensePolicy { permissions: string[]; viewScope: ExpenseScope; submitScope: ExpenseScope; importScope: ExpenseScope }
 function record(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("Invalid authorization.");
   return value as Record<string, unknown>;
@@ -32,8 +32,23 @@ export function validateExpenseAuthorization(value: unknown): AdminSession {
       typeof account.username !== "string" || !account.username || !Number.isSafeInteger(account.version) || Number(account.version) < 1 || !Number.isSafeInteger(access.version) || Number(access.version) < 1 ||
       !["admin", "partner", "manager"].includes(String(access.role)) ||
       !Array.isArray(access.permissions) || !access.permissions.every((entry) => PERMISSIONS.includes(entry)) ||
-      Object.keys(config).some((key) => !["viewScope", "submitScope"].includes(key))) throw new Error("Invalid expense authorization.");
-  const policy: ExpensePolicy = { permissions: access.permissions, viewScope: scope(config.viewScope, true), submitScope: scope(config.submitScope, false) };
+      Object.keys(config).some((key) => !["viewScope", "submitScope", "importScope"].includes(key))) throw new Error("Invalid expense authorization.");
+  const permissions = access.permissions as string[];
+  const policy: ExpensePolicy = {
+    permissions,
+    viewScope: scope(config.viewScope, true),
+    submitScope: scope(config.submitScope, false),
+    // Accounts created before separate import scopes keep their previous scope.
+    importScope: scope(config.importScope ?? config.submitScope, false),
+  };
+  const dependentPermissions = ["attachment:view", "report:edit", "report:delete", "report:import", "task:view:any"];
+  if ((!permissions.includes("report:view") && !permissions.includes("report:submit")) ||
+      dependentPermissions.some((permission) => permissions.includes(permission)) && !permissions.includes("report:view") ||
+      permissions.includes("report:view") && effectiveChannels(policy.viewScope).length === 0 ||
+      permissions.includes("report:submit") && effectiveChannels(policy.submitScope).length === 0 ||
+      permissions.includes("report:import") && effectiveChannels(policy.importScope).length === 0) {
+    throw new Error("Invalid expense authorization dependencies or empty scope.");
+  }
   return {
     accountId: account.accountId, username: account.username, role: access.role as ReimbursementAccountRole,
     managerStores: policy.submitScope.stores === "all" ? [] : policy.submitScope.stores as AdminSession["managerStores"],
@@ -59,14 +74,20 @@ export function scopeAllows(scope: ExpenseScope, channelCode: string | undefined
   return (scope.channels === "all" || scope.channels.includes(channelCode)) &&
     (scope.stores === "all" || scope.stores.includes(CHANNEL_STORES[channelCode]));
 }
-export function submissionChannels(session: AdminSession): string[] {
+function effectiveChannels(scope: ExpenseScope): string[] {
+  return Object.keys(CHANNEL_STORES).filter((channel) => scopeAllows(scope, channel));
+}
+export function actionChannels(session: AdminSession, permission: "report:submit" | "report:import"): string[] {
   if (!session.authorization) return getAllowedSubmissionChannelCodes(session);
-  if (!hasPermission(session, "report:submit") && !hasPermission(session, "report:import")) return [];
-  return Object.keys(CHANNEL_STORES).filter((channel) => scopeAllows(session.authorization!.submitScope, channel));
+  if (!hasPermission(session, permission)) return [];
+  return effectiveChannels(permission === "report:import" ? session.authorization.importScope : session.authorization.submitScope);
+}
+export function submissionChannels(session: AdminSession): string[] {
+  return actionChannels(session, "report:submit");
 }
 export function canViewResource(session: AdminSession, resource: { channelCode?: string; submittedByAccountId?: string }): boolean {
   const scope = session.authorization?.viewScope;
-  if (!scope) return session.role !== "manager" || (resource.submittedByAccountId === session.accountId && Boolean(resource.channelCode) && submissionChannels(session).includes(resource.channelCode!));
+  if (!scope) return session.role !== "manager" || (resource.submittedByAccountId === session.accountId && Boolean(resource.channelCode) && getAllowedSubmissionChannelCodes(session).includes(resource.channelCode!));
   return (scope.ownership === "any" || resource.submittedByAccountId === session.accountId) && scopeAllows(scope, resource.channelCode);
 }
 export function reportAccessScope(session: AdminSession): { submittedByAccountId?: string; allowedChannelCodes?: string[] } {

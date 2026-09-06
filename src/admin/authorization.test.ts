@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { validateExpenseAuthorization, reportAccessScope, canViewResource, hasPermission, submissionChannels } from "./authorization.js";
+import { actionChannels, validateExpenseAuthorization, reportAccessScope, canViewResource, hasPermission, submissionChannels } from "./authorization.js";
 import { gatewayAuthConfig } from "./gateway-auth.js";
 
 const envelope = {
@@ -37,7 +37,25 @@ test("unknown expense permissions and incomplete scopes fail closed", () => {
     { ...envelope.access, config: { ...envelope.access.config, override: true } },
     { ...envelope.access, config: { ...envelope.access.config, viewScope: { ownership: "self", stores: ["unknown"], channels: "all" } } },
     { ...envelope.access, enabled: false },
+    { ...envelope.access, permissions: ["report:delete"], config: envelope.access.config },
+    { ...envelope.access, permissions: ["report:view"], config: { ...envelope.access.config, viewScope: { ownership: "self", stores: [], channels: [] } } },
   ]) assert.throws(() => validateExpenseAuthorization({ ...envelope, access }));
+});
+
+test("import and submission use independent scopes with legacy fallback", () => {
+  const access = {
+    ...envelope.access,
+    permissions: ["report:view", "report:submit", "report:import"],
+    config: {
+      ...envelope.access.config,
+      importScope: { stores: ["fuzzyqz"], channels: ["reimbursement_fuzzyqz"] },
+    },
+  };
+  const session = validateExpenseAuthorization({ ...envelope, access });
+  assert.deepEqual(submissionChannels(session), ["reimbursement_peanut_manager"]);
+  assert.deepEqual(actionChannels(session, "report:import"), ["reimbursement_fuzzyqz"]);
+  const legacy = validateExpenseAuthorization({ ...envelope, access: { ...access, config: envelope.access.config } });
+  assert.deepEqual(actionChannels(legacy, "report:import"), ["reimbursement_peanut_manager"]);
 });
 
 test("expense transport rejects unknown modes and non-loopback URLs", () => {

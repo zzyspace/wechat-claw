@@ -3118,7 +3118,10 @@
           const payload = await response.json();
           if (!response.ok) return;
           const allowed = payload.apps || [];
-          for (const link of menu.querySelectorAll("[data-center]")) link.hidden = !allowed.includes(link.dataset.center);
+          for (const link of menu.querySelectorAll("[data-center]")) {
+            link.hidden = !allowed.includes(link.dataset.center);
+            if (payload.destinations?.[link.dataset.center]) link.href = payload.destinations[link.dataset.center];
+          }
           if (payload.canManageAccounts && !menu.querySelector('[data-management]')) {
             const link = document.createElement("a");
             link.href = "/auth/accounts";
