@@ -1485,7 +1485,8 @@
         }
       }
     [hidden] { display: none !important; }
-.center-switcher-option[data-center="store"] svg { color: #20a398; }
+.center-switcher-option[data-center="store"] svg { color: #e85d8e; }
+:root[data-theme="dark"] .center-switcher-option[data-center="store"] svg { color: #f486ad; }
 </style>
   </head>
   <body>
@@ -1501,7 +1502,7 @@
             <a class="center-switcher-option" data-center="expense" role="menuitem" href="/expense" aria-current="page"><svg viewBox="0 0 32 32" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="7" width="22" height="19" rx="4" fill="currentColor" fill-opacity=".16"/><path d="M8 7V5.5A2.5 2.5 0 0 1 10.5 3H22"/><path d="M10 13h8"/><path d="m12 17 2.2 2.2 3.5-3.7"/><circle cx="24" cy="24" r="4" fill="currentColor" stroke="none"/><path d="M24 22v4M22 24h4" stroke="white" stroke-width="1.8"/></svg><span>报账中心</span><span class="center-switcher-check" aria-hidden="true">✓</span></a>
             <a class="center-switcher-option" data-center="invoice" role="menuitem" href="/invoice"><svg viewBox="0 0 32 32" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="3.5" width="18" height="25" rx="3"/><path d="M11 9h10M11 14h8M11 19h5"/><circle cx="23" cy="23.5" r="4"/><path d="m21.3 23.5 1.2 1.2 2.2-2.5"/></svg><span>发票中心</span><span></span></a>
             <a class="center-switcher-option" data-center="staff" role="menuitem" href="/staff"><svg viewBox="0 0 32 32" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="16" cy="10" r="5"/><path d="M6.5 27c.8-6.2 4-9.2 9.5-9.2s8.7 3 9.5 9.2"/></svg><span>员工中心</span><span></span></a>
-            <a class="center-switcher-option" data-center="store" role="menuitem" href="/store" hidden><svg viewBox="0 0 32 32" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13v15h22V13M3 13l3-9h20l3 9M3 13c0 5 6.5 5 6.5 0 0 5 6.5 5 6.5 0 0 5 6.5 5 6.5 0 0 5 6.5 5 6.5 0M12 28v-8h8v8"/></svg><span>门店管理</span><span></span></a>
+            <a class="center-switcher-option" data-center="store" role="menuitem" href="/store" hidden><svg viewBox="0 0 32 32" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 15v10a3 3 0 0 0 3 3h14a3 3 0 0 0 3-3V15M4 12l2.5-7h19l2.5 7M13 28v-8h6v8"/><path d="M4 12a4 4 0 0 0 8 0 4 4 0 0 0 8 0 4 4 0 0 0 8 0"/></svg><span>门店管理</span><span></span></a>
           </div>
         </div>
         <div class="topbar-actions">
@@ -3136,7 +3137,7 @@
           trigger.disabled = allowed.filter((app) => app !== currentApp).length === 0 && !payload.canManageAccounts;
         } catch { /* Keep the current center label, with switching disabled. */ }
         const arrow = trigger.querySelector(".center-switcher-chevron");
-        if (arrow) arrow.hidden = trigger.disabled;
+        if (arrow) arrow.toggleAttribute("hidden", trigger.disabled);
       }
 
       async function loadSession() {
