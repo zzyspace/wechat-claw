@@ -1,5 +1,5 @@
 import { createGatewayAuth, gatewayAuthConfig, type GatewayAuthConfig } from "./gateway-auth.js";
-import { actionChannels, hasPermission, requirePermission, submissionChannels, canViewResource, reportAccessScope } from "./authorization.js";
+import { actionChannels, hasPermission, requirePermission, submissionChannels, canViewResource, canDeleteReport, reportAccessScope } from "./authorization.js";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
@@ -764,6 +764,7 @@ export function createApp(input?: {
           canAttachment: hasPermission(session, "attachment:view"),
           canEdit: hasPermission(session, "report:edit"),
           canDelete: hasPermission(session, "report:delete"),
+          canDeleteSelf: hasPermission(session, "report:delete:self"),
           canImport: hasPermission(session, "report:import"),
         } : {}),
         canWrite: session?.canWrite === true,
@@ -808,6 +809,7 @@ export function createApp(input?: {
           canAttachment: hasPermission(session, "attachment:view"),
           canEdit: hasPermission(session, "report:edit"),
           canDelete: hasPermission(session, "report:delete"),
+          canDeleteSelf: hasPermission(session, "report:delete:self"),
           canImport: hasPermission(session, "report:import"),
         } : {}),
         canWrite: session?.canWrite === true,
@@ -990,6 +992,10 @@ export function createApp(input?: {
       response.status(200).json({
         success: true,
         ...result,
+        items: result.items.map((report) => ({
+          ...report,
+          permissions: { canDelete: canDeleteReport(session, report) },
+        })),
         timeZone: config.timeZone,
       });
     } catch (error) {
@@ -1018,7 +1024,7 @@ export function createApp(input?: {
 
       response.status(200).json({
         success: true,
-        report,
+        report: { ...report, permissions: { canDelete: canDeleteReport(session, report) } },
         timeZone: config.timeZone,
       });
     } catch (error) {
@@ -1078,16 +1084,35 @@ export function createApp(input?: {
 
       response.status(200).json({
         success: true,
-        report: result.report,
+        report: { ...result.report, permissions: { canDelete: canDeleteReport(getAdminSession(response), result.report) } },
       });
     } catch (error) {
       next(error);
     }
   });
 
-  app.delete(`${ADMIN_BASE_PATH}/api/reports/:id`, requirePermission("report:delete"), checkReport, (request, response, next) => {
+  app.delete(`${ADMIN_BASE_PATH}/api/reports/:id`, (request, response, next) => {
+    if (hasPermission(getAdminSession(response), "report:delete:self")) {
+      next();
+      return;
+    }
+    requirePermission("report:delete")(request, response, next);
+  }, (request, response, next) => {
     try {
       const reportId = parsePositiveInteger(request.params.id, "id");
+      const session = getAdminSession(response);
+      const report = getAdminReimbursementReportDetail(reportId);
+      if (!session || !report || !canViewResource(session, report)) {
+        response.status(404).json({ success: false, error: { message: "报账记录不存在。" } });
+        return;
+      }
+      if (!canDeleteReport(session, report)) {
+        response.status(403).json({
+          success: false,
+          error: { message: session?.authorization ? "当前账号无权执行此操作。" : "当前账号无权使用管理员专属功能。" },
+        });
+        return;
+      }
       const deleted = deleteReimbursementReport(reportId);
 
       if (!deleted) {

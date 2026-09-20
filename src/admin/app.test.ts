@@ -3,6 +3,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { once } from "node:events";
+import { createServer } from "node:http";
+import { runInNewContext } from "node:vm";
 import { after, test } from "node:test";
 
 import { listScenarioExtractionsByRawMessageId } from "../core/scenarios/scenario-extraction-repository.js";
@@ -10,6 +12,7 @@ import { getAdminReimbursementReportDetail, saveReimbursementReceiptDelivery, sa
 import type { ReimbursementExtractor } from "../scenarios/reimbursement/batch-import.js";
 import { saveRawMessage } from "../core/storage/raw-message-repository.js";
 import { createApp } from "./app.js";
+import type { GatewayAuthConfig } from "./gateway-auth.js";
 
 test("reimbursement nginx keeps shortcut Bearer auth public and protects admin routes", () => {
   const nginx = fs.readFileSync(
@@ -53,6 +56,38 @@ test("reimbursement admin exposes a POST logout action", () => {
   );
   assert.match(html, /<form method="post" action="\/logout">/);
   assert.match(html, /name="returnTo" value="\/expense"/);
+});
+
+test("admin deletion controls preserve legacy access and honor each report capability", async () => {
+  const html = fs.readFileSync(path.resolve(process.cwd(), "src/admin/public/admin.html"), "utf8");
+  const loadSession = html.slice(html.indexOf("      async function loadSession()"), html.indexOf("      async function loadManualImportOptions()"));
+  const canDeleteItem = html.slice(html.indexOf("      function canDeleteItem("), html.indexOf("      function renderTable()"));
+  for (const [permissions, expected] of [
+    [{ canWrite: true }, true],
+    [{ canWrite: false }, false],
+    [{ canWrite: true, canEdit: true, canDelete: false, canDeleteSelf: false }, false],
+    [{ canWrite: true, canDelete: false, canDeleteSelf: true }, true],
+    [{ canDelete: true, canDeleteSelf: false }, true],
+  ] as const) {
+    const state = { canDelete: false };
+    const context = {
+      state, BASE_PATH: "/expense", buildAuthFetchUrl: (url: string) => url,
+      fetch: async () => ({ ok: true, json: async () => ({ success: true, permissions, account: { role: "admin" } }) }),
+      document: { getElementById: () => ({ hidden: false }) },
+      configureReportFiltersForAccount: () => {}, loadAuthorizedCenters: async () => {},
+      elements: {
+        centerSwitcherTrigger: { disabled: true }, centerSwitcherChevron: { toggleAttribute: () => {} },
+        operationColumnHeader: {}, accessPill: {}, manualImportOpen: {}, batchImportOpen: {},
+      },
+    };
+    await runInNewContext(`${loadSession}\nloadSession()`, context);
+    assert.equal(state.canDelete, expected);
+    for (const capability of [true, false, undefined]) {
+      assert.equal(runInNewContext(`${canDeleteItem}\ncanDeleteItem(item)`, {
+        state, item: capability === undefined ? {} : { permissions: { canDelete: capability } },
+      }), expected && capability === true);
+    }
+  }
 });
 
 const stateDir = fs.mkdtempSync(path.join(os.tmpdir(), "wechat-claw-reimbursement-admin-"));
@@ -132,8 +167,8 @@ function createAdminAuthHeaders(username = "admin", password = "secret-pass") {
   };
 }
 
-async function startServer(reimbursementExtractor?: ReimbursementExtractor) {
-  const app = createApp({ reimbursementExtractor });
+async function startServer(reimbursementExtractor?: ReimbursementExtractor, gatewayAuth?: GatewayAuthConfig) {
+  const app = createApp({ reimbursementExtractor, gatewayAuth });
   const server = app.listen(0, "127.0.0.1");
   await once(server, "listening");
 
@@ -1481,4 +1516,124 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
   } finally {
     await server.close();
   }
+});
+
+test("unified self deletion includes attributed shortcut uploads and rejects other or unowned reports", async (t) => {
+  const ownerId = "self-delete-shortcut-owner";
+  const username = "self-delete-shortcut-user";
+  applyEnv({
+    WECHATY_ADMIN_USERNAME: "admin",
+    WECHATY_ADMIN_PASSWORD: "secret-pass",
+    WECHATY_REIMBURSEMENT_SHORTCUT_API_TOKEN: "self-delete-shortcut-token",
+    WECHATY_REIMBURSEMENT_ACCOUNTS_JSON: JSON.stringify([
+      { accountId: ownerId, username, password: "unused-password", role: "manager", managerStores: ["fuzzy"] },
+    ]),
+  });
+  let selfDeleteEnabled = true;
+  const gateway = createServer((request, response) => {
+    assert.equal(request.url, "/internal/authorization/expense");
+    assert.equal(request.headers.authorization, "Bearer fixture-self-delete-gateway-token");
+    const identity = request.headers.cookie?.replace("fixture=", "");
+    if (!["owner", "other", "reader", "full"].includes(identity ?? "")) {
+      response.writeHead(401).end();
+      return;
+    }
+    const accountId = identity === "owner" || identity === "reader" ? ownerId : `self-delete-${identity}`;
+    const permissions = ["report:view", "attachment:view"];
+    if (identity === "full") permissions.push("report:delete");
+    else if (identity !== "reader" && selfDeleteEnabled) permissions.push("report:delete:self");
+    response.writeHead(200, { "Content-Type": "application/json" });
+    response.end(JSON.stringify({
+      success: true,
+      account: { accountId, username, enabled: true, version: 1 },
+      access: { accountId, app: "expense", role: "manager", enabled: true, version: 1, permissions,
+        config: {
+          viewScope: { ownership: "any", stores: ["fuzzy"], channels: ["reimbursement_fuzzy_manager"] },
+          submitScope: { stores: [], channels: [] },
+        },
+      },
+    }));
+  });
+  gateway.listen(0, "127.0.0.1");
+  await once(gateway, "listening");
+  t.after(() => new Promise<void>((resolve, reject) => gateway.close((error) => error ? reject(error) : resolve())));
+  const address = gateway.address();
+  assert(address && typeof address !== "string");
+  const server = await startServer(createShortcutTestExtractor(() => {}), {
+    mode: "unified", url: `http://127.0.0.1:${address.port}`, token: "fixture-self-delete-gateway-token",
+  });
+  t.after(() => server.close());
+  const requestAs = (identity: string, route: string, method = "GET") => fetch(`${server.baseUrl}/expense/api${route}`, {
+    method, headers: { Cookie: `fixture=${identity}` },
+  });
+  const upload = await fetch(`${server.baseUrl}/expense/api/shortcut/reports`, {
+    method: "POST",
+    headers: { Authorization: "Bearer self-delete-shortcut-token", "Idempotency-Key": "self-delete-shortcut-upload-0001" },
+    body: createShortcutForm({ channelCode: "reimbursement_fuzzy_manager", reporter: username }),
+  });
+  assert.equal(upload.status, 201);
+  const ownedId = (await upload.json()).report.id;
+  const owned = getAdminReimbursementReportDetail(ownedId);
+  assert(owned);
+  assert.equal(owned.submittedByAccountId, ownerId);
+  const attachment = owned.sources[0]?.attachments[0];
+  assert(attachment && fs.existsSync(attachment.localPath));
+  const seed = (key: string, submittedByAccountId?: string, channelCode = "reimbursement_fuzzy_manager") => {
+    const raw = saveRawMessage({
+      messageExternalId: `self-delete-${key}`, dedupeKey: `self-delete-${key}`, channelCode,
+      channelName: "删除权限测试", senderName: username, messageType: "manual_import",
+      textContent: "权限测试", eventReceivedAt: "2026-09-20T01:00:00.000Z", attachments: [],
+    });
+    return saveReimbursementReport({
+      channelCode, channelName: "删除权限测试", reporter: username, amount: 12.5, currency: "CNY",
+      expenseCategory: "food", voucherDate: "2026-09-20", voucherDateSource: "message", note: key,
+      evidenceType: "text", merchant: null, documentNo: null, voucherType: null, ocrText: null,
+      confidence: 1, needsReview: false, primaryRawMessageId: raw.rawMessageId,
+      submittedByAccountId, timeZone: "Asia/Shanghai", referenceDateTime: "2026-09-20T01:00:00.000Z",
+    }).id;
+  };
+  const otherId = seed("other", "self-delete-other");
+  const unownedId = seed("unowned");
+  const outsideId = seed("outside", ownerId, "reimbursement_peanut_manager");
+  const manualId = seed("manual", ownerId);
+
+  const session = await (await requestAs("owner", "/session")).json();
+  assert.equal(session.permissions.canDelete, false);
+  assert.equal(session.permissions.canDeleteSelf, true);
+  assert.equal(session.permissions.canEdit, false);
+  assert.equal(session.permissions.canImport, false);
+  const listing = await requestAs("owner", "/reports?limit=1000&submittedByAccountId=self-delete-other");
+  assert.equal(listing.status, 200);
+  const items = (await listing.json()).items as Array<{ id: number; permissions: { canDelete: boolean } }>;
+  for (const [id, canDelete] of [[ownedId, true], [manualId, true], [otherId, false], [unownedId, false]] as const) {
+    assert.equal(items.find((item) => item.id === id)?.permissions.canDelete, canDelete);
+    const detail = await requestAs("owner", `/reports/${id}`);
+    assert.equal(detail.status, 200);
+    assert.equal((await detail.json()).report.permissions.canDelete, canDelete);
+  }
+  assert.equal(items.some((item) => item.id === outsideId), false);
+  for (const [identity, id, expected] of [
+    ["owner", otherId, 403], ["owner", unownedId, 403], ["owner", outsideId, 404],
+    ["other", ownedId, 403], ["reader", ownedId, 403], ["unknown", ownedId, 401],
+  ] as const) {
+    assert.equal((await requestAs(identity, `/reports/${id}`, "DELETE")).status, expected);
+    assert(getAdminReimbursementReportDetail(id), "denied deletion must leave the record intact");
+  }
+  assert.equal((await requestAs("owner", `/reports/${ownedId}`, "PATCH")).status, 403);
+  assert.equal((await requestAs("owner", "/reports", "POST")).status, 403);
+  selfDeleteEnabled = false;
+  assert.equal((await requestAs("owner", `/reports/${ownedId}`, "DELETE")).status, 403);
+  assert.equal((await (await requestAs("owner", `/reports/${ownedId}`)).json()).report.permissions.canDelete, false);
+  selfDeleteEnabled = true;
+
+  assert.equal((await requestAs("full", `/reports/${outsideId}`, "DELETE")).status, 404);
+  assert.equal((await requestAs("full", `/reports/${unownedId}`, "DELETE")).status, 200);
+  assert.equal((await requestAs("owner", `/reports/${ownedId}`, "DELETE")).status, 200);
+  assert.equal((await requestAs("owner", `/reports/${ownedId}`, "DELETE")).status, 404);
+  assert.equal((await requestAs("owner", `/reports/${ownedId}`)).status, 404);
+  assert.equal((await requestAs("owner", `/attachments/${attachment.id}/content`)).status, 404);
+  assert(fs.existsSync(attachment.localPath), "existing deletion behavior retains the original attachment file");
+  assert.equal((await requestAs("owner", `/reports/${manualId}`, "DELETE")).status, 200);
+  assert(getAdminReimbursementReportDetail(otherId));
+  assert(getAdminReimbursementReportDetail(outsideId));
 });

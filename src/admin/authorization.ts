@@ -6,7 +6,7 @@ const CHANNEL_STORES: Record<string, string> = {
   reimbursement_fuzzy: "fuzzy", reimbursement_peanut: "peanut", reimbursement_fuzzyqz: "fuzzyqz",
   reimbursement_fuzzy_manager: "fuzzy", reimbursement_peanut_manager: "peanut", reimbursement_fuzzy_qz_manager: "fuzzyqz",
 };
-const PERMISSIONS = ["report:view", "attachment:view", "report:submit", "report:edit", "report:delete", "report:import", "task:view:any"];
+const PERMISSIONS = ["report:view", "attachment:view", "report:submit", "report:edit", "report:delete", "report:delete:self", "report:import", "task:view:any"];
 export interface ExpenseScope { ownership?: "self" | "any"; stores: "all" | string[]; channels: "all" | string[] }
 export interface ExpensePolicy { permissions: string[]; viewScope: ExpenseScope; submitScope: ExpenseScope; importScope: ExpenseScope }
 function record(value: unknown): Record<string, unknown> {
@@ -41,7 +41,7 @@ export function validateExpenseAuthorization(value: unknown): AdminSession {
     // Accounts created before separate import scopes keep their previous scope.
     importScope: scope(config.importScope ?? config.submitScope, false),
   };
-  const dependentPermissions = ["attachment:view", "report:edit", "report:delete", "report:import", "task:view:any"];
+  const dependentPermissions = ["attachment:view", "report:edit", "report:delete", "report:delete:self", "report:import", "task:view:any"];
   if ((!permissions.includes("report:view") && !permissions.includes("report:submit")) ||
       dependentPermissions.some((permission) => permissions.includes(permission)) && !permissions.includes("report:view") ||
       permissions.includes("report:view") && effectiveChannels(policy.viewScope).length === 0 ||
@@ -52,7 +52,7 @@ export function validateExpenseAuthorization(value: unknown): AdminSession {
   return {
     accountId: account.accountId, username: account.username, role: access.role as ReimbursementAccountRole,
     managerStores: policy.submitScope.stores === "all" ? [] : policy.submitScope.stores as AdminSession["managerStores"],
-    canWrite: ["report:edit", "report:delete", "report:import"].some((permission) => policy.permissions.includes(permission)),
+    canWrite: ["report:edit", "report:delete", "report:delete:self", "report:import"].some((permission) => policy.permissions.includes(permission)),
     canSubmit: policy.permissions.includes("report:submit"),
     canViewAllReports: policy.permissions.includes("report:view") && policy.viewScope.ownership === "any" && policy.viewScope.stores === "all" && policy.viewScope.channels === "all",
     authorization: policy,
@@ -89,6 +89,11 @@ export function canViewResource(session: AdminSession, resource: { channelCode?:
   const scope = session.authorization?.viewScope;
   if (!scope) return session.role !== "manager" || (resource.submittedByAccountId === session.accountId && Boolean(resource.channelCode) && getAllowedSubmissionChannelCodes(session).includes(resource.channelCode!));
   return (scope.ownership === "any" || resource.submittedByAccountId === session.accountId) && scopeAllows(scope, resource.channelCode);
+}
+export function canDeleteReport(session: AdminSession | undefined, resource: { channelCode?: string; submittedByAccountId?: string }): boolean {
+  if (!session || !hasPermission(session, "report:view") || !canViewResource(session, resource)) return false;
+  return hasPermission(session, "report:delete") ||
+    (hasPermission(session, "report:delete:self") && Boolean(resource.submittedByAccountId) && resource.submittedByAccountId === session.accountId);
 }
 export function reportAccessScope(session: AdminSession): { submittedByAccountId?: string; allowedChannelCodes?: string[] } {
   const scope = session.authorization?.viewScope;

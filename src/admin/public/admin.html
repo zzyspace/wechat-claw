@@ -2775,6 +2775,10 @@
         return params;
       }
 
+      function canDeleteItem(item) {
+        return state.canDelete && item?.permissions?.canDelete === true;
+      }
+
       function renderTable() {
         elements.tableBody.innerHTML = "";
         elements.emptyState.hidden = state.items.length !== 0;
@@ -2792,7 +2796,7 @@
           row.classList.toggle("is-selected", item.id === state.selectedReportId);
           const isDeleting = state.deletingIds.has(item.id);
           const operationCell = state.canWrite
-            ? `<td><div class="operation-buttons">${state.canEdit ? `<button type="button" data-edit-id="${item.id}">编辑</button>` : ""}${state.canDelete ? `<button class="button-danger" type="button" data-delete-id="${item.id}" ${isDeleting ? "disabled" : ""}>${isDeleting ? "删除中" : "删除"}</button>` : ""}</div></td>`
+            ? `<td><div class="operation-buttons">${state.canEdit ? `<button type="button" data-edit-id="${item.id}">编辑</button>` : ""}${canDeleteItem(item) ? `<button class="button-danger" type="button" data-delete-id="${item.id}" ${isDeleting ? "disabled" : ""}>${isDeleting ? "删除中" : "删除"}</button>` : ""}</div></td>`
             : "";
           row.innerHTML = `
             <td>${renderStoreCell(item)}</td>
@@ -3154,7 +3158,7 @@
 
         document.getElementById("newReportForm").hidden = payload.permissions?.canSubmit !== true;
         state.canEdit = payload.permissions?.canEdit ?? payload.permissions?.canWrite === true;
-        state.canDelete = payload.permissions?.canDelete ?? payload.permissions?.canWrite === true;
+        state.canDelete = (payload.permissions?.canDelete ?? payload.permissions?.canWrite === true) || payload.permissions?.canDeleteSelf === true;
         state.canImport = payload.permissions?.canImport ?? payload.permissions?.canWrite === true;
         state.canAttachment = payload.permissions?.canAttachment ?? true;
         state.canWrite = state.canEdit || state.canDelete;
@@ -3448,12 +3452,13 @@
       }
 
       async function deleteReport(reportId) {
-        if (!state.canDelete) {
-          setStatus("当前账号无权删除报账记录。", true);
+        const report = state.items.find((item) => item.id === reportId);
+        if (!canDeleteItem(report)) {
+          setStatus("当前账号无权删除这条报账记录。", true);
           return;
         }
 
-        if (!window.confirm(`确认删除报账 #${reportId} 吗？此操作不可恢复。`)) {
+        if (!window.confirm(`确认删除报账 #${reportId} 吗？\n报账人：${report.reporter || "未填写"}\n金额：${formatAmount(report)}\n此操作不可恢复。`)) {
           return;
         }
 
