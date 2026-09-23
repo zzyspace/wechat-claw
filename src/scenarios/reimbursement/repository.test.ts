@@ -496,6 +496,7 @@ test("listAdminReimbursementReports filters by search, partial reporter, categor
     referenceDateTime: "2026-07-22T01:00:00.000Z",
     submittedByAccountId: "manager-001",
     submittedByUsername: "manager",
+    submittedByDisplayName: "张三",
     submittedByRole: "manager",
   });
   const reviewMessage = saveRawMessage({
@@ -720,6 +721,7 @@ test("listAdminReimbursementReports filters by search, partial reporter, categor
   assert.equal(managerScoped.total, 1);
   assert.equal(managerScoped.items[0]?.id, searchReport.id);
   assert.equal(managerScoped.items[0]?.submittedByUsername, "manager");
+  assert.equal(managerScoped.items[0]?.submittedByDisplayName, "张三");
 
   const wrongChannelScope = listAdminReimbursementReports({
     submittedByAccountId: "manager-001",

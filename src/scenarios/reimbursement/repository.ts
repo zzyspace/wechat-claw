@@ -173,6 +173,7 @@ function mapReportRow(row: {
   needsReview: number;
   submittedByAccountId?: string | null;
   submittedByUsername?: string | null;
+  submittedByDisplayName?: string | null;
   submittedByRole?: string | null;
   createdAt: string;
   updatedAt: string;
@@ -197,6 +198,7 @@ function mapReportRow(row: {
     needsReview: Boolean(row.needsReview),
     submittedByAccountId: row.submittedByAccountId ?? undefined,
     submittedByUsername: row.submittedByUsername ?? undefined,
+    submittedByDisplayName: row.submittedByDisplayName ?? undefined,
     submittedByRole: row.submittedByRole ?? undefined,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
@@ -368,6 +370,7 @@ function selectReportById(id: number): ReimbursementReportRecord {
           needs_review as needsReview,
           submitted_by_account_id as submittedByAccountId,
           submitted_by_username as submittedByUsername,
+          submitted_by_display_name as submittedByDisplayName,
           submitted_by_role as submittedByRole,
           created_at as createdAt,
           updated_at as updatedAt
@@ -409,6 +412,7 @@ function findReportById(id: number): ReimbursementReportRecord | null {
           needs_review as needsReview,
           submitted_by_account_id as submittedByAccountId,
           submitted_by_username as submittedByUsername,
+          submitted_by_display_name as submittedByDisplayName,
           submitted_by_role as submittedByRole,
           created_at as createdAt,
           updated_at as updatedAt
@@ -500,9 +504,10 @@ export function saveReimbursementReport(input: ReimbursementReportInput): Reimbu
       needs_review,
       submitted_by_account_id,
       submitted_by_username,
+      submitted_by_display_name,
       submitted_by_role,
       created_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, datetime('now')))
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, datetime('now')))
   `);
   const insertSource = db.prepare(`
     INSERT INTO reimbursement_report_sources (
@@ -532,6 +537,7 @@ export function saveReimbursementReport(input: ReimbursementReportInput): Reimbu
       input.needsReview ? 1 : 0,
       input.submittedByAccountId ?? null,
       input.submittedByUsername ?? null,
+      input.submittedByDisplayName ?? null,
       input.submittedByRole ?? null,
       createdAtOverride,
     );
@@ -2052,6 +2058,7 @@ export function listAdminReimbursementReports(options?: {
           needs_review as needsReview,
           submitted_by_account_id as submittedByAccountId,
           submitted_by_username as submittedByUsername,
+          submitted_by_display_name as submittedByDisplayName,
           submitted_by_role as submittedByRole,
           created_at as createdAt,
           updated_at as updatedAt

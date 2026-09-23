@@ -156,3 +156,10 @@ test("expense transport rejects unknown modes and non-loopback URLs", () => {
   assert.throws(() => gatewayAuthConfig({ ADMIN_AUTH_MODE: "unifed" }));
   assert.throws(() => gatewayAuthConfig({ ADMIN_AUTH_MODE: "unified", ADMIN_AUTH_INTERNAL_TOKEN: "fixture-secret-000000000000000000001", ADMIN_AUTH_GATEWAY_URL: "http://example.test" }));
 });
+
+test("real names do not change account ownership, and legacy names remain usable", () => {
+  const person = validateExpenseAuthorization({...envelope, account:{...envelope.account,displayName:'张三'}});
+  assert.equal(person.displayName,'张三'); assert.equal(person.username,'person');
+  assert.equal(canViewResource(person,{submittedByAccountId:'other',channelCode:'reimbursement_fuzzy_manager'}),false);
+  assert.equal(validateExpenseAuthorization(envelope).displayName,'person');
+});

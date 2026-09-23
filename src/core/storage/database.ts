@@ -96,6 +96,7 @@ export function migrateDatabase(db: Database.Database) {
       needs_review INTEGER NOT NULL,
       submitted_by_account_id TEXT,
       submitted_by_username TEXT,
+      submitted_by_display_name TEXT,
       submitted_by_role TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
@@ -148,6 +149,7 @@ export function migrateDatabase(db: Database.Database) {
       reporter TEXT NOT NULL,
       submitted_by_account_id TEXT,
       submitted_by_username TEXT,
+      submitted_by_display_name TEXT,
       submitted_by_role TEXT,
       sent_at TEXT NOT NULL,
       time_zone TEXT NOT NULL,
@@ -229,6 +231,7 @@ export function migrateDatabase(db: Database.Database) {
   for (const columnName of [
     "submitted_by_account_id",
     "submitted_by_username",
+    "submitted_by_display_name",
     "submitted_by_role",
   ]) {
     if (!reimbursementReportColumns.some((column) => column.name === columnName)) {

@@ -12,6 +12,7 @@ export interface ReimbursementAccessAccountConfig {
 }
 
 export interface ReimbursementAccessPrincipal {
+  displayName?: string;
   accountId: string;
   managerStores: ReimbursementManagerStore[];
   role: ReimbursementAccountRole;

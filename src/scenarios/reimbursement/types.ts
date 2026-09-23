@@ -67,6 +67,7 @@ export interface ReimbursementReportInput {
   referenceDateTime?: string;
   submittedByAccountId?: string;
   submittedByUsername?: string;
+  submittedByDisplayName?: string;
   submittedByRole?: string;
 }
 
@@ -92,6 +93,7 @@ export interface ReimbursementReportRecord {
   updatedAt: string;
   submittedByAccountId?: string;
   submittedByUsername?: string;
+  submittedByDisplayName?: string;
   submittedByRole?: string;
 }
 

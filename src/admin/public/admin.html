@@ -3178,7 +3178,7 @@
           || "账号";
         elements.operationColumnHeader.hidden = !state.canWrite;
         elements.accessPill.hidden = false;
-        elements.accessPill.textContent = `${roleLabel} ${payload.account?.username || ""}`.trim();
+        elements.accessPill.textContent = `${roleLabel} ${payload.account?.displayName || payload.account?.username || ""}`.trim();
         elements.manualImportOpen.hidden = !state.canImport;
         elements.batchImportOpen.hidden = !state.canImport;
       }

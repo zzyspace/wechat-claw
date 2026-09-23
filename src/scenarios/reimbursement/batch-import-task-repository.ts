@@ -27,6 +27,7 @@ export interface BatchImportTask {
   reporter: string;
   submittedByAccountId?: string;
   submittedByUsername?: string;
+  submittedByDisplayName?: string;
   submittedByRole?: string;
   sentAt: string;
   startedAt?: string;
@@ -48,6 +49,7 @@ export interface BatchImportWorkItem {
   reporter: string;
   submittedByAccountId?: string;
   submittedByUsername?: string;
+  submittedByDisplayName?: string;
   submittedByRole?: string;
   sentAt: string;
   timeZone: string;
@@ -75,6 +77,7 @@ function selectTaskRow(id: string) {
         reporter,
         submitted_by_account_id as submittedByAccountId,
         submitted_by_username as submittedByUsername,
+        submitted_by_display_name as submittedByDisplayName,
         submitted_by_role as submittedByRole,
         sent_at as sentAt,
         time_zone as timeZone,
@@ -129,6 +132,7 @@ export function getBatchImportTask(id: string): BatchImportTask | null {
     ...row,
     submittedByAccountId: row.submittedByAccountId ?? undefined,
     submittedByUsername: row.submittedByUsername ?? undefined,
+    submittedByDisplayName: row.submittedByDisplayName ?? undefined,
     submittedByRole: row.submittedByRole ?? undefined,
     startedAt: row.startedAt ?? undefined,
     finishedAt: row.finishedAt ?? undefined,
@@ -159,12 +163,13 @@ export function createBatchImportTask(input: CreateBatchImportTaskInput): BatchI
       reporter,
       submitted_by_account_id,
       submitted_by_username,
+      submitted_by_display_name,
       submitted_by_role,
       sent_at,
       time_zone,
       status,
       total_count
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'queued', ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'queued', ?)
   `);
   const insertItem = db.prepare(`
     INSERT INTO reimbursement_batch_import_items (
@@ -188,6 +193,7 @@ export function createBatchImportTask(input: CreateBatchImportTaskInput): BatchI
       input.reporter,
       input.submittedBy?.accountId ?? null,
       input.submittedBy?.username ?? null,
+      input.submittedBy?.displayName ?? null,
       input.submittedBy?.role ?? null,
       input.sentAt,
       input.timeZone,
@@ -287,6 +293,7 @@ export function claimNextBatchImportWorkItem(jobId: string): BatchImportWorkItem
       reporter: job.reporter,
       submittedByAccountId: job.submittedByAccountId,
       submittedByUsername: job.submittedByUsername,
+      submittedByDisplayName: job.submittedByDisplayName,
       submittedByRole: job.submittedByRole,
       sentAt: job.sentAt,
       timeZone: job.timeZone,

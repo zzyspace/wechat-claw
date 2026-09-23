@@ -50,7 +50,7 @@ export function validateExpenseAuthorization(value: unknown): AdminSession {
     throw new Error("Invalid expense authorization dependencies or empty scope.");
   }
   return {
-    accountId: account.accountId, username: account.username, role: access.role as ReimbursementAccountRole,
+    accountId: account.accountId, username: account.username, displayName: typeof account.displayName === "string" && account.displayName ? account.displayName : account.username, role: access.role as ReimbursementAccountRole,
     managerStores: policy.submitScope.stores === "all" ? [] : policy.submitScope.stores as AdminSession["managerStores"],
     canWrite: ["report:edit", "report:delete", "report:delete:self", "report:import"].some((permission) => policy.permissions.includes(permission)),
     canSubmit: policy.permissions.includes("report:submit"),

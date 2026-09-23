@@ -757,6 +757,7 @@ export function createApp(input?: {
         accountId: session?.accountId,
         managerStores: session?.managerStores,
         username: session?.username,
+        ...(session?.authorization ? { displayName: session.displayName || session.username } : {}),
         role: session?.role,
       },
       permissions: {
@@ -802,6 +803,7 @@ export function createApp(input?: {
         accountId: session.accountId,
         managerStores: session.managerStores,
         username: session?.username,
+        ...(session?.authorization ? { displayName: session.displayName || session.username } : {}),
         role: session.role,
       },
       permissions: {
@@ -933,7 +935,7 @@ export function createApp(input?: {
       const allowedChannelCodes = new Set(submissionChannels(session));
       void createBatchReportTask(request, response, next, {
         allowedChannelCodes,
-        reporter: session.username,
+        reporter: session.displayName || session.username,
         submittedBy: session,
       });
     },

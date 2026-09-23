@@ -880,7 +880,7 @@
         }
 
         state.canSubmit = payload.permissions?.canSubmit === true;
-        elements.reporter.value = payload.account?.username || "";
+        elements.reporter.value = payload.account?.displayName || payload.account?.username || "";
         elements.channelCode.replaceChildren();
         const placeholder = document.createElement("option");
         placeholder.value = "";

@@ -32,7 +32,7 @@ test("migrateDatabase adds reimbursement submitter audit columns to existing dat
     (db.prepare("PRAGMA table_info(reimbursement_batch_import_jobs)").all() as Array<{ name: string }>)
       .map((column) => column.name),
   );
-  for (const column of ["submitted_by_account_id", "submitted_by_username", "submitted_by_role"]) {
+  for (const column of ["submitted_by_account_id", "submitted_by_username", "submitted_by_display_name", "submitted_by_role"]) {
     assert.equal(reportColumns.has(column), true);
     assert.equal(taskColumns.has(column), true);
   }

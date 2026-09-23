@@ -38,6 +38,7 @@ export async function processBatchImportTask(input: {
             sentAt: item.sentAt,
             submittedByAccountId: item.submittedByAccountId,
             submittedByUsername: item.submittedByUsername,
+            submittedByDisplayName: item.submittedByDisplayName,
             submittedByRole: item.submittedByRole,
             timeZone: item.timeZone,
           },

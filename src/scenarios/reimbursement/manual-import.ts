@@ -96,6 +96,7 @@ export function importManualReimbursementReport(
     primaryRawMessageId: saveResult.rawMessageId,
     submittedByAccountId: input.submittedBy?.accountId,
     submittedByUsername: input.submittedBy?.username,
+    submittedByDisplayName: input.submittedBy?.displayName,
     submittedByRole: input.submittedBy?.role,
     timeZone: input.timeZone,
     referenceDateTime: input.sentAt,
