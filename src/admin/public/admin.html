@@ -9,7 +9,7 @@
       (() => {
         let savedTheme = null;
         try {
-          savedTheme = window.localStorage.getItem("reimbursement-admin-theme");
+          savedTheme = window.localStorage.getItem("comeover-admin-theme") ?? window.localStorage.getItem("reimbursement-admin-theme");
         } catch {
           // Storage may be unavailable in privacy-restricted browser contexts.
         }
@@ -1857,7 +1857,7 @@
       const BASE_PATH = "/expense";
       const DEFAULT_TIME_ZONE = "Asia/Shanghai";
       const DEFAULT_PAGE_LIMIT = 200;
-      const THEME_STORAGE_KEY = "reimbursement-admin-theme";
+      const THEME_STORAGE_KEY = "comeover-admin-theme";
       const BATCH_TASK_STORAGE_KEY = "reimbursement-admin-active-batch-task";
       const DETAIL_CLICK_DELAY_MS = 300;
       const MANUAL_IMAGE_MIME_TYPES = new Set([
@@ -1984,7 +1984,7 @@
 
       function readSavedTheme() {
         try {
-          const savedTheme = window.localStorage.getItem(THEME_STORAGE_KEY);
+          const savedTheme = window.localStorage.getItem(THEME_STORAGE_KEY) ?? window.localStorage.getItem("reimbursement-admin-theme");
           return savedTheme === "light" || savedTheme === "dark" ? savedTheme : null;
         } catch {
           return null;
@@ -3512,6 +3512,9 @@
       });
       elements.centerSwitcherBackdrop.addEventListener("click", () => closeCenterSwitcher({ restoreFocus: true }));
 
+      window.addEventListener("storage", (event) => {
+        if (event.key === THEME_STORAGE_KEY && (event.newValue === "light" || event.newValue === "dark")) applyTheme(event.newValue);
+      });
       systemThemePreference.addEventListener("change", (event) => {
         if (!readSavedTheme()) {
           applyTheme(event.matches ? "dark" : "light");

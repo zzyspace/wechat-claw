@@ -9,7 +9,7 @@
       (() => {
         let savedTheme = null;
         try {
-          savedTheme = window.localStorage.getItem("reimbursement-admin-theme");
+          savedTheme = window.localStorage.getItem("comeover-admin-theme") ?? window.localStorage.getItem("reimbursement-admin-theme");
         } catch {
           // Storage may be unavailable in privacy-restricted browser contexts.
         }
@@ -563,7 +563,7 @@
       const BASE_PATH = "/expense";
       const SUBMISSION_PAGE = "submit";
       const TASK_STORAGE_KEY = "reimbursement-active-submission-task:submit";
-      const THEME_STORAGE_KEY = "reimbursement-admin-theme";
+      const THEME_STORAGE_KEY = "comeover-admin-theme";
       const IMAGE_MIME_TYPES = new Set([
         "image/jpeg", "image/png", "image/webp", "image/gif", "image/heic", "image/heif",
       ]);
@@ -944,7 +944,7 @@
 
       function readSavedTheme() {
         try {
-          const savedTheme = window.localStorage.getItem(THEME_STORAGE_KEY);
+          const savedTheme = window.localStorage.getItem(THEME_STORAGE_KEY) ?? window.localStorage.getItem("reimbursement-admin-theme");
           return savedTheme === "light" || savedTheme === "dark" ? savedTheme : null;
         } catch {
           return null;
@@ -1011,6 +1011,9 @@
 
       elements.themeToggle.addEventListener("click", () => {
         applyTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark", true);
+      });
+      window.addEventListener("storage", (event) => {
+        if (event.key === THEME_STORAGE_KEY && (event.newValue === "light" || event.newValue === "dark")) applyTheme(event.newValue);
       });
       systemThemePreference.addEventListener("change", (event) => {
         if (!readSavedTheme()) {
