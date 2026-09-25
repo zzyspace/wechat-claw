@@ -2,7 +2,7 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no" />
     <meta name="color-scheme" content="light dark" />
     <title>报账后台</title>
     <script>
@@ -21,6 +21,8 @@
       })();
     </script>
     <style>
+      /* Allow touch scrolling without page pinch zoom. */
+      html { touch-action: pan-x pan-y; }
       :root {
         --bg: #f2f2f7;
         --bg-accent: #e9edf7;
