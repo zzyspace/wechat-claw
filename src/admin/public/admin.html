@@ -1386,6 +1386,82 @@
         text-align: center;
       }
 
+      /* The detail sheet has its own layout; other dialogs keep their existing styles. */
+      #detailModal { display: flex; align-items: stretch; justify-content: flex-end; padding: 14px; }
+      #detailModalBackdrop { backdrop-filter: none; }
+      #detailModal .detail-dialog {
+        --detail-soft: #f7f8fa;
+        display: flex; flex-direction: column; width: 460px; max-width: 100%; min-height: 0;
+        height: calc(100vh - 28px); height: calc(100dvh - 28px);
+        max-height: calc(100vh - 28px); max-height: calc(100dvh - 28px);
+        padding: 0; border: 0; border-radius: 20px; overflow: hidden;
+        background: var(--surface-strong); backdrop-filter: none;
+      }
+      #detailModal:not([hidden]) .detail-dialog { animation: report-detail-enter 180ms ease-out; }
+      #detailModal .detail-grip { display: none; }
+      #detailModal .detail-topbar { display: flex; flex: none; align-items: center; justify-content: space-between; gap: 12px; min-height: 70px; padding: 12px 16px 12px 24px; border-bottom: 1px solid var(--line); }
+      #detailModalTitle { margin: 0; font-size: 17px; font-weight: 650; letter-spacing: 0; }
+      #detailModalClose { width: 44px; height: 44px; min-height: 44px; border: 0; background: transparent; font-weight: 400; }
+      #detailModal .detail-scroll { min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 24px; scroll-padding-top: 20px; }
+      #detailModal .detail-empty { margin: 0; padding-block: 8px; font-size: 13px; }
+      #detailModal .detail-kicker { margin: 0 0 5px; color: var(--ink-soft); font-size: 11px; overflow-wrap: anywhere; }
+      #detailModal .detail-summary-amount { margin: 5px 0 18px; }
+      #detailModal .column-amount-value { gap: 0; }
+      #detailModal .column-amount-number { font-size: 37px; font-weight: 650; letter-spacing: -1px; line-height: 1.3; font-variant-numeric: tabular-nums; white-space: normal; overflow-wrap: anywhere; }
+      #detailModal .column-amount-number small { margin-right: 3px; font-size: 23px; font-weight: 500; }
+      #detailModal .column-amount-value.is-large .column-amount-number { font-size: 28px; }
+      #detailModal .column-amount-currency { display: none; }
+      #detailModal .column-amount-missing { color: var(--warn); font-size: 27px; font-weight: 650; }
+      #detailModal .detail-summary-tags { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-bottom: 18px; }
+      #detailModal .detail-summary-tags .tag { min-height: 0; padding: 4px 7px; border: 0; border-radius: 6px; font-size: 11px; line-height: 1.4; font-weight: 550; gap: 4px; }
+      #detailModal .detail-summary-tags .ok { color: #247352; background: #edf6f0; }
+      #detailModal .detail-summary-tags svg { width: 11px; height: 11px; }
+      #detailModal .detail-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px 14px; margin: 0; }
+      #detailModal .detail-facts > div { min-width: 0; overflow-wrap: anywhere; }
+      #detailModal .detail-facts dt { margin-bottom: 3px; color: var(--ink-soft); font-size: 11px; }
+      #detailModal .detail-facts dd { margin: 0; font-size: 13px; line-height: 1.65; }
+      #detailModal .detail-note-section { margin-top: 20px; }
+      #detailModal .detail-note-section h3 { margin: 0 0 8px; font-size: 12px; font-weight: 650; }
+      #detailModal .detail-note { margin: 0; padding: 11px; border-radius: 10px; background: var(--detail-soft); font-size: 13px; line-height: 1.8; overflow-wrap: anywhere; }
+      #detailModal .detail-note .note-pill { display: inline; min-height: 0; padding: 1px 3px; border: 0; border-radius: 4px; font-size: inherit; line-height: inherit; }
+      #detailModal .detail-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 18px; }
+      #detailModal .detail-actions button { min-height: 44px; padding: 8px 10px; border-radius: 12px; font-size: 13px; }
+      #detailModal .detail-actions button:only-child { grid-column: 1 / -1; }
+      #detailModal .detail-disclosures { margin-top: 20px; }
+      #detailModal .detail-disclosure { padding: 10px 0; border-top: 1px solid var(--line); }
+      #detailModal .detail-disclosure summary { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 44px; font-size: 12px; cursor: pointer; list-style: none; }
+      #detailModal .detail-disclosure summary::-webkit-details-marker { display: none; }
+      #detailModal .detail-disclosure summary::after { content: ""; width: 7px; height: 7px; flex: none; border-right: 1.5px solid var(--ink-soft); border-bottom: 1.5px solid var(--ink-soft); transform: rotate(45deg); margin: -4px 4px 0 0; }
+      #detailModal .detail-disclosure[open] > summary::after { transform: rotate(225deg); margin-top: 4px; }
+      #detailModal .detail-disclosure-body { padding: 8px 0 6px; }
+      #detailModal .detail-disclosure h3 { margin: 0 0 8px; font-size: 12px; font-weight: 600; }
+      #detailModal .detail-ocr { margin: 0 0 18px; padding: 12px; background: var(--detail-soft); border-radius: 10px; font-size: 12px; line-height: 1.8; white-space: pre-wrap; overflow-wrap: anywhere; }
+      #detailModal .source-item, #detailModal .receipt-item { padding: 12px; border-radius: 12px; background: var(--detail-soft); }
+      #detailModal .source-meta, #detailModal .receipt-meta { font-size: 11px; overflow-wrap: anywhere; }
+      #detailModal .source-text, #detailModal .receipt-text { font-size: 12px; overflow-wrap: anywhere; }
+      #detailModal .attachment-grid { grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); }
+      #detailModal .attachment-link { overflow-wrap: anywhere; }
+      #detailModal button, #detailModal summary, #detailModal a { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+      #detailModal button:focus:not(:focus-visible) { outline: none; }
+      #detailModal :focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+      :root[data-theme="dark"] #detailModal .detail-dialog { --detail-soft: #283344; }
+      :root[data-theme="dark"] #detailModal .detail-summary-tags .ok { color: #86d3ac; background: #243c36; }
+      @keyframes report-detail-enter { from { transform: translateX(18px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+      @keyframes report-detail-sheet-enter { from { transform: translateY(16px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+      @media (max-width: 620px) {
+        #detailModal { align-items: flex-end; padding: calc(24px + env(safe-area-inset-top, 0px)) 0 0; }
+        #detailModal .detail-dialog { width: 100%; height: auto; max-height: calc(100vh - 24px); max-height: calc(100dvh - 24px - env(safe-area-inset-top, 0px)); border-radius: 24px 24px 0 0; }
+        #detailModal:not([hidden]) .detail-dialog { animation-name: report-detail-sheet-enter; }
+        #detailModal .detail-grip { display: block; width: 32px; height: 4px; flex: none; border-radius: 4px; background: var(--line); margin: 10px auto 0; }
+        #detailModal .detail-topbar { min-height: 57px; padding: 7px 14px 6px 20px; }
+        #detailModal .detail-scroll { padding: 18px 20px max(24px, env(safe-area-inset-bottom, 0px)); }
+        #detailModal .column-amount-number { font-size: 35px; }
+        #detailModal .detail-facts { gap: 13px 14px; }
+        #detailModal .detail-facts dt { font-size: 10px; }
+        #detailModal .detail-facts dd { font-size: 12px; }
+      }
+      @media (prefers-reduced-motion: reduce) { #detailModal:not([hidden]) .detail-dialog { animation: none; } }
+
       /* Desktop list styling is isolated from mobile records and other panels. */
       @media (min-width: 621px) {
         .desktop-report-table {
@@ -1926,13 +2002,14 @@ body > .topbar .center-switcher-menu { top: calc(100% + 9px); left: auto; }
 
       <div class="modal" id="detailModal" hidden>
         <div class="modal-backdrop" id="detailModalBackdrop"></div>
-        <div class="panel modal-dialog" role="dialog" aria-modal="true" aria-labelledby="detailModalTitle">
-          <div class="modal-frame">
-            <div class="modal-topbar">
-              <h2 id="detailModalTitle">报账详情</h2>
-              <button class="modal-close" id="detailModalClose" type="button" aria-label="关闭详情弹窗">×</button>
-            </div>
-            <div class="detail-empty" id="detailEmpty">点击左侧列表中的任意一条记录，在这里查看结构化字段、原始消息、附件和回执。</div>
+        <div class="panel modal-dialog detail-dialog" id="detailDialog" role="dialog" aria-modal="true" aria-labelledby="detailModalTitle" tabindex="-1">
+          <div class="detail-grip" aria-hidden="true"></div>
+          <div class="detail-topbar">
+            <h2 id="detailModalTitle">报账详情</h2>
+            <button class="modal-close" id="detailModalClose" type="button" aria-label="关闭详情弹窗">×</button>
+          </div>
+          <div class="detail-scroll" id="detailScroll">
+            <div class="detail-empty" id="detailEmpty" role="status" aria-live="polite">选择一条报账记录查看详情。</div>
             <div id="detailContent" hidden></div>
           </div>
         </div>
@@ -2016,6 +2093,13 @@ body > .topbar .center-switcher-menu { top: calc(100% + 9px); left: auto; }
         "image/heif",
       ]);
       let pendingDetailTimer = null;
+      let detailRequestVersion = 0;
+      let detailAbortController = null;
+      let detailReturnFocus = null;
+      let detailReturnReportId = null;
+      let detailBackgroundSnapshot = null;
+      let detailBodySnapshot = null;
+      let detailPreviousStatus = null;
       const state = {
         items: [],
         limit: DEFAULT_PAGE_LIMIT,
@@ -2040,6 +2124,8 @@ body > .topbar .center-switcher-menu { top: calc(100% + 9px); left: auto; }
         deletingIds: new Set(),
         editingReport: null,
         savingReport: false,
+        detailReport: null,
+        editingFromDetail: false,
       };
 
       const elements = {
@@ -2104,6 +2190,9 @@ body > .topbar .center-switcher-menu { top: calc(100% + 9px); left: auto; }
         prevPage: document.getElementById("prevPage"),
         nextPage: document.getElementById("nextPage"),
         detailModal: document.getElementById("detailModal"),
+        detailDialog: document.getElementById("detailDialog"),
+        detailModalTitle: document.getElementById("detailModalTitle"),
+        detailScroll: document.getElementById("detailScroll"),
         detailModalBackdrop: document.getElementById("detailModalBackdrop"),
         detailModalClose: document.getElementById("detailModalClose"),
         detailEmpty: document.getElementById("detailEmpty"),
@@ -3093,11 +3182,94 @@ body > .topbar .center-switcher-menu { top: calc(100% + 9px); left: auto; }
       }
 
       function closeDetailModal() {
+        cancelPendingDetail();
+        detailRequestVersion += 1;
+        if (detailAbortController && detailPreviousStatus) setStatus(detailPreviousStatus.text, detailPreviousStatus.isError);
+        detailAbortController?.abort();
+        detailAbortController = null;
+        const wasOpen = !elements.detailModal.hidden;
         elements.detailModal.hidden = true;
+        elements.detailDialog.inert = false;
+        elements.detailDialog.removeAttribute("aria-busy");
+        state.detailReport = null;
+        state.editingFromDetail = false;
+        if (detailBackgroundSnapshot) {
+          for (const [element, wasInert] of detailBackgroundSnapshot) element.inert = wasInert;
+          detailBackgroundSnapshot = null;
+        }
+        if (detailBodySnapshot) {
+          const { x, y, styles, hadStyleAttribute } = detailBodySnapshot;
+          for (const [property, value, priority] of styles) {
+            if (value) document.body.style.setProperty(property, value, priority);
+            else document.body.style.removeProperty(property);
+          }
+          if (!hadStyleAttribute && !document.body.style.length) document.body.removeAttribute("style");
+          detailBodySnapshot = null;
+          window.scrollTo(x, y);
+        }
+        if (wasOpen && elements.editReportModal.hidden && elements.attachmentPreviewModal.hidden) {
+          const list = window.matchMedia("(max-width: 620px)").matches ? elements.mobileReportList : elements.tableBody;
+          const original = detailReturnFocus?.isConnected && detailReturnFocus.getClientRects().length
+            && detailReturnFocus.matches('button:not(:disabled), a[href], input, select, textarea, [tabindex]')
+            ? detailReturnFocus : null;
+          const fallback = list.querySelector(`[data-report-id="${detailReturnReportId}"] button[data-report-id]`)
+            || elements.filters.querySelector('button[type="submit"]');
+          (original || fallback)?.focus({ preventScroll: true });
+        }
+        detailReturnFocus = null;
+        detailReturnReportId = null;
+        detailPreviousStatus = null;
       }
 
       function openDetailModal() {
+        if (!elements.detailModal.hidden) return;
+        const background = [document.querySelector("body > .topbar"), ...document.querySelector(".page").children]
+          .filter((element) => element && !element.classList.contains("modal"));
+        detailBackgroundSnapshot = background.map((element) => [element, element.inert]);
+        for (const element of background) element.inert = true;
+        const properties = ["position", "top", "left", "width", "overflow", "padding-right"];
+        detailBodySnapshot = {
+          x: window.scrollX, y: window.scrollY,
+          hadStyleAttribute: document.body.hasAttribute("style"),
+          styles: properties.map((property) => [property, document.body.style.getPropertyValue(property), document.body.style.getPropertyPriority(property)]),
+        };
+        const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
+        const paddingRight = Number.parseFloat(getComputedStyle(document.body).paddingRight) || 0;
+        Object.assign(document.body.style, {
+          position: "fixed", top: `${-detailBodySnapshot.y}px`, left: `${-detailBodySnapshot.x}px`, width: "100%", overflow: "hidden",
+        });
+        if (scrollbarWidth > 0) document.body.style.paddingRight = `${paddingRight + scrollbarWidth}px`;
         elements.detailModal.hidden = false;
+        elements.detailScroll.scrollTop = 0;
+        elements.detailModalClose.focus({ preventScroll: true });
+      }
+
+      function returnToDetailAfterEdit() {
+        if (!state.editingFromDetail) return;
+        state.editingFromDetail = false;
+        elements.detailDialog.inert = false;
+        if (!elements.detailModal.hidden) {
+          (elements.detailContent.querySelector("[data-detail-edit]") || elements.detailModalClose).focus({ preventScroll: true });
+        }
+      }
+
+      function trapDetailFocus(event) {
+        if (elements.detailModal.hidden || event.key !== "Tab") return;
+        const topModal = [...document.querySelectorAll('.modal:not([hidden])')].at(-1);
+        const dialog = topModal?.querySelector('[role="dialog"]');
+        if (!dialog) return;
+        const focusable = [...dialog.querySelectorAll('button:not(:disabled), a[href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), summary, [tabindex="0"]')]
+          .filter((element) => element.getClientRects().length && !element.closest("[inert]"));
+        const first = focusable[0];
+        const last = focusable.at(-1);
+        if (!first) {
+          event.preventDefault();
+          elements.detailDialog.focus({ preventScroll: true });
+        } else if (event.shiftKey && (document.activeElement === first || !dialog.contains(document.activeElement))) {
+          event.preventDefault(); last.focus();
+        } else if (!event.shiftKey && (document.activeElement === last || !dialog.contains(document.activeElement))) {
+          event.preventDefault(); first.focus();
+        }
       }
 
       function closeAttachmentPreviewModal() {
@@ -3150,11 +3322,16 @@ body > .topbar .center-switcher-menu { top: calc(100% + 9px); left: auto; }
       function renderDetail(report) {
         elements.detailEmpty.hidden = true;
         elements.detailContent.hidden = false;
-        openDetailModal();
+        state.detailReport = report;
+        elements.detailModalTitle.textContent = `报账 #${report.id}`;
+        const sources = report.sources || [];
+        const deliveries = report.receiptDeliveries || [];
+        const attachmentCount = new Set(sources.flatMap((source) => source.attachments || []).filter((attachment) => attachment.exists).map((attachment) => attachment.id)).size;
+        const hasCleanedAttachments = sources.some((source) => (source.attachments || []).length > 0);
 
-        const sourceItems = report.sources
+        const sourceItems = sources
           .map((source) => {
-            const attachments = source.attachments.length
+            const attachments = !state.canAttachment ? '<div class="source-meta">无附件权限</div>' : (source.attachments || []).length
               ? `<div class="attachment-grid">${source.attachments
                   .map((attachment) => {
                     if (!attachment.exists) {
@@ -3171,7 +3348,7 @@ body > .topbar .center-switcher-menu { top: calc(100% + 9px); left: auto; }
                       return `
                         <div class="attachment-card">
                           <a class="attachment-link" href="${href}" target="_blank" rel="noreferrer">
-                            <img class="attachment-thumb" src="${href}" alt="attachment-${attachment.id}" />
+                            <img class="attachment-thumb" src="${href}" alt="attachment-${attachment.id}" loading="lazy" />
                           </a>
                           <a class="attachment-link mono" href="${href}" target="_blank" rel="noreferrer">attachment #${attachment.id}</a>
                         </div>
@@ -3203,8 +3380,8 @@ body > .topbar .center-switcher-menu { top: calc(100% + 9px); left: auto; }
           })
           .join("");
 
-        const receiptItems = report.receiptDeliveries.length
-          ? report.receiptDeliveries
+        const receiptItems = deliveries.length
+          ? deliveries
               .map(
                 (receipt) => `
                   <div class="receipt-item">
@@ -3222,80 +3399,103 @@ body > .topbar .center-switcher-menu { top: calc(100% + 9px); left: auto; }
           : `<div class="detail-empty">没有回执记录。</div>`;
 
         elements.detailContent.innerHTML = `
-          <div class="detail-header">
-            <h2>报账 #${report.id}</h2>
-            <div class="detail-meta">
-              <span class="tag">${escapeHtml(report.channelName)}</span>
-              <span class="tag ${report.needsReview ? "warn" : "ok"}">${report.needsReview ? "需复核" : "已确认"}</span>
-              ${renderCategoryTag(report.expenseCategory, report.expenseCategoryLabel)}
-            </div>
+          <p class="detail-kicker">${renderStoreCell(report)}</p>
+          <div class="detail-summary-amount">${renderAmountCell(report)}</div>
+          <div class="detail-summary-tags">
+            <span class="tag ${report.needsReview ? "warn" : "ok"}">${desktopReportIcon(report.needsReview ? "review" : "check")}${report.needsReview ? "需复核" : "已确认"}</span>
+            ${renderCategoryTag(report.expenseCategory, report.expenseCategoryLabel)}
           </div>
-
-          <div class="detail-section">
-            <h3>来源消息</h3>
-            <div class="source-list">${sourceItems || `<div class="detail-empty">没有来源消息。</div>`}</div>
+          <dl class="detail-facts">
+            <div><dt>报账人</dt><dd>${escapeHtml(report.reporter || "未知")}</dd></div>
+            <div><dt>币种</dt><dd>${escapeHtml(report.currency || "CNY")}${(report.currency || "CNY") === "CNY" ? " 人民币" : ""}</dd></div>
+            <div><dt>创建时间</dt><dd>${escapeHtml(formatTimestamp(report.createdAt))}</dd></div>
+            <div><dt>更新时间</dt><dd>${escapeHtml(formatTimestamp(report.updatedAt))}</dd></div>
+            <div><dt>商户</dt><dd>${escapeHtml(report.merchant || "未提供")}</dd></div>
+            <div><dt>来源群聊</dt><dd>${escapeHtml(report.channelName || "未提供")}</dd></div>
+          </dl>
+          <section class="detail-note-section">
+            <h3>完整备注</h3><p class="detail-note note-content">${renderRemarkContent(report.note, "暂无备注")}</p>
+          </section>
+          <div class="detail-actions">
+            <button type="button" data-detail-attachments ${state.canAttachment && attachmentCount > 0 ? "" : "disabled"}>${!state.canAttachment ? "无附件权限" : attachmentCount > 0 ? `查看附件 (${attachmentCount})` : hasCleanedAttachments ? "附件已清理" : "暂无附件"}</button>
+            ${state.canEdit ? '<button class="button-primary" type="button" data-detail-edit>编辑记录</button>' : ""}
           </div>
-
-          <div class="detail-section">
-            <h3>结构化字段</h3>
-            <div class="detail-grid">
-              <div class="detail-card"><strong>群聊</strong><span>${escapeHtml(report.channelName)}${report.channelCode ? ` (${escapeHtml(report.channelCode)})` : ""}</span></div>
-              <div class="detail-card"><strong>报账人</strong><span>${escapeHtml(report.reporter)}</span></div>
-              <div class="detail-card"><strong>金额</strong><span>${escapeHtml(formatAmount(report))}</span></div>
-              <div class="detail-card"><strong>票据日期</strong><span>${escapeHtml(report.voucherDate)} (${escapeHtml(report.voucherDateSource)})</span></div>
-              <div class="detail-card"><strong>类别</strong><span>${escapeHtml(report.expenseCategoryLabel || report.expenseCategory)}</span></div>
-              <div class="detail-card"><strong>证据类型</strong><span>${escapeHtml(report.evidenceType)}</span></div>
-              <div class="detail-card"><strong>商户</strong><span>${escapeHtml(report.merchant || "(空)")}</span></div>
-              <div class="detail-card"><strong>单号</strong><span>${escapeHtml(report.documentNo || "(空)")}</span></div>
-              <div class="detail-card"><strong>凭证类型</strong><span>${escapeHtml(report.voucherType || "(空)")}</span></div>
-              <div class="detail-card"><strong>置信度</strong><span>${Number(report.confidence).toFixed(2)}</span></div>
-              <div class="detail-card"><strong>创建时间</strong><span>${escapeHtml(formatTimestamp(report.createdAt))}</span></div>
-              <div class="detail-card"><strong>更新时间</strong><span>${escapeHtml(formatTimestamp(report.updatedAt))}</span></div>
-              <div class="detail-card" style="grid-column: 1 / -1;"><strong>备注</strong><span class="note-content">${renderRemarkContent(report.note)}</span></div>
-              <div class="detail-card" style="grid-column: 1 / -1;"><strong>OCR</strong><span>${escapeHtml(compactText(report.ocrText || "(空)"))}</span></div>
-            </div>
-          </div>
-
-          <div class="detail-section">
-            <h3>回执记录</h3>
-            <div class="receipt-list">${receiptItems}</div>
+          <div class="detail-disclosures">
+            <details class="detail-disclosure" id="detailSources">
+              <summary>原始消息与 OCR</summary>
+              <div class="detail-disclosure-body">
+                <h3>OCR</h3><p class="detail-ocr">${escapeHtml(report.ocrText || "(空)")}</p>
+                <h3>来源消息与附件</h3><div class="source-list">${sourceItems || '<div class="detail-empty">没有来源消息。</div>'}</div>
+              </div>
+            </details>
+            <details class="detail-disclosure">
+              <summary>回执记录${deliveries.length ? ` (${deliveries.length})` : ""}</summary>
+              <div class="detail-disclosure-body"><div class="receipt-list">${receiptItems}</div></div>
+            </details>
+            <details class="detail-disclosure">
+              <summary>更多票据信息</summary>
+              <div class="detail-disclosure-body"><dl class="detail-facts">
+                <div><dt>门店标识</dt><dd>${escapeHtml(report.channelCode || "未提供")}</dd></div>
+                <div><dt>票据日期</dt><dd>${escapeHtml(report.voucherDate || "未提供")}</dd></div>
+                <div><dt>日期来源</dt><dd>${escapeHtml(report.voucherDateSource || "未提供")}</dd></div>
+                <div><dt>证据类型</dt><dd>${escapeHtml(report.evidenceType || "未提供")}</dd></div>
+                <div><dt>单号</dt><dd>${escapeHtml(report.documentNo || "未提供")}</dd></div>
+                <div><dt>凭证类型</dt><dd>${escapeHtml(report.voucherType || "未提供")}</dd></div>
+                <div><dt>置信度</dt><dd>${report.confidence != null && Number.isFinite(Number(report.confidence)) ? Number(report.confidence).toFixed(2) : "未提供"}</dd></div>
+              </dl></div>
+            </details>
           </div>
         `;
       }
 
       async function loadDetail(reportId) {
+        const requestVersion = ++detailRequestVersion;
+        detailAbortController?.abort();
+        const controller = new AbortController();
+        detailAbortController = controller;
+        if (elements.detailModal.hidden) {
+          detailReturnFocus = document.activeElement;
+          detailReturnReportId = reportId;
+          detailPreviousStatus = { text: elements.statusText.textContent, isError: elements.statusText.classList.contains("error") };
+        }
         state.selectedReportId = reportId;
+        state.detailReport = null;
         renderTable();
+        elements.detailModalTitle.textContent = `报账 #${reportId}`;
         openDetailModal();
+        elements.detailScroll.scrollTop = 0;
+        elements.detailDialog.setAttribute("aria-busy", "true");
         elements.detailEmpty.hidden = false;
         elements.detailContent.hidden = true;
         elements.detailContent.innerHTML = "";
         elements.detailEmpty.textContent = `正在加载报账 #${reportId} 详情...`;
+        if (!elements.detailDialog.inert) elements.detailModalClose.focus({ preventScroll: true });
         setStatus(`正在加载报账 #${reportId} 详情...`);
 
         try {
           const response = await fetch(buildAuthFetchUrl(`${BASE_PATH}/api/reports/${reportId}`), {
-            headers: {
-              Accept: "application/json",
-            },
+            headers: { Accept: "application/json" }, signal: controller.signal,
           });
           const payload = await response.json();
-
-          if (!response.ok || !payload.success) {
-            throw new Error(payload?.error?.message || "详情加载失败");
-          }
-
+          if (requestVersion !== detailRequestVersion || elements.detailModal.hidden) return;
+          if (!response.ok || !payload.success) throw new Error(payload?.error?.message || "详情加载失败");
           state.timeZone = payload.timeZone || state.timeZone || DEFAULT_TIME_ZONE;
           elements.timeZonePill.textContent = `时区 ${state.timeZone}`;
-          elements.detailEmpty.textContent = "点击左侧列表中的任意一条记录，在这里查看结构化字段、原始消息、附件和回执。";
           renderDetail(payload.report);
           setStatus(`已加载报账 #${reportId} 详情`);
         } catch (error) {
+          if (requestVersion !== detailRequestVersion || controller.signal.aborted || elements.detailModal.hidden) return;
+          state.detailReport = null;
           elements.detailEmpty.hidden = false;
           elements.detailContent.hidden = true;
           elements.detailContent.innerHTML = "";
           elements.detailEmpty.textContent = error instanceof Error ? error.message : String(error);
           setStatus(error instanceof Error ? error.message : String(error), true);
+        } finally {
+          if (requestVersion === detailRequestVersion) {
+            elements.detailDialog.removeAttribute("aria-busy");
+            detailAbortController = null;
+          }
         }
       }
 
@@ -3566,12 +3766,12 @@ body > .topbar .center-switcher-menu { top: calc(100% + 9px); left: auto; }
         elements.editReportStatus.classList.toggle("error", isError);
       }
 
-      function openEditReportModal(reportId) {
+      function openEditReportModal(reportId, detailReport = null) {
         if (!state.canEdit || state.savingReport) {
           return;
         }
 
-        const report = state.items.find((item) => item.id === reportId);
+        const report = detailReport?.id === reportId ? detailReport : state.items.find((item) => item.id === reportId);
         if (!report) {
           setStatus(`未找到报账 #${reportId}，请重新加载列表。`, true);
           return;
@@ -3579,6 +3779,9 @@ body > .topbar .center-switcher-menu { top: calc(100% + 9px); left: auto; }
 
         state.editingReport = { ...report };
         elements.editReportForm.reset();
+        if (detailReport && report.expenseCategory && ![...elements.editReportExpenseCategory.options].some((option) => option.value === report.expenseCategory)) {
+          elements.editReportExpenseCategory.add(new Option(report.expenseCategoryLabel || report.expenseCategory, report.expenseCategory));
+        }
         elements.editReportModalTitle.textContent = `编辑报账 #${report.id}`;
         elements.editReportSummary.textContent = `${report.channelName} · ${report.reporter}`;
         elements.editReportAmount.value = report.amount === null || report.amount === undefined
@@ -3601,6 +3804,7 @@ body > .topbar .center-switcher-menu { top: calc(100% + 9px); left: auto; }
         state.editingReport = null;
         elements.editReportForm.reset();
         setEditReportStatus("");
+        returnToDetailAfterEdit();
       }
 
       async function submitEditReport() {
@@ -3665,6 +3869,7 @@ body > .topbar .center-switcher-menu { top: calc(100% + 9px); left: auto; }
 
           elements.editReportModal.hidden = true;
           state.editingReport = null;
+          returnToDetailAfterEdit();
           await loadReports();
 
           if (state.selectedReportId === original.id && !elements.detailModal.hidden) {
@@ -4056,6 +4261,32 @@ body > .topbar .center-switcher-menu { top: calc(100% + 9px); left: auto; }
       elements.detailModalClose.addEventListener("click", () => {
         closeDetailModal();
       });
+
+      elements.detailContent.addEventListener("click", (event) => {
+        const target = event.target;
+        if (!(target instanceof Element) || !state.detailReport) return;
+        const attachmentButton = target.closest("[data-detail-attachments]");
+        if (attachmentButton && state.canAttachment && !attachmentButton.disabled) {
+          const sources = elements.detailContent.querySelector("#detailSources");
+          if (!sources) return;
+          sources.open = true;
+          const link = sources.querySelector("a.attachment-link[href]");
+          const section = link?.closest(".attachment-grid") || sources;
+          const top = section.getBoundingClientRect().top - elements.detailScroll.getBoundingClientRect().top + elements.detailScroll.scrollTop - 16;
+          elements.detailScroll.scrollTo({ top: Math.max(0, top), behavior: "instant" });
+          (link || sources.querySelector("summary"))?.focus({ preventScroll: true });
+          return;
+        }
+        if (target.closest("[data-detail-edit]") && state.canEdit) {
+          openEditReportModal(state.detailReport.id, state.detailReport);
+          if (!elements.editReportModal.hidden) {
+            state.editingFromDetail = true;
+            elements.detailDialog.inert = true;
+          }
+        }
+      });
+
+      document.addEventListener("keydown", trapDetailFocus);
 
       elements.attachmentPreviewModalBackdrop.addEventListener("click", () => {
         closeAttachmentPreviewModal();

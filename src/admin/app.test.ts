@@ -135,6 +135,49 @@ test("mobile report actions honor capabilities and preserve escaped data, curren
   assert.match(render(permissions, { ...item, amount: 0, currency: "CNY" }), /<small>¥<\/small><span class="mobile-report-amount-value">0\.00/);
 });
 
+test("detail presentation preserves fields and honors attachment and edit permissions", () => {
+  const html = fs.readFileSync(path.resolve(process.cwd(), "src/admin/public/admin.html"), "utf8");
+  const source = [
+    html.slice(html.indexOf("      function escapeHtml("), html.indexOf("      const REPORTER_TAG_CLASS_NAMES")),
+    html.slice(html.indexOf("      function renderStoreCell("), html.indexOf("      function renderBillAttachment(")),
+    html.slice(html.indexOf("      function renderAmountCell("), html.indexOf("      function setStatus(")),
+    html.slice(html.indexOf("      function desktopReportIcon("), html.indexOf("      function canDeleteItem(")),
+    html.slice(html.indexOf("      function renderDetail("), html.indexOf("      async function loadDetail(")),
+  ].join("\n");
+  const report = {
+    id: 72, reporter: '<img src=x onerror="alert(1)">', channelName: "Fuzzy", channelCode: "reimbursement_fuzzy",
+    amount: 1234.5, currency: "USD", expenseCategory: "food", expenseCategoryLabel: "食材",
+    note: "农 <script>note</script>", ocrText: "OCR <script>ocr</script>", needsReview: true,
+    merchant: "测试商户", documentNo: "document-72", voucherType: "receipt", confidence: 0.98,
+    voucherDate: "2026-09-26", voucherDateSource: "explicit", evidenceType: "receipt_image",
+    createdAt: "2026-09-25 16:30:00", updatedAt: "2026-09-25 17:30:00",
+    sources: [{ role: "original", rawMessageId: 3, messageExternalId: "message-72", senderName: "示例报账人", textContent: "来源消息 <script>source</script>", eventReceivedAt: "2026-09-25 16:30:00", attachments: [
+      { id: 9, mimeType: "image/png", exists: true }, { id: 10, mimeType: "application/pdf", exists: true }, { id: 11, mimeType: "image/jpeg", exists: false },
+    ] }],
+    receiptDeliveries: [{ id: 6, rawMessageId: 3, targetType: "room", targetValue: "示例接收群", receiptText: "回执 <script>receipt</script>", sentAt: "2026-09-25 17:30:00" }],
+  };
+  for (const canAttachment of [false, true]) {
+    for (const canEdit of [false, true]) {
+      const elements = { detailEmpty: { hidden: false }, detailContent: { hidden: true, innerHTML: "" }, detailModalTitle: { textContent: "" } };
+      runInNewContext(`${source}\nrenderDetail(report)`, {
+        report, elements, state: { canAttachment, canEdit, timeZone: "Asia/Shanghai" },
+        BASE_PATH: "/expense", DEFAULT_TIME_ZONE: "Asia/Shanghai", STORE_LABELS_BY_CHANNEL_CODE: new Map(),
+      });
+      const markup = elements.detailContent.innerHTML;
+      assert.equal(markup.includes("data-detail-edit"), canEdit);
+      assert.equal(markup.includes("/expense/api/attachments/9/content"), canAttachment);
+      assert.equal(markup.includes("/expense/api/attachments/10/content"), canAttachment);
+      assert.doesNotMatch(markup, /\/attachments\/11\/content|<script\b|<img src=x/);
+      if (canAttachment) assert.match(markup, /查看附件 \(2\)/);
+      else assert.doesNotMatch(markup, /<img\b|class="attachment-link/);
+      for (const value of ["USD", "document-72", "explicit", "receipt_image", "0.98", "message-72", "示例接收群", "&lt;script&gt;note&lt;/script&gt;", "&lt;script&gt;ocr&lt;/script&gt;", "&lt;script&gt;source&lt;/script&gt;", "&lt;script&gt;receipt&lt;/script&gt;"]) {
+        assert.ok(markup.includes(value), `Missing detail value: ${value}`);
+      }
+      assert.equal(elements.detailModalTitle.textContent, "报账 #72");
+    }
+  }
+});
+
 const stateDir = fs.mkdtempSync(path.join(os.tmpdir(), "wechat-claw-reimbursement-admin-"));
 const managedEnvKeys = [
   "WECHATY_ADMIN_HOST",
