@@ -1491,6 +1491,9 @@
 :root[data-theme="dark"] .center-switcher-option[data-center="store"] svg { color: #f486ad; }
 /* Full-width header; keep all existing control styles. */
 body > .topbar { height: auto; min-height: 64px; padding-block: 13px; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; box-shadow: none; }
+/* Anchor the menu below the full header, including wrapped mobile rows. */
+body > .topbar > .center-switcher { position: static; }
+body > .topbar .center-switcher-menu { top: calc(100% + 9px); left: auto; }
 </style>
   </head>
   <body>
