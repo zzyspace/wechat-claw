@@ -715,6 +715,10 @@
         overflow: auto;
       }
 
+      .mobile-report-list {
+        display: none;
+      }
+
       table {
         width: 100%;
         min-width: 1220px;
@@ -1382,6 +1386,88 @@
         text-align: center;
       }
 
+      /* Desktop list styling is isolated from mobile records and other panels. */
+      @media (min-width: 621px) {
+        .desktop-report-table {
+          --desktop-report-muted: #f7f8fa;
+          --desktop-report-faint: #8a8a91;
+          min-width: 1120px;
+          table-layout: fixed;
+          background: var(--surface-strong);
+        }
+        .desktop-report-table th,
+        .desktop-report-table td { width: auto; min-width: 0; max-width: none; }
+        .desktop-report-table th {
+          height: 46px; padding: 11px 10px; background: var(--desktop-report-muted);
+          color: var(--ink-soft); font-size: 11px; font-weight: 500;
+          letter-spacing: 0; text-transform: none; white-space: nowrap; vertical-align: middle;
+        }
+        .desktop-report-table td {
+          height: 84px; padding: 13px 10px; vertical-align: middle;
+          font-size: 12px; line-height: 1.65; overflow-wrap: anywhere;
+        }
+        .desktop-report-table th:first-child,
+        .desktop-report-table td:first-child { padding-left: 20px; }
+        .desktop-report-table th:last-child,
+        .desktop-report-table td:last-child { padding-right: 18px; }
+        .desktop-report-table th:nth-child(1) { width: 11%; }
+        .desktop-report-table th:nth-child(2) { width: 8%; }
+        .desktop-report-table th:nth-child(3) { width: 7%; }
+        .desktop-report-table th:nth-child(4) { width: 10%; text-align: right; }
+        .desktop-report-table th:nth-child(5) { width: 8%; }
+        .desktop-report-table th:nth-child(6) { width: 15%; }
+        .desktop-report-table th:nth-child(7) { width: 8%; }
+        .desktop-report-table th:nth-child(8) { width: 7%; }
+        .desktop-report-table th:nth-child(9) { width: 8%; }
+        .desktop-report-table th:nth-child(10) { width: 6%; }
+        .desktop-report-table th:nth-child(11) { width: 12%; }
+        .desktop-report-table tbody tr:last-child td { border-bottom: 0; }
+        .desktop-report-table td:first-child { font-weight: 500; }
+        .desktop-report-table td:nth-child(3) > .tag { max-width: 100%; }
+        .desktop-report-table .column-created-at,
+        .desktop-report-table .column-updated-at { color: var(--ink-soft); font-size: 11px; font-variant-numeric: tabular-nums; }
+        .desktop-report-table .column-created-at-value { gap: 4px; }
+        .desktop-report-table .column-created-at-time { color: var(--desktop-report-faint); font-size: 10px; }
+        .desktop-report-table td:nth-child(4) { text-align: right; }
+        .desktop-report-table .column-amount-value { gap: 4px; font-variant-numeric: tabular-nums; }
+        .desktop-report-table .column-amount-number { font-size: 18px; font-weight: 650; letter-spacing: -.55px; white-space: normal; overflow-wrap: anywhere; }
+        .desktop-report-table .column-amount-number small { font-size: 11px; font-weight: 500; letter-spacing: 0; margin-right: 2px; }
+        .desktop-report-table .column-amount-value.is-large .column-amount-number { font-size: 14px; }
+        .desktop-report-table .column-amount-currency { color: var(--desktop-report-faint); font-size: 10px; letter-spacing: .04em; white-space: normal; }
+        .desktop-report-table .column-amount-missing { color: var(--warn); font-size: 13px; font-weight: 600; }
+        .desktop-report-table td:nth-child(5) > .tag { min-height: 0; padding: 3px 7px; border: 0; border-radius: 5px; font-size: 11px; font-weight: 550; line-height: 1.55; }
+        .desktop-report-table .note-cell { font-size: 12px; line-height: 1.9; }
+        .desktop-report-table .note-cell > .note-content { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+        .desktop-report-table .note-pill { display: inline; min-height: 0; padding: 1px 3px; border: 0; border-radius: 4px; font-size: inherit; line-height: inherit; }
+        .desktop-report-table td.column-bill { padding-inline: 8px; }
+        .desktop-report-table .bill-link,
+        .desktop-report-table .bill-placeholder { background: var(--surface-strong); }
+        .desktop-report-table .bill-placeholder.warn { background: var(--warn-soft); }
+        .desktop-report-table .desktop-report-status { gap: 4px; min-height: 0; padding: 4px 6px; border: 0; border-radius: 6px; font-size: 10px; font-weight: 550; line-height: 1.4; white-space: nowrap; }
+        .desktop-report-table .desktop-report-status.ok { color: #247352; background: #edf6f0; }
+        .desktop-report-table svg { width: 14px; height: 14px; flex: none; pointer-events: none; }
+        .desktop-report-table .desktop-report-status svg { width: 11px; height: 11px; }
+        .desktop-report-table td:nth-child(10) > button {
+          min-height: 44px; padding: 0; border: 0; border-radius: 7px; background: transparent;
+          color: var(--brand); font-size: 12px; font-weight: 400; font-variant-numeric: tabular-nums; white-space: nowrap;
+        }
+        .desktop-report-table .operation-buttons { gap: 4px; }
+        .desktop-report-table .operation-buttons button {
+          display: inline-flex; align-items: center; justify-content: center; gap: 4px;
+          min-height: 44px; padding: 0 4px; border: 0; border-radius: 7px;
+          background: transparent; color: var(--ink-soft); font-size: 12px; font-weight: 400;
+        }
+        .desktop-report-table .operation-buttons .button-danger { color: var(--danger); }
+        :root[data-theme="dark"] .desktop-report-table { --desktop-report-muted: #283344; --desktop-report-faint: #8e9bae; }
+        :root[data-theme="dark"] .desktop-report-table .desktop-report-status.ok { color: #86d3ac; background: #243c36; }
+        @media (hover: hover) and (pointer: fine) {
+          .desktop-report-table tbody tr:hover { background: var(--desktop-report-muted); }
+          .desktop-report-table .operation-buttons button:hover { color: var(--brand); background: var(--brand-soft); }
+          .desktop-report-table .operation-buttons .button-danger:hover:not([disabled]) { color: var(--danger); background: rgba(255, 59, 48, .08); }
+        }
+        .desktop-report-table tbody tr.is-selected { background: var(--brand-soft); }
+      }
+
       @media (max-width: 900px) {
         .controls-grid,
         .manual-import-grid,
@@ -1395,6 +1481,59 @@
       }
 
       @media (max-width: 620px) {
+        .table-panel > .table-scroll { display: none; }
+        .mobile-report-list { display: block; padding: 0 14px; background: var(--surface-strong); }
+        .mobile-report { min-width: 0; padding: 12px 0 2px; border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
+        .mobile-report:last-child { border-bottom: 0; }
+        .mobile-report.is-selected { background: var(--brand-soft); }
+        .mobile-report button {
+          min-height: 44px; padding: 0 8px; border: 0; border-radius: 8px;
+          background: transparent; color: var(--ink-soft); font-size: 12px; font-weight: 400;
+          touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+        }
+        .mobile-report button:active:not([disabled]) { opacity: .65; }
+        .mobile-report button:focus:not(:focus-visible) { outline: none; }
+        .mobile-report button:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+        .mobile-report svg { width: 15px; height: 15px; flex: none; pointer-events: none; }
+        .mobile-report .mobile-report-main {
+          display: block; width: 100%; padding: 0; color: var(--ink); text-align: left;
+          line-height: 1.5; user-select: text; -webkit-user-select: text;
+        }
+        .mobile-report-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+        .mobile-report-identity { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; min-width: 0; }
+        .mobile-report-identity strong { font-size: 15px; font-weight: 600; }
+        .mobile-report-identity .tag { min-height: 0; padding: 3px 7px; border: 0; border-radius: 5px; font-size: 11px; line-height: 1.55; }
+        .mobile-report .category-food { color: #23763e; }
+        .mobile-report .category-rent { color: #a75b00; }
+        .mobile-report-amount {
+          display: flex; align-items: baseline; justify-content: flex-end; gap: 2px;
+          flex: 0 0 auto; max-width: 60%; min-width: 0; font-size: 21px; font-weight: 650;
+          line-height: 1.35; letter-spacing: -.6px; font-variant-numeric: tabular-nums;
+        }
+        .mobile-report-amount-value { min-width: 0; overflow-wrap: anywhere; }
+        .mobile-report-amount small { flex: none; font-size: 11px; letter-spacing: 0; font-weight: 500; }
+        .mobile-report-amount.is-large { font-size: 17px; }
+        .mobile-report-amount.is-missing { font-size: 16px; color: var(--warn); }
+        .mobile-report-meta { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 4px; }
+        .mobile-report-store { min-width: 0; color: var(--ink-soft); font-size: 11px; }
+        .mobile-report-status { display: inline-flex; align-items: center; gap: 4px; flex: none; padding: 3px 6px; border-radius: 6px; font-size: 10px; line-height: 1.4; font-weight: 550; }
+        .mobile-report-status svg { width: 11px; height: 11px; }
+        .mobile-report-status.is-review { color: var(--warn); background: var(--warn-soft); }
+        .mobile-report-status.is-confirmed { color: #247352; background: #edf6f0; }
+        .mobile-report-note { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 5px; color: var(--ink-soft); font-size: 12px; line-height: 1.8; }
+        .mobile-report-note .note-pill { display: inline; min-height: 0; padding: 1px 3px; border: 0; border-radius: 4px; font-size: inherit; line-height: inherit; }
+        .mobile-report-footer { display: flex; align-items: center; gap: 1px; min-height: 44px; }
+        .mobile-report-footer time { min-width: 0; margin-right: auto; color: var(--ink-soft); font-size: 11px; font-variant-numeric: tabular-nums; }
+        .mobile-report-footer button { display: flex; align-items: center; justify-content: center; gap: 4px; flex: none; font-size: 11px; white-space: nowrap; }
+        .mobile-report-footer .mobile-report-attachment { color: var(--brand); }
+        .mobile-report-footer .mobile-report-more { width: 44px; min-width: 44px; }
+        .mobile-report-menu { display: flex; justify-content: flex-end; gap: 8px; padding: 6px 0 10px; border-top: 1px solid var(--line); }
+        .mobile-report-menu button { color: var(--brand); }
+        .mobile-report-menu .button-danger { color: var(--danger); }
+        :root[data-theme="dark"] .mobile-report .category-food { color: #69dc8d; }
+        :root[data-theme="dark"] .mobile-report .category-rent { color: #ffc266; }
+        :root[data-theme="dark"] .mobile-report-status.is-confirmed { color: #86d3ac; background: #243c36; }
+
         .page {
           width: min(100vw - 18px, 100%);
           padding-top: 8px;
@@ -1622,7 +1761,7 @@ body > .topbar .center-switcher-menu { top: calc(100% + 9px); left: auto; }
       <div class="content">
         <div class="panel table-panel">
           <div class="table-scroll">
-            <table>
+            <table class="desktop-report-table">
               <thead>
                 <tr>
                   <th>门店</th>
@@ -1641,6 +1780,7 @@ body > .topbar .center-switcher-menu { top: calc(100% + 9px); left: auto; }
               <tbody id="tableBody"></tbody>
             </table>
           </div>
+          <div class="mobile-report-list" id="mobileReportList" role="list" aria-label="报账记录"></div>
           <div class="empty-state" id="emptyState" hidden>没有匹配的报账记录。</div>
           <div class="pagination">
             <div class="status" id="rangeText">0 - 0 / 0</div>
@@ -1957,6 +2097,7 @@ body > .topbar .center-switcher-menu { top: calc(100% + 9px); left: auto; }
         accessPill: document.getElementById("accessPill"),
         statusText: document.getElementById("statusText"),
         tableBody: document.getElementById("tableBody"),
+        mobileReportList: document.getElementById("mobileReportList"),
         operationColumnHeader: document.getElementById("operationColumnHeader"),
         emptyState: document.getElementById("emptyState"),
         rangeText: document.getElementById("rangeText"),
@@ -2286,15 +2427,16 @@ body > .topbar .center-switcher-menu { top: calc(100% + 9px); left: auto; }
       }
 
       function renderAmountCell(item) {
-        if (item.amount === null || item.amount === undefined) {
-          return escapeHtml(formatAmount(item));
+        if (item.amount === null || item.amount === undefined || !Number.isFinite(Number(item.amount))) {
+          return '<span class="column-amount-missing">待复核</span>';
         }
 
         const amount = Number(item.amount);
         const currency = item.currency || "CNY";
+        const number = amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         return `
-          <span class="column-amount-value">
-            <span class="column-amount-number">${escapeHtml(amount.toFixed(2))}</span>
+          <span class="column-amount-value${number.length > 10 ? " is-large" : ""}">
+            <span class="column-amount-number">${currency === "CNY" ? "<small>¥</small>" : ""}${escapeHtml(number)}</span>
             <span class="column-amount-currency">${escapeHtml(currency)}</span>
           </span>
         `;
@@ -2782,11 +2924,92 @@ body > .topbar .center-switcher-menu { top: calc(100% + 9px); left: auto; }
         return params;
       }
 
+      const MOBILE_REPORT_ICONS = {
+        attachment: '<path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9Z"/><path d="M14 3v6h6M8 13h8M8 17h5"/>',
+        edit: '<path d="m14.5 4.5 5 5M4 20l5-1L20 8a2.1 2.1 0 0 0-5-5L4 14Z"/>',
+        more: '<circle cx="5" cy="12" r="1" fill="currentColor"/><circle cx="12" cy="12" r="1" fill="currentColor"/><circle cx="19" cy="12" r="1" fill="currentColor"/>',
+        check: '<path d="m5 12 4 4L19 6"/>',
+        review: '<circle cx="12" cy="12" r="9"/><path d="M12 7v6M12 17h.01"/>',
+      };
+
+      function mobileReportIcon(name) {
+        return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${MOBILE_REPORT_ICONS[name]}</svg>`;
+      }
+
+      function formatMobileCreatedAt(value) {
+        const date = parseDatabaseTimestamp(value);
+        if (!date) return value || "-";
+        const parts = new Intl.DateTimeFormat("en-GB", {
+          timeZone: state.timeZone || DEFAULT_TIME_ZONE,
+          month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+        }).formatToParts(date);
+        const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+        return `${values.month}/${values.day} ${values.hour}:${values.minute}`;
+      }
+
+      function renderMobileReportAmount(item) {
+        if (item.amount === null || item.amount === undefined || !Number.isFinite(Number(item.amount))) {
+          return '<span class="mobile-report-amount is-missing">待复核</span>';
+        }
+        const amount = Number(item.amount);
+        const currency = item.currency || "CNY";
+        const number = amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        return `<span class="mobile-report-amount${number.length > 10 ? " is-large" : ""}">${currency === "CNY" ? "<small>¥</small>" : ""}<span class="mobile-report-amount-value">${escapeHtml(number)}</span>${currency === "CNY" ? "" : `<small>${escapeHtml(currency)}</small>`}</span>`;
+      }
+
+      function renderMobileReport(item) {
+        const attachment = item.billAttachment;
+        const attachmentButton = state.canAttachment && attachment?.exists
+          ? `<button type="button" class="mobile-report-attachment" data-attachment-preview data-attachment-preview-report-id="${item.id}" aria-label="查看${escapeHtml(item.reporter)}的附件">${mobileReportIcon("attachment")}<span>附件</span></button>`
+          : `<button type="button" disabled>${!state.canAttachment ? "无附件权限" : attachment ? "已清理" : "无附件"}</button>`;
+        const isDeleting = state.deletingIds.has(item.id);
+        return `
+          <article class="mobile-report${item.id === state.selectedReportId ? " is-selected" : ""}" role="listitem" data-report-id="${item.id}">
+            <button type="button" class="mobile-report-main" data-report-id="${item.id}" aria-label="查看${escapeHtml(item.reporter)}的报账详情">
+              <span class="mobile-report-heading"><span class="mobile-report-identity"><strong>${escapeHtml(item.reporter || "未知")}</strong>${renderCategoryTag(item.expenseCategory, item.expenseCategoryLabel)}</span>${renderMobileReportAmount(item)}</span>
+              <span class="mobile-report-meta"><span class="mobile-report-store">${renderStoreCell(item)}</span><span class="mobile-report-status ${item.needsReview ? "is-review" : "is-confirmed"}">${mobileReportIcon(item.needsReview ? "review" : "check")}${item.needsReview ? "需复核" : "已确认"}</span></span>
+              <span class="mobile-report-note">${renderRemarkContent(item.note, "暂无备注")}</span>
+            </button>
+            <div class="mobile-report-footer">
+              <time title="${escapeHtml(formatTimestamp(item.createdAt))}">${escapeHtml(formatMobileCreatedAt(item.createdAt))}</time>
+              ${attachmentButton}
+              ${state.canEdit ? `<button type="button" data-edit-id="${item.id}" aria-label="编辑${escapeHtml(item.reporter)}的报账">${mobileReportIcon("edit")}<span>编辑</span></button>` : ""}
+              <button type="button" class="mobile-report-more" data-mobile-more-id="${item.id}" aria-label="更多操作" aria-expanded="false" aria-controls="mobile-report-menu-${item.id}">${mobileReportIcon("more")}</button>
+            </div>
+            <div class="mobile-report-menu" id="mobile-report-menu-${item.id}" hidden>
+              <button type="button" data-report-id="${item.id}">查看详情</button>
+              ${canDeleteItem(item) ? `<button type="button" class="button-danger" data-delete-id="${item.id}" ${isDeleting ? "disabled" : ""}>${isDeleting ? "删除中" : "删除"}</button>` : ""}
+            </div>
+          </article>`;
+      }
+
+      function renderMobileReports() {
+        elements.mobileReportList.innerHTML = window.matchMedia("(max-width: 620px)").matches
+          ? state.items.map(renderMobileReport).join("")
+          : "";
+      }
+
+      function closeMobileReportMenus() {
+        elements.mobileReportList.querySelectorAll("[data-mobile-more-id]").forEach((button) => button.setAttribute("aria-expanded", "false"));
+        elements.mobileReportList.querySelectorAll(".mobile-report-menu").forEach((menu) => { menu.hidden = true; });
+      }
+
+      function desktopReportIcon(name) {
+        const paths = {
+          edit: '<path d="m14.5 4.5 5 5M4 20l5-1L20 8a2.1 2.1 0 0 0-5-5L4 14Z"/>',
+          delete: '<path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7"/>',
+          check: '<path d="m5 12 4 4L19 6"/>',
+          review: '<circle cx="12" cy="12" r="9"/><path d="M12 7v6M12 17h.01"/>',
+        };
+        return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths[name]}</svg>`;
+      }
+
       function canDeleteItem(item) {
         return state.canDelete && item?.permissions?.canDelete === true;
       }
 
       function renderTable() {
+        renderMobileReports();
         elements.tableBody.innerHTML = "";
         elements.emptyState.hidden = state.items.length !== 0;
 
@@ -2803,7 +3026,7 @@ body > .topbar .center-switcher-menu { top: calc(100% + 9px); left: auto; }
           row.classList.toggle("is-selected", item.id === state.selectedReportId);
           const isDeleting = state.deletingIds.has(item.id);
           const operationCell = state.canWrite
-            ? `<td><div class="operation-buttons">${state.canEdit ? `<button type="button" data-edit-id="${item.id}">编辑</button>` : ""}${canDeleteItem(item) ? `<button class="button-danger" type="button" data-delete-id="${item.id}" ${isDeleting ? "disabled" : ""}>${isDeleting ? "删除中" : "删除"}</button>` : ""}</div></td>`
+            ? `<td><div class="operation-buttons">${state.canEdit ? `<button type="button" data-edit-id="${item.id}">${desktopReportIcon("edit")}<span>编辑</span></button>` : ""}${canDeleteItem(item) ? `<button class="button-danger" type="button" data-delete-id="${item.id}" ${isDeleting ? "disabled" : ""}>${isDeleting ? "" : desktopReportIcon("delete")}<span>${isDeleting ? "删除中" : "删除"}</span></button>` : ""}</div></td>`
             : "";
           row.innerHTML = `
             <td>${renderStoreCell(item)}</td>
@@ -2811,10 +3034,10 @@ body > .topbar .center-switcher-menu { top: calc(100% + 9px); left: auto; }
             <td>${renderReporterTag(item.reporter, reporterColorMap)}</td>
             <td>${renderAmountCell(item)}</td>
             <td>${renderCategoryTag(item.expenseCategory, item.expenseCategoryLabel)}</td>
-            <td class="note-cell"><span class="note-content">${renderRemarkContent(item.note, "-")}</span></td>
+            <td class="note-cell"><span class="note-content" title="${escapeHtml(compactText(item.note, "-"))}">${renderRemarkContent(item.note, "-")}</span></td>
             <td class="column-bill">${state.canAttachment ? renderBillAttachment(item) : "无附件权限"}</td>
-            <td><span class="tag ${item.needsReview ? "warn" : "ok"}">${item.needsReview ? "需复核" : "已确认"}</span></td>
-            <td>${escapeHtml(formatTimestamp(item.updatedAt))}</td>
+            <td><span class="tag desktop-report-status ${item.needsReview ? "warn" : "ok"}">${desktopReportIcon(item.needsReview ? "review" : "check")}${item.needsReview ? "需复核" : "已确认"}</span></td>
+            <td class="column-updated-at">${renderCreatedAtCell(item.updatedAt)}</td>
             <td><button type="button" data-report-id="${item.id}">#${item.id}</button></td>
             ${operationCell}
           `;
@@ -3730,7 +3953,7 @@ body > .topbar .center-switcher-menu { top: calc(100% + 9px); left: auto; }
         void loadReports();
       });
 
-      elements.tableBody.addEventListener("click", (event) => {
+      function handleReportListClick(event) {
         const target = event.target;
 
         if (!(target instanceof HTMLElement)) {
@@ -3787,7 +4010,40 @@ body > .topbar .center-switcher-menu { top: calc(100% + 9px); left: auto; }
         }
 
         scheduleDetail(reportId);
+      }
+
+      elements.tableBody.addEventListener("click", handleReportListClick);
+
+      elements.mobileReportList.addEventListener("click", (event) => {
+        const target = event.target;
+        if (!(target instanceof HTMLElement)) return;
+        const moreButton = target.closest("[data-mobile-more-id]");
+        if (moreButton) {
+          cancelPendingDetail();
+          const wasExpanded = moreButton.getAttribute("aria-expanded") === "true";
+          closeMobileReportMenus();
+          const menu = document.getElementById(moreButton.getAttribute("aria-controls"));
+          if (menu && !wasExpanded) {
+            moreButton.setAttribute("aria-expanded", "true");
+            menu.hidden = false;
+          }
+          return;
+        }
+        closeMobileReportMenus();
+        handleReportListClick(event);
       });
+
+      elements.mobileReportList.addEventListener("dblclick", cancelPendingDetail);
+      elements.mobileReportList.addEventListener("keydown", (event) => {
+        if (event.key !== "Escape") return;
+        const button = elements.mobileReportList.querySelector('[data-mobile-more-id][aria-expanded="true"]');
+        if (button) {
+          closeMobileReportMenus();
+          button.focus();
+          event.stopPropagation();
+        }
+      });
+      window.matchMedia("(max-width: 620px)").addEventListener("change", renderMobileReports);
 
       elements.tableBody.addEventListener("dblclick", () => {
         cancelPendingDetail();

@@ -90,6 +90,51 @@ test("admin deletion controls preserve legacy access and honor each report capab
   }
 });
 
+test("mobile report actions honor capabilities and preserve escaped data, currency, and local time", () => {
+  const html = fs.readFileSync(path.resolve(process.cwd(), "src/admin/public/admin.html"), "utf8");
+  const source = [
+    html.slice(html.indexOf("      function escapeHtml("), html.indexOf("      const REPORTER_TAG_CLASS_NAMES")),
+    html.slice(html.indexOf("      function renderStoreCell("), html.indexOf("      function renderBillAttachment(")),
+    html.slice(html.indexOf("      const MOBILE_REPORT_ICONS"), html.indexOf("      function renderTable()")),
+  ].join("\n");
+  const item = {
+    id: 72, reporter: '<img src=x onerror="alert(1)">', channelName: "Fuzzy <test>",
+    amount: 1234.5, currency: "USD", expenseCategory: "food", expenseCategoryLabel: "食材",
+    note: "农 <script>alert(1)</script>", createdAt: "2026-09-25 16:30:00", needsReview: true,
+    billAttachment: { id: 9, exists: true }, permissions: { canDelete: false },
+  };
+  const render = (permissions: { canEdit: boolean; canDelete: boolean; canAttachment: boolean }, record: object) => runInNewContext(`${source}\nrenderMobileReport(item)`, {
+    state: { ...permissions, selectedReportId: null, deletingIds: new Set(), timeZone: "Asia/Shanghai" },
+    item: record, DEFAULT_TIME_ZONE: "Asia/Shanghai", STORE_LABELS_BY_CHANNEL_CODE: new Map(),
+  }) as string;
+
+  for (const [canEdit, canDelete, canAttachment, recordCanDelete] of [
+    [false, false, false, true],
+    [true, true, true, false],
+    [true, true, true, true],
+    [false, true, true, true],
+    [false, true, true, undefined],
+  ] as const) {
+    const result = render({ canEdit, canDelete, canAttachment }, { ...item, permissions: { canDelete: recordCanDelete } });
+    assert.equal(result.includes('data-edit-id="72"'), canEdit);
+    assert.equal(result.includes('data-delete-id="72"'), canDelete && recordCanDelete === true);
+    assert.equal(result.includes('data-attachment-preview-report-id="72"'), canAttachment);
+    assert.doesNotMatch(result, /<img\b|<script\b/);
+    assert.match(result, /&lt;img src=x onerror=&quot;alert\(1\)&quot;&gt;/);
+    assert.match(result, /&lt;script&gt;alert\(1\)&lt;\/script&gt;/);
+    assert.match(result, /09\/26 00:30/);
+    assert.match(result, /1,234\.50/);
+    assert.match(result, /<small>USD<\/small>/);
+    assert.doesNotMatch(result, /¥|#72/);
+  }
+
+  const permissions = { canEdit: false, canDelete: false, canAttachment: true };
+  assert.doesNotMatch(render(permissions, { ...item, billAttachment: { id: 9, exists: false } }), /data-attachment-preview-report-id/);
+  assert.match(render(permissions, { ...item, billAttachment: undefined }), /无附件/);
+  assert.match(render(permissions, { ...item, amount: null }), /is-missing">待复核/);
+  assert.match(render(permissions, { ...item, amount: 0, currency: "CNY" }), /<small>¥<\/small><span class="mobile-report-amount-value">0\.00/);
+});
+
 const stateDir = fs.mkdtempSync(path.join(os.tmpdir(), "wechat-claw-reimbursement-admin-"));
 const managedEnvKeys = [
   "WECHATY_ADMIN_HOST",
