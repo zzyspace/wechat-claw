@@ -1489,10 +1489,11 @@
     [hidden] { display: none !important; }
 .center-switcher-option[data-center="store"] svg { color: #e85d8e; }
 :root[data-theme="dark"] .center-switcher-option[data-center="store"] svg { color: #f486ad; }
+/* Full-width header; keep all existing control styles. */
+body > .topbar { height: auto; min-height: 64px; padding-block: 13px; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; box-shadow: none; }
 </style>
   </head>
   <body>
-    <div class="page">
       <nav class="topbar" aria-label="报账中心导航">
         <div class="center-switcher" id="centerSwitcher">
           <button class="center-switcher-trigger" id="centerSwitcherTrigger" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="centerSwitcherMenu" disabled>
@@ -1521,6 +1522,7 @@
         </div>
       </nav>
       <button class="center-switcher-backdrop" id="centerSwitcherBackdrop" type="button" aria-label="关闭后台选择列表" hidden></button>
+    <div class="page">
 
       <header class="hero">
         <div class="hero-copy">
