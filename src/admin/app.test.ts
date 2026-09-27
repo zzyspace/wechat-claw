@@ -178,6 +178,28 @@ test("detail presentation preserves fields and honors attachment and edit permis
   }
 });
 
+test("date range calendar rejects invalid dates and uses the business timezone", () => {
+  const html = fs.readFileSync(path.resolve(process.cwd(), "src/admin/public/admin.html"), "utf8");
+  const source = html.slice(html.indexOf("      function normalizedRangeDate("), html.indexOf("      function dateRangeCaption("));
+  const calendar = runInNewContext(`${source}\n({ normalizedRangeDate, rangeCalendarDay, rangeBusinessToday, defaultCreatedDateRange })`, {
+    state: { timeZone: "Asia/Shanghai" }, DEFAULT_TIME_ZONE: "Asia/Shanghai",
+  });
+  assert.equal(calendar.normalizedRangeDate("2024-02-29"), "2024-02-29");
+  assert.equal(calendar.normalizedRangeDate("0001-01-01"), "0001-01-01");
+  for (const value of ["2026-02-29", "2100-02-29", "2026-04-31", "0000-01-01", "2026-9-1", '<script>']) {
+    assert.equal(calendar.normalizedRangeDate(value), "");
+  }
+  assert.equal(calendar.rangeCalendarDay(2024, 2, 0).toISOString().slice(0, 10), "2024-02-29");
+  assert.equal(calendar.rangeCalendarDay(2026, 0, 0).toISOString().slice(0, 10), "2025-12-31");
+  assert.equal(calendar.rangeBusinessToday(new Date("2026-09-26T16:30:00Z")), "2026-09-27");
+  const monthToDate = calendar.defaultCreatedDateRange(new Date("2026-09-26T16:30:00Z"));
+  assert.equal(monthToDate.from, "2026-09-01");
+  assert.equal(monthToDate.to, "2026-09-27");
+  const nextMonth = calendar.defaultCreatedDateRange(new Date("2026-09-30T16:30:00Z"));
+  assert.equal(nextMonth.from, "2026-10-01");
+  assert.equal(nextMonth.to, "2026-10-01");
+});
+
 const stateDir = fs.mkdtempSync(path.join(os.tmpdir(), "wechat-claw-reimbursement-admin-"));
 const managedEnvKeys = [
   "WECHATY_ADMIN_HOST",
@@ -857,9 +879,6 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     assert.match(pageHtml, /\.field input,\s*\.field select,\s*\.field textarea \{[^}]*min-width: 0;/s);
     assert.match(pageHtml, /\.controls-grid \.field select \{[^}]*height: 46px;[^}]*-webkit-appearance: none;/s);
     assert.match(pageHtml, /background-position:\s*calc\(100% - 18px\) 50%,\s*calc\(100% - 13px\) 50%;/);
-    assert.match(pageHtml, /@supports \(-webkit-touch-callout: none\)/);
-    assert.match(pageHtml, /#createdDateFrom,\s*#createdDateTo \{\s*height: 46px;\s*min-height: 46px;\s*max-height: 46px;/);
-    assert.match(pageHtml, /#createdDateFrom::-webkit-date-and-time-value,\s*#createdDateTo::-webkit-date-and-time-value \{\s*display: flex;\s*align-items: center;\s*height: 44px;/);
     assert.match(pageHtml, /renderRemarkContent\(item\.note, "-"\)/);
     assert.match(pageHtml, /tag note-pill/);
     assert.match(pageHtml, /\/\[平农\]\/gu/);

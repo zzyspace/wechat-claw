@@ -1396,6 +1396,41 @@
         text-align: center;
       }
 
+
+      .field .date-range-trigger { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; min-width: 0; min-height: 46px; background: var(--surface-input); text-align: left; font-size: 16px; font-weight: 400; }
+      .date-range-trigger span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .date-range-trigger.is-empty { color: var(--ink-soft); }
+      .date-range-trigger svg { width: 18px; height: 18px; flex: none; }
+      #dateRangeDialog { width: 380px; max-width: calc(100vw - 24px); max-height: calc(100vh - 24px); max-height: calc(100dvh - 24px); margin: auto; padding: 20px; border: 1px solid var(--line); border-radius: 22px; overflow-y: auto; overscroll-behavior: contain; background: var(--surface-strong); color: var(--ink); box-shadow: var(--shadow); }
+      #dateRangeDialog::backdrop { background: var(--modal-backdrop); }
+      #dateRangeDialog button { min-height: 44px; padding: 0 10px; font-size: 13px; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+      #dateRangeDialog button:active:not(:disabled) { opacity: .65; }
+      #dateRangeDialog button:focus:not(:focus-visible) { outline: none; }
+      #dateRangeDialog :focus-visible { outline: 2px solid var(--brand); outline-offset: 1px; }
+      .date-range-heading { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+      #dateRangeTitle { margin: 0; font-size: 17px; font-weight: 650; }
+      #dateRangeDialog #dateRangeClose { width: 44px; padding: 0; border: 0; background: transparent; font-size: 23px; font-weight: 400; }
+      .date-range-status { min-height: 42px; margin: 6px 0 10px; font-size: 12px; line-height: 1.7; color: var(--ink-soft); overflow-wrap: anywhere; }
+      .date-range-shortcuts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; margin-bottom: 12px; }
+      #dateRangeDialog .date-range-shortcuts button { padding: 0 3px; font-size: 12px; background: var(--brand-soft); border: 0; border-radius: 9px; color: var(--brand); font-weight: 500; }
+      .date-range-month { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 10px; }
+      #dateRangeDialog .date-range-month button { width: 44px; flex: none; padding: 0; border: 0; background: transparent; font-size: 23px; font-weight: 400; }
+      .date-range-month select { min-width: 0; min-height: 44px; padding: 0 5px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface-input); color: var(--ink); font-size: 16px; }
+      .date-range-weekdays, .date-range-calendar { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }
+      .date-range-weekdays span { padding: 6px 0; color: var(--ink-soft); font-size: 11px; text-align: center; }
+      #dateRangeDialog .date-range-calendar button { min-width: 0; min-height: 44px; padding: 0; border: 0; border-radius: 0; background: transparent; font-size: 14px; font-weight: 400; font-variant-numeric: tabular-nums; }
+      .date-range-calendar > span { min-height: 44px; }
+      #dateRangeDialog .date-range-calendar .in-range { background: var(--brand-soft); color: var(--brand); }
+      #dateRangeDialog .date-range-calendar .is-today { box-shadow: inset 0 0 0 1px var(--brand); border-radius: 9px; }
+      #dateRangeDialog .date-range-calendar .range-endpoint { background: var(--brand); color: #fff; border-radius: 9px; font-weight: 650; }
+      .date-range-footer { display: flex; align-items: center; gap: 8px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
+      #dateRangeClear { margin-right: auto; color: var(--ink-soft); border: 0; background: transparent; }
+      @media (hover: hover) and (pointer: fine) { #dateRangeDialog .date-range-calendar button:hover:not(.range-endpoint) { background: var(--brand-soft); color: var(--brand); } }
+      @media (max-width: 620px) {
+        #dateRangeDialog { width: 100%; max-width: 100%; margin: auto 0 0; padding: 12px 6px max(16px, env(safe-area-inset-bottom, 0px)); border: 0; border-radius: 24px 24px 0 0; }
+        .date-range-heading, .date-range-status, .date-range-shortcuts, .date-range-month, .date-range-footer { margin-inline: 10px; }
+      }
+
       /* The detail sheet has its own layout; other dialogs keep their existing styles. */
       #detailModal { display: flex; align-items: stretch; justify-content: flex-end; padding: 14px; }
       #detailModalBackdrop { backdrop-filter: none; }
@@ -1637,26 +1672,6 @@
         .hero-actions button { min-height: 40px; border-radius: 10px; font-size: 14px; }
         .submit-button { padding-inline: 13px; }
 
-        @supports (-webkit-touch-callout: none) {
-          #createdDateFrom,
-          #createdDateTo {
-            height: 46px;
-            min-height: 46px;
-            max-height: 46px;
-            padding-inline: 0;
-            line-height: normal;
-          }
-
-          #createdDateFrom::-webkit-date-and-time-value,
-          #createdDateTo::-webkit-date-and-time-value {
-            display: flex;
-            align-items: center;
-            height: 44px;
-            min-height: 44px;
-            padding-inline-start: 14px;
-            text-align: left;
-          }
-        }
 
         .controls-grid,
         .manual-import-grid,
@@ -1804,12 +1819,13 @@ body > .topbar .center-switcher-menu { top: calc(100% + 9px); left: auto; }
               <input id="note" name="note" placeholder="支持 !排除、&与、||或，如 采购&!平" />
             </div>
             <div class="field">
-              <label for="createdDateFrom">创建日期从</label>
-              <input id="createdDateFrom" name="createdDateFrom" type="date" />
-            </div>
-            <div class="field">
-              <label for="createdDateTo">创建日期到</label>
-              <input id="createdDateTo" name="createdDateTo" type="date" />
+              <label for="createdDateRange">创建日期</label>
+              <button id="createdDateRange" class="date-range-trigger" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="dateRangeDialog">
+                <span id="dateRangeLabel">选择起止日期</span>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M7 3v4M17 3v4M3 11h18"/></svg>
+              </button>
+              <input id="createdDateFrom" name="createdDateFrom" type="hidden" />
+              <input id="createdDateTo" name="createdDateTo" type="hidden" />
             </div>
           </div>
           <div class="actions">
@@ -2003,6 +2019,17 @@ body > .topbar .center-switcher-menu { top: calc(100% + 9px); left: auto; }
           </div>
         </div>
       </div>
+
+
+      <dialog id="dateRangeDialog" aria-labelledby="dateRangeTitle" aria-describedby="dateRangeStatus">
+        <div class="date-range-heading"><h2 id="dateRangeTitle">选择创建日期</h2><button id="dateRangeClose" type="button" aria-label="关闭日期选择">×</button></div>
+        <p class="date-range-status" id="dateRangeStatus" role="status" aria-live="polite">先选择开始日期，再选择结束日期。</p>
+        <div class="date-range-shortcuts"><button type="button" data-date-shortcut="today">今天</button><button type="button" data-date-shortcut="week">近 7 天</button><button type="button" data-date-shortcut="month">本月</button><button type="button" data-date-shortcut="lastMonth">上月</button></div>
+        <div class="date-range-month"><button id="dateRangePrevious" type="button" aria-label="上个月">‹</button><select id="dateRangeYear" aria-label="年份"></select><select id="dateRangeMonth" aria-label="月份"></select><button id="dateRangeNext" type="button" aria-label="下个月">›</button></div>
+        <div class="date-range-weekdays" aria-hidden="true"><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span><span>日</span></div>
+        <div class="date-range-calendar" id="dateRangeCalendar" role="group" aria-label="选择开始和结束日期"></div>
+        <div class="date-range-footer"><button id="dateRangeClear" type="button">清空</button><button id="dateRangeCancel" type="button">取消</button><button id="dateRangeApply" class="button-primary" type="button" disabled>应用</button></div>
+      </dialog>
 
       <div class="modal" id="detailModal" hidden>
         <div class="modal-backdrop" id="detailModalBackdrop"></div>
@@ -2950,6 +2977,193 @@ body > .topbar .center-switcher-menu { top: calc(100% + 9px); left: auto; }
         return url.toString();
       }
 
+      const createdDateRangeState = { from: "", to: "", year: 0, month: 0, focusDate: "", page: null };
+      const dateRangeElements = Object.fromEntries([
+        "createdDateRange", "createdDateFrom", "createdDateTo", "dateRangeLabel", "dateRangeDialog", "dateRangeStatus",
+        "dateRangeYear", "dateRangeMonth", "dateRangeCalendar", "dateRangePrevious", "dateRangeNext", "dateRangeApply",
+      ].map((id) => [id, document.getElementById(id)]));
+
+      function normalizedRangeDate(value) {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(value) || Number(value.slice(0, 4)) < 1) return "";
+        const date = new Date(`${value}T12:00:00Z`);
+        return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value ? value : "";
+      }
+
+      function rangeCalendarDay(year, month, day) {
+        const date = new Date(0);
+        date.setUTCHours(12, 0, 0, 0);
+        date.setUTCFullYear(year, month, day);
+        return date;
+      }
+
+      function rangeBusinessToday(now = new Date()) {
+        const values = Object.fromEntries(new Intl.DateTimeFormat("en-GB", {
+          timeZone: state.timeZone || DEFAULT_TIME_ZONE, year: "numeric", month: "2-digit", day: "2-digit",
+        }).formatToParts(now).map((part) => [part.type, part.value]));
+        return `${values.year.padStart(4, "0")}-${values.month}-${values.day}`;
+      }
+
+      function defaultCreatedDateRange(now = new Date()) {
+        const today = rangeBusinessToday(now);
+        return { from: `${today.slice(0, 8)}01`, to: today };
+      }
+
+      function setDefaultCreatedDateRange() {
+        const range = defaultCreatedDateRange();
+        dateRangeElements.createdDateFrom.value = range.from;
+        dateRangeElements.createdDateTo.value = range.to;
+      }
+
+      function dateRangeCaption(from, to) {
+        const display = (value) => value.replaceAll("-", "/");
+        return from && to ? `${display(from)} — ${display(to)}` : from ? `${display(from)} 起` : to ? `截至 ${display(to)}` : "选择起止日期";
+      }
+
+      function syncDateRangeLabel() {
+        const e = dateRangeElements;
+        e.createdDateFrom.value = normalizedRangeDate(e.createdDateFrom.value);
+        e.createdDateTo.value = normalizedRangeDate(e.createdDateTo.value);
+        const label = dateRangeCaption(e.createdDateFrom.value, e.createdDateTo.value);
+        e.dateRangeLabel.textContent = label;
+        e.createdDateRange.title = label;
+        e.createdDateRange.setAttribute("aria-label", `创建日期：${label}`);
+        e.createdDateRange.classList.toggle("is-empty", !e.createdDateFrom.value && !e.createdDateTo.value);
+      }
+
+      function renderDateRangeCalendar(focusDate = "") {
+        const e = dateRangeElements, range = createdDateRangeState;
+        const today = rangeBusinessToday();
+        const first = rangeCalendarDay(range.year, range.month, 1);
+        const count = rangeCalendarDay(range.year, range.month + 1, 0).getUTCDate();
+        const offset = (first.getUTCDay() + 6) % 7;
+        const prefix = `${String(range.year).padStart(4, "0")}-${String(range.month + 1).padStart(2, "0")}-`;
+        if (focusDate) range.focusDate = focusDate;
+        if (!range.focusDate.startsWith(prefix)) range.focusDate = today.startsWith(prefix) ? today : `${prefix}01`;
+        const years = [];
+        for (let year = Math.max(1, range.year - 10); year <= Math.min(9999, range.year + 10); year++) years.push(`<option value="${year}" ${year === range.year ? "selected" : ""}>${year} 年</option>`);
+        e.dateRangeYear.innerHTML = years.join("");
+        e.dateRangeMonth.innerHTML = Array.from({ length: 12 }, (_, month) => `<option value="${month}" ${month === range.month ? "selected" : ""}>${month + 1} 月</option>`).join("");
+        e.dateRangePrevious.disabled = range.year === 1 && range.month === 0;
+        e.dateRangeNext.disabled = range.year === 9999 && range.month === 11;
+        e.dateRangeStatus.textContent = range.from && range.to ? `已选：${dateRangeCaption(range.from, range.to)}` : range.from ? `开始：${range.from.replaceAll("-", "/")}；请选择结束日期。` : "先选择开始日期，再选择结束日期。";
+        e.dateRangeApply.disabled = !range.from || !range.to;
+        e.dateRangeCalendar.innerHTML = Array.from({ length: 42 }, (_, index) => {
+          const day = index - offset + 1;
+          if (day < 1 || day > count) return '<span aria-hidden="true"></span>';
+          const date = `${prefix}${String(day).padStart(2, "0")}`;
+          const endpoint = date === range.from || date === range.to;
+          const selected = endpoint || Boolean(range.from && range.to && date >= range.from && date <= range.to);
+          return `<button type="button" data-range-date="${date}" class="${selected ? "in-range " : ""}${endpoint ? "range-endpoint " : ""}${date === today ? "is-today" : ""}" aria-label="${range.year}年${range.month + 1}月${day}日${date === range.from ? "，开始日期" : ""}${date === range.to ? "，结束日期" : ""}" aria-pressed="${selected}" ${date === today ? 'aria-current="date"' : ""} tabindex="${date === range.focusDate ? "0" : "-1"}">${day}</button>`;
+        }).join("");
+        if (focusDate) e.dateRangeCalendar.querySelector(`[data-range-date="${focusDate}"]`)?.focus({ preventScroll: true });
+      }
+
+      function openDateRangePicker() {
+        const e = dateRangeElements, range = createdDateRangeState;
+        if (e.dateRangeDialog.open) return;
+        cancelPendingDetail();
+        range.from = e.createdDateFrom.value;
+        range.to = e.createdDateTo.value;
+        if (range.from && range.to && range.from > range.to) [range.from, range.to] = [range.to, range.from];
+        const anchor = range.from || range.to || rangeBusinessToday();
+        const date = new Date(`${anchor}T12:00:00Z`);
+        range.year = date.getUTCFullYear(); range.month = date.getUTCMonth(); range.focusDate = anchor;
+        renderDateRangeCalendar();
+        range.page = { x: scrollX, y: scrollY, style: document.body.getAttribute("style") };
+        const scrollbar = innerWidth - document.documentElement.clientWidth;
+        const padding = Number.parseFloat(getComputedStyle(document.body).paddingRight) || 0;
+        Object.assign(document.body.style, { position: "fixed", top: `${-range.page.y}px`, left: `${-range.page.x}px`, width: "100%", overflow: "hidden" });
+        if (scrollbar) document.body.style.paddingRight = `${padding + scrollbar}px`;
+        e.createdDateRange.setAttribute("aria-expanded", "true");
+        e.dateRangeDialog.showModal();
+        e.dateRangeCalendar.querySelector('[tabindex="0"]')?.focus({ preventScroll: true });
+      }
+
+      function restoreDateRangePage() {
+        const snapshot = createdDateRangeState.page;
+        if (!snapshot) return;
+        createdDateRangeState.page = null;
+        if (snapshot.style === null) document.body.removeAttribute("style");
+        else document.body.setAttribute("style", snapshot.style);
+        window.scrollTo(snapshot.x, snapshot.y);
+        dateRangeElements.createdDateRange.setAttribute("aria-expanded", "false");
+        dateRangeElements.createdDateRange.focus({ preventScroll: true });
+      }
+
+      function closeDateRangePicker() {
+        dateRangeElements.dateRangeDialog.close();
+        restoreDateRangePage();
+      }
+
+      function applyCreatedDateRange(from, to) {
+        dateRangeElements.createdDateFrom.value = from;
+        dateRangeElements.createdDateTo.value = to;
+        syncDateRangeLabel();
+        closeDateRangePicker();
+        elements.filters.requestSubmit();
+      }
+
+      function moveDateRangeMonth(step) {
+        const range = createdDateRangeState;
+        const date = rangeCalendarDay(range.year, range.month + step, 1);
+        if (date.getUTCFullYear() < 1 || date.getUTCFullYear() > 9999) return;
+        range.year = date.getUTCFullYear(); range.month = date.getUTCMonth();
+        renderDateRangeCalendar();
+      }
+
+      dateRangeElements.createdDateRange.addEventListener("click", openDateRangePicker);
+      dateRangeElements.dateRangeDialog.addEventListener("close", restoreDateRangePage);
+      dateRangeElements.dateRangeDialog.addEventListener("click", (event) => {
+        const rect = dateRangeElements.dateRangeDialog.getBoundingClientRect();
+        if (event.target === dateRangeElements.dateRangeDialog && (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom)) closeDateRangePicker();
+      });
+      for (const id of ["dateRangeClose", "dateRangeCancel"]) document.getElementById(id).addEventListener("click", closeDateRangePicker);
+      document.getElementById("dateRangeClear").addEventListener("click", () => applyCreatedDateRange("", ""));
+      dateRangeElements.dateRangeApply.addEventListener("click", () => {
+        const { from, to } = createdDateRangeState;
+        if (from && to) applyCreatedDateRange(from, to);
+      });
+      dateRangeElements.dateRangePrevious.addEventListener("click", () => moveDateRangeMonth(-1));
+      dateRangeElements.dateRangeNext.addEventListener("click", () => moveDateRangeMonth(1));
+      for (const [element, key] of [[dateRangeElements.dateRangeYear, "year"], [dateRangeElements.dateRangeMonth, "month"]]) element.addEventListener("change", () => {
+        createdDateRangeState[key] = Number(element.value); renderDateRangeCalendar();
+      });
+      dateRangeElements.dateRangeCalendar.addEventListener("click", (event) => {
+        const date = event.target.closest("[data-range-date]")?.dataset.rangeDate;
+        if (!date) return;
+        const range = createdDateRangeState;
+        if (!range.from || range.to) { range.from = date; range.to = ""; }
+        else { range.to = date; if (range.to < range.from) [range.from, range.to] = [range.to, range.from]; }
+        renderDateRangeCalendar(date);
+      });
+      dateRangeElements.dateRangeCalendar.addEventListener("keydown", (event) => {
+        const value = event.target.closest("[data-range-date]")?.dataset.rangeDate;
+        if (!value) return;
+        const date = new Date(`${value}T12:00:00Z`);
+        const weekDay = (date.getUTCDay() + 6) % 7;
+        const offsets = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -7, ArrowDown: 7, Home: -weekDay, End: 6 - weekDay };
+        if (Object.hasOwn(offsets, event.key)) date.setUTCDate(date.getUTCDate() + offsets[event.key]);
+        else if (event.key === "PageUp" || event.key === "PageDown") {
+          const day = date.getUTCDate(); date.setUTCDate(1); date.setUTCMonth(date.getUTCMonth() + (event.key === "PageUp" ? -1 : 1));
+          date.setUTCDate(Math.min(day, rangeCalendarDay(date.getUTCFullYear(), date.getUTCMonth() + 1, 0).getUTCDate()));
+        } else return;
+        event.preventDefault();
+        if (date.getUTCFullYear() < 1 || date.getUTCFullYear() > 9999) return;
+        createdDateRangeState.year = date.getUTCFullYear(); createdDateRangeState.month = date.getUTCMonth();
+        renderDateRangeCalendar(date.toISOString().slice(0, 10));
+      });
+      dateRangeElements.dateRangeDialog.querySelectorAll("[data-date-shortcut]").forEach((button) => button.addEventListener("click", () => {
+        const today = new Date(`${rangeBusinessToday()}T12:00:00Z`);
+        let from = new Date(today), to = new Date(today);
+        switch (button.dataset.dateShortcut) {
+          case "week": from.setUTCDate(from.getUTCDate() - 6); break;
+          case "month": from.setUTCDate(1); to = rangeCalendarDay(today.getUTCFullYear(), today.getUTCMonth() + 1, 0); break;
+          case "lastMonth": from = rangeCalendarDay(today.getUTCFullYear(), today.getUTCMonth() - 1, 1); to = rangeCalendarDay(today.getUTCFullYear(), today.getUTCMonth(), 0); break;
+        }
+        Object.assign(createdDateRangeState, { from: from.toISOString().slice(0, 10), to: to.toISOString().slice(0, 10), year: from.getUTCFullYear(), month: from.getUTCMonth(), focusDate: from.toISOString().slice(0, 10) });
+        renderDateRangeCalendar();
+      }));
+
       function readFilters() {
         const formData = new FormData(elements.filters);
         return {
@@ -2991,6 +3205,7 @@ body > .topbar .center-switcher-menu { top: calc(100% + 9px); left: auto; }
 
         const offsetValue = params.get("offset");
         state.offset = offsetValue ? Math.max(Number.parseInt(offsetValue, 10) || 0, 0) : 0;
+        if (!params.has("createdDateFrom") && !params.has("createdDateTo")) setDefaultCreatedDateRange();
       }
 
       function updateUrl() {
@@ -4151,6 +4366,8 @@ body > .topbar .center-switcher-menu { top: calc(100% + 9px); left: auto; }
 
       elements.resetFilters.addEventListener("click", () => {
         elements.filters.reset();
+        setDefaultCreatedDateRange();
+        syncDateRangeLabel();
         restoreRoleScopedFilterValues();
         state.offset = 0;
         state.selectedReportId = null;
@@ -4379,6 +4596,7 @@ body > .topbar .center-switcher-menu { top: calc(100% + 9px); left: auto; }
       }
 
       writeFiltersFromUrl();
+      syncDateRangeLabel();
       void initialize();
     </script>
   </body>
