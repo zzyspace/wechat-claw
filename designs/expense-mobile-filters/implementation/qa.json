@@ -1,0 +1,73 @@
+{
+  "checks": [
+    "desktop geometry unchanged at 768",
+    "desktop geometry unchanged at 900",
+    "desktop geometry unchanged at 1440",
+    "mobile 320–620 light/dark collapsed and expanded",
+    "compound parameters unchanged",
+    "successful submit collapses and chips reflect response filters",
+    "chip removal preserves other filters",
+    "pagination and URL restore",
+    "reset and date picker",
+    "error keeps fields expanded",
+    "chip text safely escaped",
+    "Escape restores focus",
+    "stale response cannot overwrite latest results",
+    "in-flight typing remains expanded and unmodified",
+    "resize preserves draft",
+    "manager reporter scope unchanged"
+  ],
+  "layouts": [
+    {
+      "width": 320,
+      "theme": "light",
+      "filterHeight": 275
+    },
+    {
+      "width": 375,
+      "theme": "light",
+      "filterHeight": 275
+    },
+    {
+      "width": 390,
+      "theme": "light",
+      "filterHeight": 275
+    },
+    {
+      "width": 430,
+      "theme": "light",
+      "filterHeight": 275
+    },
+    {
+      "width": 620,
+      "theme": "light",
+      "filterHeight": 275
+    },
+    {
+      "width": 320,
+      "theme": "dark",
+      "filterHeight": 275
+    },
+    {
+      "width": 375,
+      "theme": "dark",
+      "filterHeight": 275
+    },
+    {
+      "width": 390,
+      "theme": "dark",
+      "filterHeight": 275
+    },
+    {
+      "width": 430,
+      "theme": "dark",
+      "filterHeight": 275
+    },
+    {
+      "width": 620,
+      "theme": "dark",
+      "filterHeight": 275
+    }
+  ],
+  "errors": []
+}

@@ -1,0 +1,124 @@
+{
+  "checks": [
+    "mobile collapsed and expanded geometry unchanged: 320/390/620, light/dark",
+    "desktop all 6 fields visible at 621–1920",
+    "single-line toolbar above 1300",
+    "narrow desktop wraps without overflow",
+    "compound queries and chip removal",
+    "date picker widened buttons retained",
+    "reset and Enter submit",
+    "resize preserves draft",
+    "manager scope unchanged"
+  ],
+  "layouts": [
+    {
+      "width": 621,
+      "theme": "light",
+      "filterHeight": 374.796875,
+      "rows": 4
+    },
+    {
+      "width": 768,
+      "theme": "light",
+      "filterHeight": 374.796875,
+      "rows": 4
+    },
+    {
+      "width": 900,
+      "theme": "light",
+      "filterHeight": 374.796875,
+      "rows": 4
+    },
+    {
+      "width": 1024,
+      "theme": "light",
+      "filterHeight": 236.796875,
+      "rows": 2
+    },
+    {
+      "width": 1280,
+      "theme": "light",
+      "filterHeight": 236.796875,
+      "rows": 2
+    },
+    {
+      "width": 1300,
+      "theme": "light",
+      "filterHeight": 236.796875,
+      "rows": 2
+    },
+    {
+      "width": 1301,
+      "theme": "light",
+      "filterHeight": 158.796875,
+      "rows": 1
+    },
+    {
+      "width": 1440,
+      "theme": "light",
+      "filterHeight": 158.796875,
+      "rows": 1
+    },
+    {
+      "width": 1920,
+      "theme": "light",
+      "filterHeight": 158.796875,
+      "rows": 1
+    },
+    {
+      "width": 621,
+      "theme": "dark",
+      "filterHeight": 374.796875,
+      "rows": 4
+    },
+    {
+      "width": 768,
+      "theme": "dark",
+      "filterHeight": 374.796875,
+      "rows": 4
+    },
+    {
+      "width": 900,
+      "theme": "dark",
+      "filterHeight": 374.796875,
+      "rows": 4
+    },
+    {
+      "width": 1024,
+      "theme": "dark",
+      "filterHeight": 236.796875,
+      "rows": 2
+    },
+    {
+      "width": 1280,
+      "theme": "dark",
+      "filterHeight": 236.796875,
+      "rows": 2
+    },
+    {
+      "width": 1300,
+      "theme": "dark",
+      "filterHeight": 236.796875,
+      "rows": 2
+    },
+    {
+      "width": 1301,
+      "theme": "dark",
+      "filterHeight": 158.796875,
+      "rows": 1
+    },
+    {
+      "width": 1440,
+      "theme": "dark",
+      "filterHeight": 158.796875,
+      "rows": 1
+    },
+    {
+      "width": 1920,
+      "theme": "dark",
+      "filterHeight": 158.796875,
+      "rows": 1
+    }
+  ],
+  "errors": []
+}

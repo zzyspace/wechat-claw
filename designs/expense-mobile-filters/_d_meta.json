@@ -1,0 +1,76 @@
+{
+  "type": "design",
+  "designSystems": [],
+  "primaryDesignSystem": null,
+  "assets": {
+    "手机端筛选四版对比": {
+      "versions": [
+        {
+          "path": "index.html",
+          "createdAt": "2026-09-27T08:15:37.278Z",
+          "status": "needs-review",
+          "viewport": {
+            "width": 1400,
+            "height": 1050
+          }
+        }
+      ]
+    },
+    "手机端筛选方案 a": {
+      "versions": [
+        {
+          "path": "a.html",
+          "createdAt": "2026-09-27T08:16:24.105Z",
+          "status": "approved",
+          "viewport": {
+            "width": 390,
+            "height": 844
+          }
+        }
+      ]
+    },
+    "手机端筛选方案 b": {
+      "versions": [
+        {
+          "path": "b.html",
+          "createdAt": "2026-09-27T08:16:24.189Z",
+          "status": "needs-review",
+          "viewport": {
+            "width": 390,
+            "height": 844
+          }
+        }
+      ]
+    },
+    "手机端筛选方案 c": {
+      "versions": [
+        {
+          "path": "c.html",
+          "createdAt": "2026-09-27T08:16:24.279Z",
+          "status": "needs-review",
+          "viewport": {
+            "width": 390,
+            "height": 844
+          }
+        }
+      ]
+    },
+    "手机端筛选方案 d": {
+      "versions": [
+        {
+          "path": "d.html",
+          "createdAt": "2026-09-27T08:16:24.358Z",
+          "status": "needs-review",
+          "viewport": {
+            "width": 390,
+            "height": 844
+          }
+        }
+      ]
+    }
+  },
+  "createdAt": "2026-09-27T08:15:37.288Z",
+  "updatedAt": "2026-09-27T09:11:09.137Z",
+  "title": "/expense 手机端筛选四版对比",
+  "prompt": "门店、创建日期常驻；关键词、报账人、类别、备注默认折叠；沿用现有风格，提供四种布局对比。"
+}

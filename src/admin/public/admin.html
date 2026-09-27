@@ -1425,6 +1425,7 @@
       #dateRangeDialog .date-range-calendar .range-endpoint { background: var(--brand); color: #fff; border-radius: 9px; font-weight: 650; }
       .date-range-footer { display: flex; align-items: center; gap: 8px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
       #dateRangeClear { margin-right: auto; color: var(--ink-soft); border: 0; background: transparent; }
+      #dateRangeCancel, #dateRangeApply { flex: 1; }
       @media (hover: hover) and (pointer: fine) { #dateRangeDialog .date-range-calendar button:hover:not(.range-endpoint) { background: var(--brand-soft); color: var(--brand); } }
       @media (max-width: 620px) {
         #dateRangeDialog { width: 100%; max-width: 100%; margin: auto 0 0; padding: 12px 6px max(16px, env(safe-area-inset-bottom, 0px)); border: 0; border-radius: 24px 24px 0 0; }
@@ -1724,7 +1725,7 @@
         }
       }
 
-      /* Preserve the desktop grid; group the four secondary fields for mobile. */
+      /* Secondary fields remain grouped for the mobile disclosure. */
       .advanced-filters { display: contents; }
       .filter-search { order: 0; }
       .filter-store { order: 1; }
@@ -1733,6 +1734,51 @@
       .filter-note { order: 4; }
       .filter-date { order: 5; }
       .more-filters, .advanced-filter-help, .applied-extra-filters { display: none; }
+      .desktop-filter-help { display: none; }
+      @media (min-width: 621px) {
+        .controls { border-radius: 22px; }
+        #filters {
+          display: grid;
+          grid-template-columns: minmax(125px, 1fr) minmax(236px, 1.7fr) minmax(130px, 1.25fr) minmax(100px, .8fr) minmax(104px, .8fr) minmax(125px, 1.1fr) auto;
+          align-items: end;
+          gap: 10px;
+        }
+        #filters .controls-grid { display: contents; }
+        #filters .filter-store { order: 0; }
+        #filters .filter-date { order: 1; }
+        #filters .filter-search { order: 2; }
+        #filters .filter-reporter { order: 3; }
+        #filters .filter-category { order: 4; }
+        #filters .filter-note { order: 5; }
+        #filters .field { gap: 7px; }
+        #filters .field label { font-weight: 550; letter-spacing: normal; }
+        #filters .field input, #filters .field select, #filters .date-range-trigger { height: 44px; min-height: 44px; border-radius: 10px; font-size: 14px; }
+        #filters .field input { padding-inline: 10px; }
+        #filters .field input::placeholder { font-size: 13px; }
+        #filters .date-range-trigger { font-size: 13px; padding-inline: 12px; }
+        #filters .date-range-trigger svg { width: 16px; height: 16px; }
+        #filters .filter-actions { order: 6; flex-wrap: nowrap; gap: 3px; margin: 0; }
+        #filters .filter-actions button { min-height: 44px; border-radius: 10px; font-size: 13px; font-weight: 550; white-space: nowrap; }
+        #filters .filter-actions .button-primary { min-width: 70px; }
+        #filters #resetFilters { padding-inline: 9px; color: var(--ink-soft); border-color: transparent; background: transparent; }
+        .controls .summary-row { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); }
+        .controls .status { font-size: 12px; }
+        .desktop-filter-help { display: block; margin: 0 0 0 auto; color: var(--ink-soft); font-size: 11px; line-height: 1.8; }
+        .desktop-filter-help code { color: var(--brand); font-family: ui-monospace, monospace; }
+        .applied-extra-filters { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 12px; }
+        .applied-extra-filters button { display: inline-flex; align-items: center; gap: 8px; max-width: min(400px, 100%); min-height: 32px; padding: 0 10px; border: 0; border-radius: 9px; color: var(--brand); background: var(--brand-soft); font-size: 12px; font-weight: 400; }
+        .applied-extra-filters button span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      }
+      @media (min-width: 901px) and (max-width: 1300px) {
+        #filters { grid-template-columns: 1fr 1.5fr 1.2fr 1fr; }
+        #filters .filter-category { grid-column: 1; }
+        #filters .filter-note { grid-column: 2 / 4; }
+        #filters .filter-actions { justify-content: flex-end; }
+      }
+      @media (min-width: 621px) and (max-width: 900px) {
+        #filters { grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: 12px; }
+        #filters .filter-actions { grid-column: 1 / -1; justify-content: flex-end; }
+      }
       @media (max-width: 620px) {
         .controls { padding: 16px; border-radius: 20px; }
         #filters .controls-grid { display: flex; flex-direction: column; gap: 13px; }
@@ -1877,6 +1923,7 @@ body > .topbar .center-switcher-menu { top: calc(100% + 9px); left: auto; }
         <div id="appliedExtraFilters" class="applied-extra-filters" aria-label="已生效的更多条件" hidden></div>
         <div class="summary-row">
           <div class="status" id="statusText">等待加载</div>
+          <p class="desktop-filter-help"><code>!</code> 排除 · <code>&amp;</code> 同时满足 · <code>||</code> 任一满足</p>
         </div>
       </div>
 
@@ -3203,6 +3250,17 @@ body > .topbar .center-switcher-menu { top: calc(100% + 9px); left: auto; }
       const EXTRA_FILTER_LABELS = { search: "关键词", reporter: "报账人", expenseCategory: "类别", note: "备注" };
       const mobileFilterLayout = window.matchMedia("(max-width: 620px)");
       let listRequestVersion = 0;
+
+      function syncFilterPlaceholders() {
+        const compactHints = { search: "关键词 / 报账 ID", reporter: "如 张||李", expenseCategory: "如 食材||房租", note: "如 采购&!平" };
+        for (const [name, hint] of Object.entries(compactHints)) {
+          const field = elements.filters.elements.namedItem(name);
+          if (!(field instanceof HTMLInputElement)) continue;
+          if (field.dataset.fullPlaceholder === undefined) field.dataset.fullPlaceholder = field.placeholder;
+          field.placeholder = mobileFilterLayout.matches || field.readOnly ? field.dataset.fullPlaceholder : hint;
+        }
+      }
+      mobileFilterLayout.addEventListener("change", syncFilterPlaceholders);
 
       function setAdvancedFiltersExpanded(expanded) {
         if (!expanded && mobileFilterLayout.matches && elements.advancedFilters.contains(document.activeElement)) {
@@ -4685,6 +4743,7 @@ body > .topbar .center-switcher-menu { top: calc(100% + 9px); left: auto; }
       async function initialize() {
         try {
           await loadSession();
+          syncFilterPlaceholders();
           if (state.canImport) {
             await loadManualImportOptions();
           }

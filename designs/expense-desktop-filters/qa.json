@@ -1,0 +1,20 @@
+{
+  "checks": [
+    "a: light/dark layouts at 1024–1600, compound query, reset, remove, date, store, error and empty state",
+    "b: light/dark layouts at 1024–1600, compound query, reset, remove, date, store, error and empty state",
+    "c: light/dark layouts at 1024–1600, compound query, reset, remove, date, store, error and empty state"
+  ],
+  "heights": {
+    "a": 159.796875,
+    "b": 157,
+    "c": 243.796875
+  },
+  "errors": [],
+  "reviewChecks": [
+    "iframe preview",
+    "prefill",
+    "theme retains filters",
+    "3 artboards and zoom"
+  ],
+  "data": "fictional"
+}

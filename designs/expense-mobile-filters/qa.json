@@ -1,0 +1,88 @@
+{
+  "browser": "Google Chrome / Playwright",
+  "date": "2026-09-27T08:16:20.660Z",
+  "results": [
+    {
+      "variant": "a",
+      "collapsedHeight": 245,
+      "checks": [
+        "4 widths in light and dark",
+        "visible primary fields and hidden secondary inputs",
+        "compound filters and count",
+        "remove applied chip",
+        "reset",
+        "date picker",
+        "store filter",
+        "syntax error preserves results",
+        "empty state",
+        "44px tap targets"
+      ]
+    },
+    {
+      "variant": "b",
+      "collapsedHeight": 188,
+      "checks": [
+        "4 widths in light and dark",
+        "visible primary fields and hidden secondary inputs",
+        "compound filters and count",
+        "remove applied chip",
+        "reset",
+        "date picker",
+        "store filter",
+        "syntax error preserves results",
+        "empty state",
+        "44px tap targets"
+      ]
+    },
+    {
+      "variant": "c",
+      "collapsedHeight": 244,
+      "checks": [
+        "4 widths in light and dark",
+        "visible primary fields and hidden secondary inputs",
+        "compound filters and count",
+        "remove applied chip",
+        "reset",
+        "date picker",
+        "store filter",
+        "syntax error preserves results",
+        "empty state",
+        "44px tap targets",
+        "sheet draft discarded on cancel"
+      ]
+    },
+    {
+      "variant": "d",
+      "collapsedHeight": 252,
+      "checks": [
+        "4 widths in light and dark",
+        "visible primary fields and hidden secondary inputs",
+        "compound filters and count",
+        "remove applied chip",
+        "reset",
+        "date picker",
+        "store filter",
+        "syntax error preserves results",
+        "empty state",
+        "44px tap targets"
+      ]
+    }
+  ],
+  "reviewChecks": [
+    "version picker",
+    "example state",
+    "theme change preserves state",
+    "comparison canvas with 4 images",
+    "390px review page no overflow",
+    "reduced motion",
+    "Escape dismiss",
+    "all 4 artboards fit in viewport",
+    "fit / zoom controls",
+    "dark comparison images"
+  ],
+  "errors": [],
+  "limitations": [
+    "Real-device Safari and WeChat not tested",
+    "Prototype data only; no production/API operations"
+  ]
+}

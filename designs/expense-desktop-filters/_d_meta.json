@@ -1,0 +1,76 @@
+{
+  "type": "design",
+  "designSystems": [],
+  "primaryDesignSystem": null,
+  "assets": {
+    "电脑端筛选 index": {
+      "versions": [
+        {
+          "path": "index.html",
+          "createdAt": "2026-09-27T10:37:44.492Z",
+          "status": "needs-review",
+          "viewport": {
+            "width": 1440,
+            "height": 940
+          }
+        }
+      ]
+    },
+    "电脑端筛选 a": {
+      "versions": [
+        {
+          "path": "a.html",
+          "createdAt": "2026-09-27T10:37:44.585Z",
+          "status": "approved",
+          "viewport": {
+            "width": 1440,
+            "height": 940
+          }
+        }
+      ]
+    },
+    "电脑端筛选 b": {
+      "versions": [
+        {
+          "path": "b.html",
+          "createdAt": "2026-09-27T10:37:44.701Z",
+          "status": "needs-review",
+          "viewport": {
+            "width": 1440,
+            "height": 940
+          }
+        }
+      ]
+    },
+    "电脑端筛选 c": {
+      "versions": [
+        {
+          "path": "c.html",
+          "createdAt": "2026-09-27T10:37:44.830Z",
+          "status": "needs-review",
+          "viewport": {
+            "width": 1440,
+            "height": 940
+          }
+        }
+      ]
+    },
+    "电脑端筛选 overview": {
+      "versions": [
+        {
+          "path": "overview.html",
+          "createdAt": "2026-09-27T10:37:44.959Z",
+          "status": "needs-review",
+          "viewport": {
+            "width": 1440,
+            "height": 940
+          }
+        }
+      ]
+    }
+  },
+  "createdAt": "2026-09-27T10:37:44.496Z",
+  "updatedAt": "2026-09-27T10:44:44.489Z",
+  "title": "/expense 电脑端筛选三版对比",
+  "prompt": "沿用当前风格，同时对比全部展开与折叠方案；先出效果图，确认后再实施。"
+}
