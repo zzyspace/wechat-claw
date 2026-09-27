@@ -522,6 +522,39 @@ test("createApp returns 503 on admin routes when credentials are not configured"
   }
 });
 
+test("filtered admin URLs survive direct navigation and refresh through the legacy proxy path", async () => {
+  applyEnv({ WECHATY_ADMIN_USERNAME: "admin", WECHATY_ADMIN_PASSWORD: "secret-pass" });
+  const server = await startServer();
+  const query = new URLSearchParams({
+    createdDateFrom: "2026-09-01", createdDateTo: "2026-09-27",
+    reporter: "张||李", note: "采购&!平", limit: "50", offset: "50",
+  });
+  try {
+    for (const pathname of ["/expense", "/expense/", "/reimbursement", "/reimbursement/"]) {
+      const url = `${server.baseUrl}${pathname}?${query}`;
+      const unauthorized = await fetch(url);
+      assert.equal(unauthorized.status, 401, `${pathname} still requires authentication`);
+      await unauthorized.arrayBuffer();
+      for (const navigation of ["direct", "refresh"]) {
+        const response = await fetch(url, { headers: createAdminAuthHeaders() });
+        assert.equal(response.status, 200, `${pathname}: ${navigation}`);
+        assert.equal(new URL(response.url).search, `?${query}`);
+        assert.match(await response.text(), /id="filters"/);
+      }
+    }
+    const api = await fetch(`${server.baseUrl}/reimbursement/api/reports?limit=7&offset=0`, { headers: createAdminAuthHeaders() });
+    assert.equal(api.status, 200);
+    assert.equal((await api.json()).limit, 7);
+    for (const pathname of ["/reimbursement-other", "/reimbursements"]) {
+      const response = await fetch(`${server.baseUrl}${pathname}?${query}`, { headers: createAdminAuthHeaders() });
+      assert.equal(response.status, 404, "only the exact legacy path or its children are rewritten");
+      await response.arrayBuffer();
+    }
+  } finally {
+    await server.close();
+  }
+});
+
 test("shortcut reimbursement API requires its dedicated bearer token", async () => {
   applyEnv({
     WECHATY_REIMBURSEMENT_SHORTCUT_API_TOKEN: undefined,

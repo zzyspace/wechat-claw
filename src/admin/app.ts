@@ -593,8 +593,8 @@ export function createApp(input?: {
   app.set("trust proxy", "loopback");
   app.use((request, _response, next) => {
     if (
-      request.url === LEGACY_ADMIN_BASE_PATH ||
-      request.url.startsWith(`${LEGACY_ADMIN_BASE_PATH}/`)
+      request.path === LEGACY_ADMIN_BASE_PATH ||
+      request.path.startsWith(`${LEGACY_ADMIN_BASE_PATH}/`)
     ) {
       request.url = `${ADMIN_BASE_PATH}${request.url.slice(LEGACY_ADMIN_BASE_PATH.length)}`;
     }
