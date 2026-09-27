@@ -890,7 +890,6 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     assert.match(pageHtml, /if \(event\.detail > 1 \|\| hasSelectedTextWithin\(trigger\)\) \{\s*return;\s*\}/);
     assert.match(pageHtml, /function scheduleDetail\(reportId\)/);
     assert.match(pageHtml, /elements\.tableBody\.addEventListener\("dblclick", \(\) => \{\s*cancelPendingDetail\(\);\s*\}\)/);
-    assert.match(pageHtml, /id="accessPill" hidden/);
     assert.match(pageHtml, /id="operationColumnHeader" hidden>操作<\/th>/);
     assert.match(pageHtml, /const operationCell = state\.canWrite/);
     assert.match(pageHtml, /id="editReportModal" hidden/);
@@ -903,7 +902,6 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     assert.match(pageHtml, /method: "PATCH"/);
     assert.match(pageHtml, /body: JSON\.stringify\(payload\)/);
     assert.match(pageHtml, /elements\.operationColumnHeader\.hidden = !state\.canWrite/);
-    assert.match(pageHtml, /manager: "管理"/);
     assert.match(pageHtml, /const MANAGER_CHANNEL_CODE_BY_STORE = new Map/);
     assert.match(pageHtml, /new Option\("全部（权限内）", ""\)/);
     assert.match(pageHtml, /elements\.filterReporter\.readOnly = true/);

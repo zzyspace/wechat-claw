@@ -1834,12 +1834,6 @@ body > .topbar .center-switcher-menu { top: calc(100% + 9px); left: auto; }
           </div>
         </form>
         <div class="summary-row">
-          <div class="summary">
-            <span class="pill" id="totalPill">总数 0</span>
-            <span class="pill" id="pagePill">第 1 页</span>
-            <span class="pill" id="timeZonePill">时区 Asia/Shanghai</span>
-            <span class="pill" id="accessPill" hidden></span>
-          </div>
           <div class="status" id="statusText">等待加载</div>
         </div>
       </div>
@@ -2208,10 +2202,6 @@ body > .topbar .center-switcher-menu { top: calc(100% + 9px); left: auto; }
         themeToggle: document.getElementById("themeToggle"),
         themeIcon: document.getElementById("themeIcon"),
         resetFilters: document.getElementById("resetFilters"),
-        totalPill: document.getElementById("totalPill"),
-        pagePill: document.getElementById("pagePill"),
-        timeZonePill: document.getElementById("timeZonePill"),
-        accessPill: document.getElementById("accessPill"),
         statusText: document.getElementById("statusText"),
         tableBody: document.getElementById("tableBody"),
         mobileReportList: document.getElementById("mobileReportList"),
@@ -3399,13 +3389,9 @@ body > .topbar .center-switcher-menu { top: calc(100% + 9px); left: auto; }
       }
 
       function renderSummary() {
-        const pageIndex = Math.floor(state.offset / state.limit) + 1;
         const rangeStart = state.total === 0 ? 0 : state.offset + 1;
         const rangeEnd = state.offset + state.items.length;
 
-        elements.totalPill.textContent = `总数 ${state.total}`;
-        elements.pagePill.textContent = `第 ${pageIndex} 页`;
-        elements.timeZonePill.textContent = `时区 ${state.timeZone}`;
         elements.rangeText.textContent = `${rangeStart} - ${rangeEnd} / ${state.total}`;
         elements.prevPage.disabled = state.offset <= 0;
         elements.nextPage.disabled = state.offset + state.items.length >= state.total;
@@ -3710,7 +3696,6 @@ body > .topbar .center-switcher-menu { top: calc(100% + 9px); left: auto; }
           if (requestVersion !== detailRequestVersion || elements.detailModal.hidden) return;
           if (!response.ok || !payload.success) throw new Error(payload?.error?.message || "详情加载失败");
           state.timeZone = payload.timeZone || state.timeZone || DEFAULT_TIME_ZONE;
-          elements.timeZonePill.textContent = `时区 ${state.timeZone}`;
           renderDetail(payload.report);
           setStatus(`已加载报账 #${reportId} 详情`);
         } catch (error) {
@@ -3834,11 +3819,7 @@ body > .topbar .center-switcher-menu { top: calc(100% + 9px); left: auto; }
           const allowed = payload.authorization.allowedChannelCodes;
           if (allowed) elements.filterChannelCode.replaceChildren(new Option("全部（权限内）", ""), ...allowed.map((code) => new Option(STORE_LABELS_BY_CHANNEL_CODE.get(code) || code, code)));
         }
-        const roleLabel = ({ admin: "管理员", partner: "合伙人", manager: "管理" })[payload.account?.role]
-          || "账号";
         elements.operationColumnHeader.hidden = !state.canWrite;
-        elements.accessPill.hidden = false;
-        elements.accessPill.textContent = `${roleLabel} ${payload.account?.displayName || payload.account?.username || ""}`.trim();
         elements.manualImportOpen.hidden = !state.canImport;
         elements.batchImportOpen.hidden = !state.canImport;
       }
