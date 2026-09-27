@@ -837,10 +837,6 @@
         cursor: text;
       }
 
-      tbody tr.is-selected {
-        background: rgba(0, 122, 255, 0.08);
-      }
-
       .note-cell {
         max-width: 160px;
         color: var(--ink-soft);
@@ -1388,10 +1384,11 @@
         flex-wrap: wrap;
       }
 
-      .pagination-buttons {
-        display: flex;
-        gap: 10px;
-      }
+      .pagination .pagination-summary { margin-right: auto; font-size: 13px; }
+      .page-size { display: flex; align-items: center; gap: 8px; white-space: nowrap; font-size: 13px; color: var(--ink-soft); }
+      .page-size select { min-height: 36px; padding: 0 8px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-input); color: var(--ink); font: inherit; }
+      .pagination-buttons { display: flex; gap: 8px; }
+      .pagination-buttons button { min-height: 36px; font-size: 13px; padding: 0 12px; }
 
       .empty-state {
         padding: 30px 20px;
@@ -1554,7 +1551,6 @@
           .desktop-report-table .operation-buttons button:hover { color: var(--brand); background: var(--brand-soft); }
           .desktop-report-table .operation-buttons .button-danger:hover:not([disabled]) { color: var(--danger); background: rgba(255, 59, 48, .08); }
         }
-        .desktop-report-table tbody tr.is-selected { background: var(--brand-soft); }
       }
 
       @media (max-width: 900px) {
@@ -1574,7 +1570,6 @@
         .mobile-report-list { display: block; padding: 0 20px; background: var(--surface-strong); }
         .mobile-report { min-width: 0; padding: 12px 0 2px; border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
         .mobile-report:last-child { border-bottom: 0; }
-        .mobile-report.is-selected { background: var(--brand-soft); }
         .mobile-report button {
           min-height: 44px; padding: 0 8px; border: 0; border-radius: 8px;
           background: transparent; color: var(--ink-soft); font-size: 12px; font-weight: 400;
@@ -1604,7 +1599,7 @@
         .mobile-report-amount.is-large { font-size: 17px; }
         .mobile-report-amount.is-missing { font-size: 16px; color: var(--warn); }
         .mobile-report-meta { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 4px; }
-        .mobile-report-store { min-width: 0; color: var(--ink-soft); font-size: 11px; }
+        .mobile-report-store { min-width: 0; color: var(--ink-soft); font-size: 11px; font-weight: 600; }
         .mobile-report-status { display: inline-flex; align-items: center; gap: 4px; flex: none; padding: 3px 6px; border-radius: 6px; font-size: 10px; line-height: 1.4; font-weight: 550; }
         .mobile-report-status svg { width: 11px; height: 11px; }
         .mobile-report-status.is-review { color: var(--warn); background: var(--warn-soft); }
@@ -1691,13 +1686,12 @@
           align-items: stretch;
         }
 
-        .pagination-buttons {
-          width: 100%;
-        }
-
-        .pagination-buttons button {
-          flex: 1 1 0;
-        }
+        .pagination { align-items: center; gap: 10px; padding: 12px; }
+        .pagination .pagination-summary { width: 100%; }
+        .page-size { margin-right: auto; }
+        .page-size select { min-height: 44px; font-size: 16px; }
+        .pagination-buttons { width: auto; }
+        .pagination-buttons button { flex: none; min-height: 44px; padding: 0 10px; }
 
         .modal {
           padding: 8px;
@@ -1817,19 +1811,6 @@ body > .topbar .center-switcher-menu { top: calc(100% + 9px); left: auto; }
               <label for="createdDateTo">创建日期到</label>
               <input id="createdDateTo" name="createdDateTo" type="date" />
             </div>
-            <div class="field">
-              <label for="limit">每页条数</label>
-              <select id="limit" name="limit">
-                <option value="20">20</option>
-                <option value="50">50</option>
-                <option value="100">100</option>
-                <option value="200" selected>200</option>
-                <option value="400">400</option>
-                <option value="600">600</option>
-                <option value="800">800</option>
-                <option value="1000">1000</option>
-              </select>
-            </div>
           </div>
           <div class="actions">
             <button class="button-primary" type="submit">查询</button>
@@ -1872,7 +1853,17 @@ body > .topbar .center-switcher-menu { top: calc(100% + 9px); left: auto; }
           <div class="mobile-report-list" id="mobileReportList" role="list" aria-label="报账记录"></div>
           <div class="empty-state" id="emptyState" hidden>没有匹配的报账记录。</div>
           <div class="pagination">
-            <div class="status" id="rangeText">0 - 0 / 0</div>
+            <div class="status pagination-summary" id="rangeText">0 - 0 / 0</div>
+            <label class="page-size" for="limit"><span>每页</span><select id="limit" name="limit" form="filters" aria-label="每页条数">
+                <option value="20">20</option>
+                <option value="50">50</option>
+                <option value="100">100</option>
+                <option value="200" selected>200</option>
+                <option value="400">400</option>
+                <option value="600">600</option>
+                <option value="800">800</option>
+                <option value="1000">1000</option>
+              </select></label>
             <div class="pagination-buttons">
               <button id="prevPage" type="button">上一页</button>
               <button id="nextPage" type="button">下一页</button>
@@ -3978,6 +3969,10 @@ body > .topbar .center-switcher-menu { top: calc(100% + 9px); left: auto; }
         if (!readSavedTheme()) {
           applyTheme(event.matches ? "dark" : "light");
         }
+      });
+
+      document.getElementById("limit").addEventListener("change", () => {
+        elements.filters.requestSubmit();
       });
 
       elements.filters.addEventListener("submit", (event) => {
