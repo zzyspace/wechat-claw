@@ -21,6 +21,8 @@ usage() {
 Usage:
   deploy-wechat-claw [--with-env <server-env-file>]
 
+Deploys the reimbursement admin while keeping the WeChat bot and its timers disabled.
+
 Options:
   --with-env <server-env-file>  Install a server-local env file to /etc/wechat-claw.env before deploy
   -h, --help                    Show help
@@ -70,7 +72,7 @@ if [[ "${EUID}" -ne 0 ]]; then
   exit 1
 fi
 
-for cmd in curl git install ln node npm systemctl sudo; do
+for cmd in curl git install ln node npm readlink systemctl sudo; do
   if ! command -v "${cmd}" >/dev/null 2>&1; then
     echo "Missing required command: ${cmd}" >&2
     exit 1
@@ -112,7 +114,7 @@ fi
 ADMIN_HEALTHZ_NODE_URL="http://${ADMIN_HEALTHZ_HOST}:${ADMIN_PORT}/health/expense"
 PUBLIC_WEB_HEALTHZ_URL="${WECHATY_ADMIN_PUBLIC_HEALTHZ_URL:-${WECHATY_ADMIN_NGINX_HEALTHZ_URL:-https://comeover.cn/health/expense}}"
 
-script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+script_dir="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
 service_source="${script_dir}/wechat-claw.service"
 service_target="${SYSTEMD_UNIT_DIR}/${SERVICE_NAME}.service"
 admin_service_source="${script_dir}/wechat-claw-reimbursement-admin.service"
@@ -127,6 +129,13 @@ daily_restart_timer_source="${script_dir}/wechat-claw-daily-restart.timer"
 daily_restart_timer_target="${SYSTEMD_UNIT_DIR}/${DAILY_RESTART_TIMER_NAME}.timer"
 needrestart_source="${script_dir}/needrestart-wechat-claw.conf"
 needrestart_target="${NEEDRESTART_CONF_DIR}/${SERVICE_NAME}.conf"
+bot_units=(
+  "${SERVICE_NAME}.service"
+  "${WATCHDOG_SERVICE_NAME}.service"
+  "${WATCHDOG_TIMER_NAME}.timer"
+  "${DAILY_RESTART_SERVICE_NAME}.service"
+  "${DAILY_RESTART_TIMER_NAME}.timer"
+)
 
 run_as_app_user() {
   sudo -u "${APP_USER}" -H bash -lc "cd '${APP_DIR}' && $*"
@@ -265,7 +274,17 @@ if [[ -f "${needrestart_source}" ]]; then
 fi
 
 echo "[deploy] Reloading systemd daemon"
+for unit in "${bot_units[@]}"; do
+  install -d -m 755 -o root -g root "${SYSTEMD_UNIT_DIR}/${unit}.d"
+  install -m 644 -o root -g root "${script_dir}/bot-disabled.conf" \
+    "${SYSTEMD_UNIT_DIR}/${unit}.d/50-bot-disabled.conf"
+done
 systemctl daemon-reload
+
+echo "[deploy] Keeping WeChat bot and automatic restart timers disabled"
+systemctl disable --now "${WATCHDOG_TIMER_NAME}.timer" "${DAILY_RESTART_TIMER_NAME}.timer"
+systemctl stop "${WATCHDOG_SERVICE_NAME}.service" "${DAILY_RESTART_SERVICE_NAME}.service"
+systemctl disable --now "${SERVICE_NAME}.service"
 
 install_dependencies_if_needed
 
@@ -279,8 +298,6 @@ set -a
 set +a
 sudo -u "${APP_USER}" -E -H bash -lc "cd '${APP_DIR}' && npm run doctor"
 
-echo "[deploy] Restarting ${SERVICE_NAME}"
-systemctl restart "${SERVICE_NAME}"
 if [[ -f "${admin_service_source}" ]]; then
   echo "[deploy] Enabling and restarting ${ADMIN_SERVICE_NAME}"
   systemctl enable "${ADMIN_SERVICE_NAME}" >/dev/null
@@ -289,16 +306,6 @@ fi
 sleep 5
 
 echo "[deploy] Shared Nginx entry is managed by server-infra"
-
-if [[ -f "${watchdog_service_source}" && -f "${watchdog_timer_source}" ]]; then
-  echo "[deploy] Enabling watchdog timer"
-  systemctl enable --now "${WATCHDOG_TIMER_NAME}.timer"
-fi
-
-if [[ -f "${daily_restart_service_source}" && -f "${daily_restart_timer_source}" ]]; then
-  echo "[deploy] Enabling daily restart timer"
-  systemctl enable --now "${DAILY_RESTART_TIMER_NAME}.timer"
-fi
 
 echo "[deploy] Verifying health endpoints"
 if ! wait_for_http_ok "Reimbursement admin health endpoint" "${ADMIN_HEALTHZ_NODE_URL}" 30 1; then
@@ -312,8 +319,14 @@ if ! wait_for_http_ok "Public reimbursement health endpoint" "${PUBLIC_WEB_HEALT
   exit 1
 fi
 
-echo "[deploy] Service status"
-systemctl --no-pager --full status "${SERVICE_NAME}"
+echo "[deploy] Verifying WeChat bot and automatic restart tasks remain stopped"
+for unit in "${bot_units[@]}"; do
+  state="$(systemctl show "${unit}" --property=ActiveState --value)"
+  if [[ "${state}" != "inactive" ]]; then
+    echo "[deploy] Expected ${unit} to be inactive, found: ${state}" >&2
+    exit 1
+  fi
+done
 
 if [[ -f "${admin_service_source}" ]]; then
   echo "[deploy] Admin service status"

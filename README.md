@@ -674,7 +674,7 @@ npm run logs:recent -- --date 2026-05-21 --grep login
 
 ## 异常处理
 
-当前异常处理链路：
+机器人当前已停用，watchdog 和每日重启任务也已禁用；下面的异常处理链路仅适用于明确恢复机器人之后：
 
 - `systemd` 负责“进程退出后”自动拉起 `wechat-claw.service`
 - `watchdog timer` 每分钟执行一次 `npm run watchdog:check`
@@ -741,7 +741,7 @@ git clone <your-repo> /opt/wechat-claw/current
 cd /opt/wechat-claw/current
 npm ci
 npm run build
-sudo systemctl restart wechat-claw
+sudo bash deploy/deploy-wechat-claw.sh
 ```
 
 如果服务器已经完成这次初始化，而你这次没有改本地 `.env`，可以直接用：
@@ -762,9 +762,15 @@ sudo bash deploy/deploy-wechat-claw.sh
 - 仅当当前 `package-lock.json` 和已安装依赖树不一致时执行 `npm ci --include=dev`
 - `npm run build`
 - `npm run doctor`
-- `systemctl restart wechat-claw`
-- `systemctl enable --now wechat-claw-watchdog.timer`
-- `systemctl enable --now wechat-claw-daily-restart.timer`
+- 安装 `deploy/bot-disabled.conf` 启动保护，停止并禁用微信机器人、watchdog 和每日重启定时器
+- 仅启用并重启 `wechat-claw-reimbursement-admin`，检查报销管理健康接口
+- 验证机器人及自动拉起任务全部保持 `inactive`
+
+**机器人停用策略（2026-09-28）：** 后续部署保持机器人关闭，报销管理后台继续运行。
+五个机器人相关 systemd 单元均安装独立的 `50-bot-disabled.conf` drop-in，
+只有 `/etc/wechat-claw/bot-start-approved` 存在才允许启动；日常部署不会创建该文件。
+这样即使旧版脚本或维护命令尝试重启机器人，systemd 也会跳过启动。
+必须获得明确恢复机器人的指示后才能解除保护。下文涉及机器人重启、会话重置和自愈的命令均受此策略约束。
 
 如果你想降低“忘记同步服务器配置”的风险，推荐以后统一只用这一条本地发布命令：
 
