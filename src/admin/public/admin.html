@@ -1723,6 +1723,43 @@
           width: calc(100vw - 16px);
         }
       }
+
+      /* Preserve the desktop grid; group the four secondary fields for mobile. */
+      .advanced-filters { display: contents; }
+      .filter-search { order: 0; }
+      .filter-store { order: 1; }
+      .filter-reporter { order: 2; }
+      .filter-category { order: 3; }
+      .filter-note { order: 4; }
+      .filter-date { order: 5; }
+      .more-filters, .advanced-filter-help, .applied-extra-filters { display: none; }
+      @media (max-width: 620px) {
+        .controls { padding: 16px; border-radius: 20px; }
+        #filters .controls-grid { display: flex; flex-direction: column; gap: 13px; }
+        #filters .field { gap: 6px; }
+        #filters .field label { font-weight: 550; letter-spacing: normal; }
+        #filters .field input, #filters .field select, #filters .date-range-trigger { border-radius: 10px; font-size: 16px; }
+        #filters .date-range-trigger { font-size: 15px; padding-inline: 12px; }
+        #filters .advanced-filters { display: none; order: 6; }
+        #filters .advanced-filters.is-open { display: grid; gap: 13px; margin-top: 1px; padding-top: 14px; border-top: 1px solid var(--line); }
+        .advanced-filter-help { display: block; order: 5; margin: 0; color: var(--ink-soft); font-size: 12px; line-height: 1.8; }
+        .advanced-filter-help code { color: var(--brand); font-family: ui-monospace, monospace; }
+        #filters .filter-actions { flex-wrap: nowrap; align-items: center; gap: 7px; margin-top: 14px; }
+        #filters .filter-actions button { min-height: 44px; border-radius: 10px; font-size: 14px; font-weight: 550; touch-action: manipulation; -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none; }
+        #filters .more-filters { display: flex; align-items: center; justify-content: flex-start; gap: 6px; margin-right: auto; padding: 0; border: 0; background: transparent; color: var(--brand); order: 0; }
+        .more-filters svg { width: 16px; height: 16px; flex: none; }
+        .more-filters[aria-expanded="true"] svg { transform: rotate(180deg); }
+        .filter-count { display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 20px; padding-inline: 4px; border-radius: 6px; background: var(--brand-soft); font-size: 12px; }
+        #filters #resetFilters { order: 1; border-color: transparent; background: transparent; color: var(--ink-soft); padding-inline: 10px; }
+        #filters .filter-actions .button-primary { order: 2; min-width: 72px; }
+        .applied-extra-filters { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+        .applied-extra-filters button { display: inline-flex; align-items: center; gap: 8px; max-width: 100%; min-height: 44px; padding: 0 10px; border: 0; border-radius: 9px; color: var(--brand); background: var(--brand-soft); font-size: 12px; font-weight: 400; touch-action: manipulation; -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none; }
+        .applied-extra-filters button span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        #filters .filter-actions button:active, .applied-extra-filters button:active { opacity: .65; }
+        #filters .filter-actions button:focus:not(:focus-visible), .applied-extra-filters button:focus:not(:focus-visible) { outline: none; }
+        #filters .filter-actions button:focus-visible, .applied-extra-filters button:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+        .controls .summary-row { margin-top: 12px; }
+      }
     [hidden] { display: none !important; }
 .center-switcher-option[data-center="store"] svg { color: #e85d8e; }
 :root[data-theme="dark"] .center-switcher-option[data-center="store"] svg { color: #f486ad; }
@@ -1790,11 +1827,7 @@ body > .topbar .center-switcher-menu { top: calc(100% + 9px); left: auto; }
       <div class="panel controls">
         <form id="filters">
           <div class="controls-grid">
-            <div class="field">
-              <label for="search">关键词 / 报账 ID</label>
-              <input id="search" name="search" placeholder="支持群聊、报账人、商户、单号、OCR 或 ID" />
-            </div>
-            <div class="field">
+            <div class="field filter-store">
               <label for="channelCode">门店</label>
               <select id="channelCode" name="channelCode">
                 <option value="">全部</option>
@@ -1806,19 +1839,7 @@ body > .topbar .center-switcher-menu { top: calc(100% + 9px); left: auto; }
                 <option value="reimbursement_fuzzy_qz_manager">Fuzzy泉州店长报账群</option>
               </select>
             </div>
-            <div class="field">
-              <label id="reporterFilterLabel" for="reporter">报账人</label>
-              <input id="reporter" name="reporter" placeholder="支持 !排除、&与、||或，如 张||李" />
-            </div>
-            <div class="field">
-              <label for="expenseCategory">类别</label>
-              <input id="expenseCategory" name="expenseCategory" placeholder="支持 !、&、||，如 食材||房租" />
-            </div>
-            <div class="field">
-              <label for="note">备注</label>
-              <input id="note" name="note" placeholder="支持 !排除、&与、||或，如 采购&!平" />
-            </div>
-            <div class="field">
+            <div class="field filter-date">
               <label for="createdDateRange">创建日期</label>
               <button id="createdDateRange" class="date-range-trigger" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="dateRangeDialog">
                 <span id="dateRangeLabel">选择起止日期</span>
@@ -1827,12 +1848,33 @@ body > .topbar .center-switcher-menu { top: calc(100% + 9px); left: auto; }
               <input id="createdDateFrom" name="createdDateFrom" type="hidden" />
               <input id="createdDateTo" name="createdDateTo" type="hidden" />
             </div>
+            <div id="advancedFilters" class="advanced-filters">
+              <div class="field filter-search">
+                <label for="search">关键词 / 报账 ID</label>
+                <input id="search" name="search" placeholder="支持群聊、报账人、商户、单号、OCR 或 ID" />
+              </div>
+              <div class="field filter-reporter">
+                <label id="reporterFilterLabel" for="reporter">报账人</label>
+                <input id="reporter" name="reporter" placeholder="支持 !排除、&与、||或，如 张||李" />
+              </div>
+              <div class="field filter-category">
+                <label for="expenseCategory">类别</label>
+                <input id="expenseCategory" name="expenseCategory" placeholder="支持 !、&、||，如 食材||房租" />
+              </div>
+              <div class="field filter-note">
+                <label for="note">备注</label>
+                <input id="note" name="note" placeholder="支持 !排除、&与、||或，如 采购&!平" />
+              </div>
+              <p class="advanced-filter-help">报账人、类别、备注支持 <code>!</code> 排除 · <code>&amp;</code> 与 · <code>||</code> 或</p>
+            </div>
           </div>
-          <div class="actions">
+          <div class="actions filter-actions">
+            <button id="moreFilters" class="more-filters" type="button" aria-expanded="false" aria-controls="advancedFilters"><span>更多条件</span><span id="moreFiltersCount" class="filter-count" hidden></span><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m5 7 5 5 5-5"/></svg></button>
             <button class="button-primary" type="submit">查询</button>
             <button id="resetFilters" type="button">重置</button>
           </div>
         </form>
+        <div id="appliedExtraFilters" class="applied-extra-filters" aria-label="已生效的更多条件" hidden></div>
         <div class="summary-row">
           <div class="status" id="statusText">等待加载</div>
         </div>
@@ -2155,6 +2197,10 @@ body > .topbar .center-switcher-menu { top: calc(100% + 9px); left: auto; }
 
       const elements = {
         filters: document.getElementById("filters"),
+        advancedFilters: document.getElementById("advancedFilters"),
+        moreFilters: document.getElementById("moreFilters"),
+        moreFiltersCount: document.getElementById("moreFiltersCount"),
+        appliedExtraFilters: document.getElementById("appliedExtraFilters"),
         filterChannelCode: document.getElementById("channelCode"),
         filterReporter: document.getElementById("reporter"),
         reporterFilterLabel: document.getElementById("reporterFilterLabel"),
@@ -3154,6 +3200,46 @@ body > .topbar .center-switcher-menu { top: calc(100% + 9px); left: auto; }
         renderDateRangeCalendar();
       }));
 
+      const EXTRA_FILTER_LABELS = { search: "关键词", reporter: "报账人", expenseCategory: "类别", note: "备注" };
+      const mobileFilterLayout = window.matchMedia("(max-width: 620px)");
+      let listRequestVersion = 0;
+
+      function setAdvancedFiltersExpanded(expanded) {
+        if (!expanded && mobileFilterLayout.matches && elements.advancedFilters.contains(document.activeElement)) {
+          elements.moreFilters.focus({ preventScroll: true });
+        }
+        elements.advancedFilters.classList.toggle("is-open", expanded);
+        elements.moreFilters.setAttribute("aria-expanded", String(expanded));
+      }
+
+      function syncMoreFiltersCount() {
+        const filters = readFilters();
+        const count = Object.keys(EXTRA_FILTER_LABELS).filter((key) => filters[key]).length;
+        elements.moreFiltersCount.textContent = String(count);
+        elements.moreFiltersCount.hidden = count === 0;
+      }
+
+      function renderAppliedExtraFilters(filters) {
+        elements.appliedExtraFilters.replaceChildren();
+        for (const [key, label] of Object.entries(EXTRA_FILTER_LABELS)) {
+          if (!filters[key]) continue;
+          const button = document.createElement("button");
+          button.type = "button";
+          button.dataset.clearFilter = key;
+          button.setAttribute("aria-label", `移除${label}条件`);
+          button.title = `${label}：${filters[key]}`;
+          const text = document.createElement("span");
+          text.textContent = button.title;
+          const close = document.createElement("span");
+          close.textContent = "×";
+          close.setAttribute("aria-hidden", "true");
+          button.append(text, close);
+          elements.appliedExtraFilters.append(button);
+        }
+        elements.appliedExtraFilters.hidden = elements.appliedExtraFilters.childElementCount === 0;
+        syncMoreFiltersCount();
+      }
+
       function readFilters() {
         const formData = new FormData(elements.filters);
         return {
@@ -3714,7 +3800,9 @@ body > .topbar .center-switcher-menu { top: calc(100% + 9px); left: auto; }
         }
       }
 
-      async function loadReports({ resetOffset = false } = {}) {
+      async function loadReports({ resetOffset = false, collapseFilters = false } = {}) {
+        const requestVersion = ++listRequestVersion;
+        const requestedFilters = readFilters();
         if (resetOffset) {
           state.offset = 0;
         }
@@ -3730,6 +3818,7 @@ body > .topbar .center-switcher-menu { top: calc(100% + 9px); left: auto; }
             },
           });
           const payload = await response.json();
+          if (requestVersion !== listRequestVersion) return;
 
           if (!response.ok || !payload.success) {
             throw new Error(payload?.error?.message || "列表加载失败");
@@ -3743,6 +3832,11 @@ body > .topbar .center-switcher-menu { top: calc(100% + 9px); left: auto; }
 
           renderTable();
           renderSummary();
+          renderAppliedExtraFilters(requestedFilters);
+          const currentFilters = readFilters();
+          if (collapseFilters && Object.keys(requestedFilters).every((key) => requestedFilters[key] === currentFilters[key])) {
+            setAdvancedFiltersExpanded(false);
+          }
           setStatus(`已加载 ${state.items.length} 条记录，总计金额 ${sumLoadedAmounts(state.items).toFixed(2)} 元`);
 
           if (state.selectedReportId && state.items.some((item) => item.id === state.selectedReportId)) {
@@ -3752,6 +3846,9 @@ body > .topbar .center-switcher-menu { top: calc(100% + 9px); left: auto; }
             closeDetailModal();
           }
         } catch (error) {
+          if (requestVersion !== listRequestVersion) return;
+          renderAppliedExtraFilters({});
+          if (Object.keys(EXTRA_FILTER_LABELS).some((key) => requestedFilters[key])) setAdvancedFiltersExpanded(true);
           state.items = [];
           state.total = 0;
           renderTable();
@@ -4171,9 +4268,31 @@ body > .topbar .center-switcher-menu { top: calc(100% + 9px); left: auto; }
         elements.filters.requestSubmit();
       });
 
+      elements.moreFilters.addEventListener("click", () => {
+        setAdvancedFiltersExpanded(elements.moreFilters.getAttribute("aria-expanded") !== "true");
+      });
+      elements.filters.addEventListener("input", syncMoreFiltersCount);
+      elements.filters.addEventListener("change", syncMoreFiltersCount);
+      elements.advancedFilters.addEventListener("keydown", (event) => {
+        if (event.key === "Escape" && mobileFilterLayout.matches) {
+          event.preventDefault();
+          setAdvancedFiltersExpanded(false);
+        }
+      });
+      elements.appliedExtraFilters.addEventListener("click", (event) => {
+        if (!(event.target instanceof Element)) return;
+        const key = event.target.closest("[data-clear-filter]")?.dataset.clearFilter;
+        if (!Object.hasOwn(EXTRA_FILTER_LABELS, key)) return;
+        const field = elements.filters.elements.namedItem(key);
+        if (!(field instanceof HTMLInputElement) || field.readOnly || field.disabled) return;
+        field.value = "";
+        syncMoreFiltersCount();
+        elements.filters.querySelector('button[type="submit"]').focus({ preventScroll: true });
+        elements.filters.requestSubmit();
+      });
       elements.filters.addEventListener("submit", (event) => {
         event.preventDefault();
-        void loadReports({ resetOffset: true });
+        void loadReports({ resetOffset: true, collapseFilters: true });
       });
 
       elements.manualImportOpen.addEventListener("click", () => {
@@ -4350,6 +4469,8 @@ body > .topbar .center-switcher-menu { top: calc(100% + 9px); left: auto; }
         setDefaultCreatedDateRange();
         syncDateRangeLabel();
         restoreRoleScopedFilterValues();
+        setAdvancedFiltersExpanded(false);
+        syncMoreFiltersCount();
         state.offset = 0;
         state.selectedReportId = null;
         closeAttachmentPreviewModal();
