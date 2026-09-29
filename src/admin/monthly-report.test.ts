@@ -39,7 +39,7 @@ test("monthly page, API, details, export and assets enforce explicit permission 
   seed({created:"2026-09-30 15:59:59",amount:3});
   seed({created:"2026-09-30 16:00:00",amount:999}); // Local October.
   seed({channel:"reimbursement_peanut",amount:999});
-  const owned=seed({channel:"reimbursement_fuzzy_manager",reporter:"李晨晨",category:"manager_reimbursement",amount:5});
+  const owned=seed({channel:"reimbursement_fuzzy_manager",reporter:"李晨晨",category:"food",note:"市场采购",amount:5});
   seed({channel:"reimbursement_fuzzy_manager",reporter:"张志延",category:"manager_reimbursement",owner:"other",amount:7});
   seed({channel:"reimbursement_fuzzy_manager",reporter:"张志延",category:"manager_reimbursement",owner:null,amount:9});
   seed({reporter:"邓振国",note:"门锁维修",category:"other",amount:null});
@@ -74,6 +74,15 @@ test("monthly page, API, details, export and assets enforce explicit permission 
   for(const route of [api+"?month=2026-13&store=fuzzy",api+"?month[]=2026-09&store=fuzzy",api+"/details"+query+selection+"&limit=0",api+"/details"+query+selection+"&offset=-1"])assert.equal((await request("all",route)).status,400);
   const session=await (await request("reader","/expense/api/session")).json();assert.equal(session.permissions.canMonthlyReport,false);
   assert.equal((await (await request("all","/expense/api/session")).json()).permissions.canMonthlyReport,true);
+  seed({reporter:"李晨晨",category:"manager_reimbursement",note:"店长报账",ocr:"店长报账群",amount:11});
+  for (const category of ["rent", "utilities", "salary"]) seed({reporter:"李晨晨",category,note:"",ocr:"",amount:13});
+  seed({reporter:"李晨晨",category:"rent",note:"宿舍房租",amount:17});
+  const rules=await (await request("all",api+query)).json();
+  assert.equal(rules.groups.find((g:any)=>g.projectId==="manager").recordCount,3);
+  assert.equal(rules.groups.find((g:any)=>g.projectId==="manager").amountCents,2100);
+  assert.equal(rules.groups.find((g:any)=>g.projectId==="unclassified"&&g.reporter==="李晨晨").amountCents,1100);
+  for (const projectId of ["rent", "utilities", "salary"]) assert.equal(rules.groups.find((g:any)=>g.projectId===projectId&&g.reporter==="李晨晨").amountCents,1300);
+  assert.equal(rules.groups.find((g:any)=>g.projectId==="dorm-rent"&&g.reporter==="李晨晨").amountCents,1700);
   revoked=true;
   assert.equal((await request("all",api+query)).status,403);assert.equal((await request("all",api+"/export"+query)).status,403);assert.equal((await request("all","/expense/monthly")).status,403);
 });

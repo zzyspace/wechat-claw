@@ -9,21 +9,27 @@ export const MONTHLY_STORES = [
   { id: "peanut", name: "Peanut", channels: ["reimbursement_peanut", "reimbursement_peanut_manager"] },
   { id: "fuzzyqz", name: "Fuzzy泉州店", channels: ["reimbursement_fuzzyqz", "reimbursement_fuzzy_qz_manager"] },
 ] as const;
+const MONTHLY_MANAGER_CHANNELS = new Set([
+  "reimbursement_fuzzy_manager", "reimbursement_peanut_manager", "reimbursement_fuzzy_qz_manager",
+]);
+const MONTHLY_CATEGORY_FALLBACK = new Map<string, string>([
+  ["food", "other-food"], ["rent", "rent"], ["utilities", "utilities"], ["salary", "salary"],
+]);
 export const MONTHLY_REPORTERS = ["张志延", "李晨晨", "邓振国"];
 export const MONTHLY_PROJECTS = [
   { id: "kuailv", name: "快驴", keywords: ["快驴"], description: "OCR 或备注包含「快驴」" },
   { id: "aomeijia", name: "澳美佳 / 安之乐 / 知其味", keywords: ["澳美佳", "安之乐", "知其味"], description: "命中任一字样，合并为同一项目" },
   { id: "mozan", name: "墨赞", keywords: ["墨赞"], description: "OCR 或备注包含「墨赞」" },
   { id: "other-food", name: "其他食材", keywords: [], description: "未命中任何指定项目的食材报账" },
-  { id: "manager", name: "店长报账", keywords: ["店长报账"], description: "类别为店长报账，或 OCR / 备注包含「店长报账」；统一显示为张志延" },
-  { id: "rent", name: "房租", keywords: ["房租"], description: "OCR 或备注包含「房租」，排除宿舍房租" },
+  { id: "manager", name: "店长报账", keywords: [], description: "仅按来源渠道：店长报账群的全部记录合并，统一显示为张志延；不依据 OCR、备注或类别识别" },
+  { id: "rent", name: "房租", keywords: ["房租"], description: "OCR 或备注包含「房租」，排除宿舍房租；未命中指定项目时按房租类别兜底" },
   { id: "dorm-rent", name: "宿舍房租", keywords: ["宿舍房租"], description: "OCR 或备注包含「宿舍房租」" },
-  { id: "utilities", name: "水电", keywords: ["水电"], description: "OCR 或备注包含「水电」" },
-  { id: "salary", name: "工资", keywords: ["工资"], description: "OCR 或备注包含「工资」" },
+  { id: "utilities", name: "水电", keywords: ["水电"], description: "OCR 或备注包含「水电」；未命中指定项目时按水电类别兜底" },
+  { id: "salary", name: "工资", keywords: ["工资"], description: "OCR 或备注包含「工资」；未命中指定项目时按工资类别兜底" },
   { id: "unclassified", name: "待归类", keywords: [], description: "未命中指定项目的非食材记录，金额仍计入总额" },
 ];
 export interface MonthlyRecord {
-  id: number; reporter: string; expenseCategory: string; amount: number | null; currency: string;
+  id: number; channelCode: string | null; reporter: string; expenseCategory: string; amount: number | null; currency: string;
   note: string; ocrText: string | null; createdAt: string;
 }
 export interface MonthlyScope { submittedByAccountId?: string; allowedChannelCodes?: string[] }
@@ -51,15 +57,15 @@ export function monthlyStoresForScope(scope: MonthlyScope) {
   });
 }
 export function classifyMonthlyRecord(record: MonthlyRecord) {
+  if (record.channelCode && MONTHLY_MANAGER_CHANNELS.has(record.channelCode)) return { projectId: "manager", reporter: "张志延" };
   const texts = [record.ocrText || "", record.note || ""];
   const includes = (word: string) => texts.some(text => text.includes(word));
-  if (record.expenseCategory === "manager_reimbursement" || includes("店长报账")) return { projectId: "manager", reporter: "张志延" };
   const dorm = includes("宿舍房租");
   for (const project of MONTHLY_PROJECTS) {
     if (project.id === "manager" || project.id === "rent" && dorm) continue;
     if (project.keywords.some(includes)) return { projectId: project.id, reporter: record.reporter.trim() || "未知" };
   }
-  return { projectId: record.expenseCategory === "food" ? "other-food" : "unclassified", reporter: record.reporter.trim() || "未知" };
+  return { projectId: MONTHLY_CATEGORY_FALLBACK.get(record.expenseCategory) || "unclassified", reporter: record.reporter.trim() || "未知" };
 }
 function currencyOf(record: MonthlyRecord) { return record.currency.trim().toUpperCase() || "未标注币种"; }
 function toCents(amount: number | null) {
@@ -109,7 +115,7 @@ export function readMonthlyRecords(input: { month: string; store: string; timeZo
   const channels = store.channels.map((channel, index) => { params[`channel${index}`] = channel; return `@channel${index}`; });
   if (input.scope.submittedByAccountId) params.owner = input.scope.submittedByAccountId;
   // Scope is applied before aggregation; never infer ownership from displayed reporter names.
-  const records = getDatabase().prepare(`SELECT id, reporter, expense_category AS expenseCategory, amount, currency, note, ocr_text AS ocrText, created_at AS createdAt
+  const records = getDatabase().prepare(`SELECT id, channel_code AS channelCode, reporter, expense_category AS expenseCategory, amount, currency, note, ocr_text AS ocrText, created_at AS createdAt
     FROM reimbursement_reports WHERE channel_code IN (${channels.join(",")}) AND created_at >= @from AND created_at < @to
     ${input.scope.submittedByAccountId ? "AND submitted_by_account_id = @owner" : ""} ORDER BY created_at ASC, id ASC`).all(params) as MonthlyRecord[];
   return { store, records };
