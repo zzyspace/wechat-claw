@@ -256,3 +256,34 @@
 .detail-record-table .column-amount-value.is-large .column-amount-number{font-size:14px}
 .detail-record-table .column-amount-currency{display:block;color:var(--detail-faint);font-size:10px;letter-spacing:.04em;white-space:normal}
 .detail-record-table .column-amount-missing{color:var(--warn);font-size:13px;font-weight:600}
+
+/* Mobile detail records follow the /expense mobile report layout. */
+.mobile-detail-list{display:none}
+@media(max-width:740px){
+  .records-drawer{overflow-x:hidden;overscroll-behavior:contain}
+  .records-drawer .drawer-inner{padding-bottom:max(24px,env(safe-area-inset-bottom,0px))}
+  .records-drawer .detail-table-scroll{display:none}
+  .mobile-detail-list{display:block;min-width:0;border-top:1px solid var(--line)}
+  .mobile-detail-record{min-width:0;padding:16px 0 4px;border-bottom:1px solid var(--line);overflow-wrap:anywhere}
+  .mobile-detail-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+  .mobile-detail-identity{display:flex;align-items:center;flex-wrap:wrap;gap:6px;min-width:0;flex:1}
+  .mobile-detail-identity strong{font-size:15px;font-weight:600;line-height:1.55;min-width:0;overflow-wrap:anywhere}
+  .mobile-detail-identity .tag{min-height:0;padding:3px 7px;border:0;border-radius:5px;font-size:11px;line-height:1.55}
+  .mobile-detail-identity .category-food{color:#23763e}.mobile-detail-identity .category-rent{color:#a75b00}
+  :root[data-theme=dark] .mobile-detail-identity .category-food{color:#69dc8d}:root[data-theme=dark] .mobile-detail-identity .category-rent{color:#ffc266}
+  .mobile-detail-amount{display:flex;align-items:baseline;justify-content:flex-end;gap:2px;flex:0 0 auto;max-width:60%;min-width:0;font-size:21px;font-weight:650;line-height:1.35;letter-spacing:-.6px;font-variant-numeric:tabular-nums;flex-wrap:wrap}
+  .mobile-detail-amount>span{min-width:0;overflow-wrap:anywhere}.mobile-detail-amount small{flex:none;font-size:11px;letter-spacing:0;font-weight:500}
+  .mobile-detail-amount.is-large{font-size:17px}.mobile-detail-amount.is-missing{font-size:16px;color:var(--warn)}
+  .mobile-detail-body{display:flex;align-items:flex-start;gap:14px;margin-top:10px;min-width:0}.mobile-detail-note{flex:1;min-width:0;margin-top:0;color:var(--ink);font-size:13px;line-height:1.8;overflow-wrap:anywhere}
+  .mobile-detail-empty{color:var(--soft)}
+  .mobile-detail-note .note-pill{display:inline;min-height:0;padding:1px 3px;margin:0 2px;border:0;border-radius:4px;font-size:inherit;line-height:inherit;color:#9a6700;background:rgba(255,204,0,.18)}
+  .mobile-detail-note .note-pill-farm{color:#15803d;background:rgba(34,197,94,.14)}
+  :root[data-theme=dark] .mobile-detail-note .note-pill{color:#ffc266}:root[data-theme=dark] .mobile-detail-note .note-pill-farm{color:#69dc8d}
+  .mobile-detail-footer{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:2px;min-height:44px}
+  .mobile-detail-time{min-width:0;color:var(--soft);font-size:11px;font-variant-numeric:tabular-nums}
+  .mobile-detail-time .column-created-at-value{display:flex;flex-wrap:wrap;gap:6px;line-height:1.5}
+  .mobile-detail-unavailable{display:flex;align-items:center;justify-content:center;width:72px;height:72px;border:1px solid var(--line);border-radius:14px;color:var(--soft);font-size:11px;flex:none}
+  .mobile-detail-attachment{width:72px;height:72px;min-height:72px;flex:none;padding:4px;border:1px solid var(--line);border-radius:14px;background:var(--surface);overflow:hidden;cursor:zoom-in;touch-action:manipulation;user-select:none}.mobile-detail-attachment img{display:block;width:100%;height:100%;object-fit:contain}
+  .mobile-detail-attachment svg{width:15px;height:15px;pointer-events:none}
+  .mobile-detail-attachment:active{opacity:.65}
+}
