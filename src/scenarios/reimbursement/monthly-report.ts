@@ -26,7 +26,8 @@ export const MONTHLY_PROJECTS = [
   { id: "dorm-rent", name: "宿舍房租", keywords: ["宿舍房租"], description: "OCR 或备注包含「宿舍房租」" },
   { id: "utilities", name: "水电", keywords: ["水电"], description: "OCR 或备注包含「水电」；未命中指定项目时按水电类别兜底" },
   { id: "salary", name: "工资", keywords: ["工资"], description: "OCR 或备注包含「工资」；未命中指定项目时按工资类别兜底" },
-  { id: "unclassified", name: "待归类", keywords: [], description: "未命中指定项目的非食材记录，金额仍计入总额" },
+  { id: "flower", name: "花卉", keywords: [], description: "仅依据 flower 类别，不匹配 OCR 或备注；店长报账来源优先" },
+  { id: "other", name: "其他", keywords: [], description: "不属于以上项目的其他记录，金额计入总额" },
 ];
 export interface MonthlyRecord {
   id: number; channelCode: string | null; reporter: string; expenseCategory: string; amount: number | null; currency: string;
@@ -58,6 +59,7 @@ export function monthlyStoresForScope(scope: MonthlyScope) {
 }
 export function classifyMonthlyRecord(record: MonthlyRecord) {
   if (record.channelCode && MONTHLY_MANAGER_CHANNELS.has(record.channelCode)) return { projectId: "manager", reporter: "张志延" };
+  if (record.expenseCategory === "flower") return { projectId: "flower", reporter: record.reporter.trim() || "未知" };
   const texts = [record.ocrText || "", record.note || ""];
   const includes = (word: string) => texts.some(text => text.includes(word));
   const dorm = includes("宿舍房租");
@@ -65,7 +67,7 @@ export function classifyMonthlyRecord(record: MonthlyRecord) {
     if (project.id === "manager" || project.id === "rent" && dorm) continue;
     if (project.keywords.some(includes)) return { projectId: project.id, reporter: record.reporter.trim() || "未知" };
   }
-  return { projectId: MONTHLY_CATEGORY_FALLBACK.get(record.expenseCategory) || "unclassified", reporter: record.reporter.trim() || "未知" };
+  return { projectId: MONTHLY_CATEGORY_FALLBACK.get(record.expenseCategory) || "other", reporter: record.reporter.trim() || "未知" };
 }
 function currencyOf(record: MonthlyRecord) { return record.currency.trim().toUpperCase() || "未标注币种"; }
 function toCents(amount: number | null) {
@@ -104,7 +106,7 @@ export function monthlyTotals(groups: MonthlyGroup[]) {
     total.amountCents = addCents(total.amountCents, group.amountCents); total.recordCount += group.recordCount; total.missingAmountCount += group.missingAmountCount; total.groupCount++;
     totals.set(group.currency, total);
   }
-  for (const total of totals.values()) total.projectCount = new Set(groups.filter(g => g.currency === total.currency && g.projectId !== "unclassified").map(g => g.projectId)).size;
+  for (const total of totals.values()) total.projectCount = new Set(groups.filter(g => g.currency === total.currency).map(g => g.projectId)).size;
   return [...totals.values()].sort((a, b) => a.currency === "CNY" ? -1 : b.currency === "CNY" ? 1 : a.currency.localeCompare(b.currency));
 }
 export function readMonthlyRecords(input: { month: string; store: string; timeZone: string; scope: MonthlyScope }) {

@@ -80,9 +80,17 @@ test("monthly page, API, details, export and assets enforce explicit permission 
   const rules=await (await request("all",api+query)).json();
   assert.equal(rules.groups.find((g:any)=>g.projectId==="manager").recordCount,3);
   assert.equal(rules.groups.find((g:any)=>g.projectId==="manager").amountCents,2100);
-  assert.equal(rules.groups.find((g:any)=>g.projectId==="unclassified"&&g.reporter==="李晨晨").amountCents,1100);
+  assert.equal(rules.groups.find((g:any)=>g.projectId==="other"&&g.reporter==="李晨晨").amountCents,1100);
   for (const projectId of ["rent", "utilities", "salary"]) assert.equal(rules.groups.find((g:any)=>g.projectId===projectId&&g.reporter==="李晨晨").amountCents,1300);
   assert.equal(rules.groups.find((g:any)=>g.projectId==="dorm-rent"&&g.reporter==="李晨晨").amountCents,1700);
+  seed({reporter:"李晨晨",category:"flower",note:"快驴",ocr:"工资",amount:19});
+  const expanded=await (await request("all",api+query)).json();
+  assert.equal(expanded.groups.find((g:any)=>g.projectId==="flower").amountCents,1900);
+  assert.equal(expanded.groups.find((g:any)=>g.projectId==="other").project,"其他");
+  const flowerDetail=await (await request("all",api+"/details"+query+"&projectId=flower&reporter="+encodeURIComponent("李晨晨")+"&currency=CNY")).json();
+  assert.equal(flowerDetail.total,1);assert.equal(flowerDetail.items[0].expenseCategory,"flower");
+  const projectOptions=await (await request("all",api+"/options")).json();
+  assert.deepEqual(projectOptions.projects.slice(-2).map((p:any)=>p.name),["花卉","其他"]);
   revoked=true;
   assert.equal((await request("all",api+query)).status,403);assert.equal((await request("all",api+"/export"+query)).status,403);assert.equal((await request("all","/expense/monthly")).status,403);
 });

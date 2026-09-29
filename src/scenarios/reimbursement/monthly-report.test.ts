@@ -9,7 +9,7 @@ test("project rules use OCR or notes and resolve overlapping matches without dup
   assert.equal(classifyMonthlyRecord(row({ note: "宿舍房租", expenseCategory: "rent" })).projectId, "dorm-rent");
   assert.equal(classifyMonthlyRecord(row({ note: "快驴 宿舍房租" })).projectId, "kuailv");
   assert.equal(classifyMonthlyRecord(row()).projectId, "other-food");
-  assert.equal(classifyMonthlyRecord(row({ expenseCategory: "other" })).projectId, "unclassified");
+  assert.equal(classifyMonthlyRecord(row({ expenseCategory: "other" })).projectId, "other");
 
 });
 test("reporter order precedes project order, categories merge and currencies never mix", () => {
@@ -54,7 +54,7 @@ test("manager grouping depends only on exact source channels and takes precedenc
     }
   }
   for (const channelCode of ["reimbursement_fuzzy", "reimbursement_peanut", "reimbursement_fuzzyqz", "unknown_manager", null]) {
-    assert.equal(classifyMonthlyRecord(row({ channelCode, expenseCategory: "manager_reimbursement", note: "店长报账", ocrText: "店长报账群" })).projectId, "unclassified");
+    assert.equal(classifyMonthlyRecord(row({ channelCode, expenseCategory: "manager_reimbursement", note: "店长报账", ocrText: "店长报账群" })).projectId, "other");
     assert.equal(classifyMonthlyRecord(row({ channelCode, note: "店长报账 快驴" })).projectId, "kuailv");
   }
 });
@@ -65,11 +65,23 @@ test("rent, utilities and salary fall back to category after named project match
     assert.equal(classifyMonthlyRecord(row({ expenseCategory, note: "快驴" })).projectId, "kuailv");
   }
   assert.equal(classifyMonthlyRecord(row({ expenseCategory: "rent", note: "宿舍房租" })).projectId, "dorm-rent");
-  for (const expenseCategory of ["constructor", "__proto__", "unknown"]) assert.equal(classifyMonthlyRecord(row({ expenseCategory })).projectId, "unclassified");
+  for (const expenseCategory of ["constructor", "__proto__", "unknown"]) assert.equal(classifyMonthlyRecord(row({ expenseCategory })).projectId, "other");
   const groups = aggregateMonthlyRecords([
     row({ id: 1, channelCode: "reimbursement_fuzzy_manager", amount: 20, reporter: "李晨晨" }),
     row({ id: 2, channelCode: "reimbursement_fuzzy_manager", amount: 30, reporter: "邓振国", expenseCategory: "salary" }),
     row({ id: 3, expenseCategory: "rent", amount: 40 }),
   ]);
   assert.deepEqual(groups.map(g => [g.projectId, g.reporter, g.amountCents, g.recordCount]), [["manager", "张志延", 5000, 2], ["rent", "张志延", 4000, 1]]);
+});
+
+test("flowers use category only, after manager source and before keyword matches", () => {
+  for (const note of ["", "快驴", "工资", "宿舍房租"]) assert.equal(classifyMonthlyRecord(row({expenseCategory:"flower",note})).projectId,"flower");
+  assert.equal(classifyMonthlyRecord(row({expenseCategory:"other",note:"花卉",ocrText:"鲜花"})).projectId,"other");
+  assert.equal(classifyMonthlyRecord(row({expenseCategory:"food",note:"花卉"})).projectId,"other-food");
+  assert.deepEqual(classifyMonthlyRecord(row({expenseCategory:"flower",channelCode:"reimbursement_fuzzy_manager",reporter:"李晨晨"})),{projectId:"manager",reporter:"张志延"});
+  const groups=aggregateMonthlyRecords([row({expenseCategory:"other",amount:3}),row({expenseCategory:"planned_expense",amount:4}),row({expenseCategory:"flower",amount:5}),row({expenseCategory:"salary",amount:6})]);
+  assert.deepEqual(groups.map(g=>g.projectId),["salary","flower","other"]);
+  assert.equal(groups[2].recordCount,2);assert.equal(groups[2].amountCents,700);
+  assert.equal(monthlyTotals(groups)[0].projectCount,3);
+  assert.ok(monthlyCsv(groups).includes('"花卉"'));assert.ok(monthlyCsv(groups).includes('"其他"'));assert.ok(!monthlyCsv(groups).includes('待归类'));
 });
