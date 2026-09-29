@@ -1,6 +1,6 @@
 import type { RequestHandler } from "express";
 import type { AdminSession } from "./auth.js";
-import { validateExpenseAuthorization } from "./authorization.js";
+import { submissionChannels, validateExpenseAuthorization } from "./authorization.js";
 
 export interface GatewayAuthConfig { mode: "legacy" | "unified"; url: string; token: string }
 export function gatewayAuthConfig(env: NodeJS.ProcessEnv = process.env): GatewayAuthConfig {
@@ -16,6 +16,28 @@ export function gatewayAuthConfig(env: NodeJS.ProcessEnv = process.env): Gateway
   }
   return { mode, url, token };
 }
+
+export async function resolveShortcutAccount(config: GatewayAuthConfig, displayName: string, channelCode: string): Promise<AdminSession | undefined> {
+  const query = new URLSearchParams({ displayName });
+  const reply = await fetch(`${config.url.replace(/\/$/, "")}/internal/shortcut-accounts/expense?${query}`, {
+    redirect: "error", signal: AbortSignal.timeout(2000),
+    headers: { Authorization: `Bearer ${config.token}` },
+  });
+  if (!reply.ok) {
+    await reply.body?.cancel();
+    throw new Error("Shortcut account lookup failed.");
+  }
+  const data = await reply.json();
+  if (data?.success !== true || !Array.isArray(data.matches)) throw new Error("Invalid shortcut account lookup.");
+  const matches: AdminSession[] = data.matches.map((entry: { account?: { displayName?: unknown } }) => {
+    // Do not use the authorization validator's legacy username fallback here.
+    if (entry?.account?.displayName !== displayName) throw new Error("Shortcut account name mismatch.");
+    return validateExpenseAuthorization(entry);
+  }).filter((session: AdminSession) => submissionChannels(session).includes(channelCode));
+  // A shared Shortcut token cannot disambiguate people with the same real name.
+  return matches.length === 1 ? matches[0] : undefined;
+}
+
 export function createGatewayAuth(config: GatewayAuthConfig): RequestHandler {
   return async (request, response, next) => {
     response.set("Cache-Control", "no-store");

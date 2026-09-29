@@ -5,6 +5,7 @@ export type ReimbursementManagerStore = (typeof REIMBURSEMENT_MANAGER_STORES)[nu
 
 export interface ReimbursementAccessAccountConfig {
   accountId: string;
+  displayName?: string;
   managerStores: ReimbursementManagerStore[];
   password: string;
   role: Exclude<ReimbursementAccountRole, "admin">;
@@ -55,6 +56,7 @@ export function parseReimbursementAccessAccounts(value: string | undefined): Rei
     const record = item as Record<string, unknown>;
     const accountId = trimmed(record.accountId);
     const username = trimmed(record.username);
+    const displayName = trimmed(record.displayName);
     const password = trimmed(record.password);
     const role = trimmed(record.role);
     if (!accountId || !username || !password || !role) {
@@ -99,6 +101,7 @@ export function parseReimbursementAccessAccounts(value: string | undefined): Rei
     accounts.push({
       accountId,
       username,
+      ...(displayName ? { displayName } : {}),
       password,
       role,
       managerStores: stores.sort() as ReimbursementManagerStore[],

@@ -17,6 +17,7 @@ test("parseReimbursementAccessAccounts supports partners and multi-store manager
     {
       accountId: "manager-001",
       username: "manager",
+      displayName: "店长姓名",
       password: "manager-password",
       role: "manager",
       managerStores: ["fuzzyqz", "fuzzy", "fuzzy"],
@@ -24,6 +25,8 @@ test("parseReimbursementAccessAccounts supports partners and multi-store manager
   ]));
 
   assert.equal(result.error, undefined);
+  assert.equal(result.accounts[1]?.displayName, "店长姓名");
+  assert.equal(result.accounts[0]?.displayName, undefined);
   assert.deepEqual(result.accounts[1]?.managerStores, ["fuzzy", "fuzzyqz"]);
   assert.deepEqual(getAllowedSubmissionChannelCodes({
     accountId: "manager-001",

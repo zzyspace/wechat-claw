@@ -13,6 +13,7 @@ import type { ReimbursementExtractor } from "../scenarios/reimbursement/batch-im
 import { saveRawMessage } from "../core/storage/raw-message-repository.js";
 import { createApp } from "./app.js";
 import type { GatewayAuthConfig } from "./gateway-auth.js";
+import { getDatabase } from "../core/storage/database.js";
 
 test("reimbursement nginx keeps shortcut Bearer auth public and protects admin routes", () => {
   const nginx = fs.readFileSync(
@@ -681,7 +682,7 @@ test("shortcut reimbursement API recognizes, persists, receipts, and deduplicate
   }
 });
 
-test("shortcut reimbursement API attributes matching manager uploads for manager visibility", async () => {
+test("legacy Shortcut attribution uses explicit real names for manager visibility", async () => {
   applyEnv({
     WECHATY_ADMIN_USERNAME: "admin",
     WECHATY_ADMIN_PASSWORD: "secret-pass",
@@ -689,6 +690,7 @@ test("shortcut reimbursement API attributes matching manager uploads for manager
       {
         accountId: "shortcut-manager-001",
         username: "shortcut-manager",
+        displayName: "快捷店长",
         password: "manager-secret-pass",
         role: "manager",
         managerStores: ["fuzzy"],
@@ -708,7 +710,7 @@ test("shortcut reimbursement API attributes matching manager uploads for manager
       body: createShortcutForm({
         channelCode: "reimbursement_fuzzy_manager",
         image: "manager-shortcut-image",
-        reporter: "shortcut-manager",
+        reporter: "快捷店长",
       }),
     });
     assert.equal(response.status, 201);
@@ -719,9 +721,10 @@ test("shortcut reimbursement API attributes matching manager uploads for manager
     });
     assert.equal(detailResponse.status, 200);
     const report = (await detailResponse.json()).report;
-    assert.equal(report.reporter, "shortcut-manager");
+    assert.equal(report.reporter, "快捷店长");
     assert.equal(report.submittedByAccountId, "shortcut-manager-001");
     assert.equal(report.submittedByUsername, "shortcut-manager");
+    assert.equal(report.submittedByDisplayName, "快捷店长");
     assert.equal(report.submittedByRole, "manager");
 
     const listResponse = await fetch(`${server.baseUrl}/expense/api/reports?limit=1000`, {
@@ -742,7 +745,7 @@ test("shortcut reimbursement API attributes matching manager uploads for manager
       body: createShortcutForm({
         channelCode: "reimbursement_peanut_manager",
         image: "other-store-shortcut-image",
-        reporter: "shortcut-manager",
+        reporter: "快捷店长",
       }),
     });
     assert.equal(otherStoreResponse.status, 201);
@@ -756,9 +759,129 @@ test("shortcut reimbursement API attributes matching manager uploads for manager
       { headers: createAdminAuthHeaders("shortcut-manager", "manager-secret-pass") },
     );
     assert.equal(otherStoreDetailResponse.status, 404);
+
+    const loginNameUpload = await fetch(`${server.baseUrl}/expense/api/shortcut/reports`, {
+      method: "POST",
+      headers: { Authorization: "Bearer shortcut-secret", "Idempotency-Key": "legacy-shortcut-login-name-0001" },
+      body: createShortcutForm({ channelCode: "reimbursement_fuzzy_manager", reporter: "shortcut-manager" }),
+    });
+    assert.equal(loginNameUpload.status, 201);
+    assert.equal(getAdminReimbursementReportDetail((await loginNameUpload.json()).report.id)!.submittedByAccountId, undefined);
   } finally {
     await server.close();
   }
+});
+
+test("unified Shortcut attribution matches real names, enforces submission scopes and preserves idempotency", async (t) => {
+  applyEnv({ WECHATY_REIMBURSEMENT_SHORTCUT_API_TOKEN: "real-name-shortcut-token",
+    // This stale legacy account must never win in unified mode.
+    WECHATY_REIMBURSEMENT_ACCOUNTS_JSON: JSON.stringify([{ accountId: "wrong-legacy-id", username: "张志延", displayName: "张志延", password: "fixture", role: "manager", managerStores: ["fuzzy"] }]),
+  });
+  let gatewayStatus = 200;
+  let responseOverride: unknown;
+  let lookups = 0;
+  let extracted = 0;
+  const authorization = (accountId = "reimbursement-admin", displayName = "张志延", role = "admin") => ({ success: true,
+    account: { accountId, username: "ryanzzy", displayName, enabled: true, version: 1 },
+    access: { accountId, app: "expense", role, enabled: true, version: 1, permissions: ["report:view", "report:submit"],
+      config: { viewScope: { ownership: "any", stores: "all" as string | string[], channels: "all" as string | string[] },
+        submitScope: { stores: "all" as string | string[], channels: "all" as string | string[] } },
+    },
+  });
+  let candidates = [authorization()];
+  const gateway = createServer((request, response) => {
+    const url = new URL(request.url!, "http://localhost");
+    assert.equal(url.pathname, "/internal/shortcut-accounts/expense");
+    assert.equal(request.headers.authorization, "Bearer fixture-real-name-internal-token");
+    assert.equal(request.headers.cookie, undefined);
+    lookups += 1;
+    response.writeHead(gatewayStatus, { "Content-Type": "application/json" });
+    response.end(JSON.stringify(responseOverride ?? { success: true, matches: candidates.filter((entry) => entry.account.displayName === url.searchParams.get("displayName")) }));
+  });
+  gateway.listen(0, "127.0.0.1");
+  await once(gateway, "listening");
+  t.after(() => new Promise<void>((resolve, reject) => gateway.close((error) => error ? reject(error) : resolve())));
+  const address = gateway.address();
+  assert(address && typeof address !== "string");
+  const server = await startServer(createShortcutTestExtractor(() => { extracted += 1; }), {
+    mode: "unified", url: `http://127.0.0.1:${address.port}`, token: "fixture-real-name-internal-token",
+  });
+  t.after(() => server.close());
+  const upload = (key: string, reporter = "张志延", channelCode = "reimbursement_fuzzy") => fetch(`${server.baseUrl}/expense/api/shortcut/reports`, {
+    method: "POST", headers: { Authorization: "Bearer real-name-shortcut-token", "Idempotency-Key": `real-name-${key}` },
+    body: createShortcutForm({ reporter, channelCode, image: `image-${key}` }),
+  });
+  const success = await upload("administrator");
+  assert.equal(success.status, 201);
+  const reportId = (await success.json()).report.id;
+  const report = getAdminReimbursementReportDetail(reportId)!;
+  assert.equal(report.reporter, "张志延");
+  assert.equal(report.submittedByAccountId, "reimbursement-admin");
+  assert.equal(report.submittedByUsername, "ryanzzy");
+  assert.equal(report.submittedByDisplayName, "张志延");
+  assert.equal(report.submittedByRole, "admin");
+  assert.equal(extracted, 1);
+
+  gatewayStatus = 503;
+  const duplicate = await upload("administrator");
+  assert.equal(duplicate.status, 200);
+  assert.equal((await duplicate.json()).report.id, reportId);
+  assert.equal(lookups, 1, "completed retries do not need a new identity lookup");
+  assert.equal(extracted, 1);
+  assert.equal((await upload("administrator", "另一人")).status, 409);
+
+  const db = getDatabase();
+  const beforeRawCount = db.prepare("SELECT count(*) AS count FROM raw_messages").get();
+  const failed = await upload("service-failure");
+  assert.equal(failed.status, 503);
+  assert.equal(extracted, 1);
+  assert.deepEqual(db.prepare("SELECT count(*) AS count FROM raw_messages").get(), beforeRawCount);
+  gatewayStatus = 200;
+  assert.equal((await upload("service-failure")).status, 201, "same key can retry after lookup failure");
+
+  const malformedCandidate = authorization();
+  malformedCandidate.account.username = "张志延";
+  const { displayName: _ignored, ...accountWithoutRealName } = malformedCandidate.account;
+  const beforeMalformedCount = db.prepare("SELECT count(*) AS count FROM raw_messages").get();
+  for (const [index, malformed] of [
+    { success: true },
+    { success: true, matches: [{ ...malformedCandidate, account: accountWithoutRealName }] },
+    { success: true, matches: [{ ...malformedCandidate, account: { ...malformedCandidate.account, enabled: false } }] },
+  ].entries()) {
+    responseOverride = malformed;
+    assert.equal((await upload(`invalid-gateway-${index}`)).status, 503);
+    assert.deepEqual(db.prepare("SELECT count(*) AS count FROM raw_messages").get(), beforeMalformedCount);
+  }
+  responseOverride = undefined;
+
+  const unowned = async (key: string, reporter = "张志延", channelCode = "reimbursement_fuzzy") => {
+    const reply = await upload(key, reporter, channelCode);
+    assert.equal(reply.status, 201);
+    const saved = getAdminReimbursementReportDetail((await reply.json()).report.id)!;
+    assert.equal(saved.reporter, reporter.trim());
+    assert.equal(saved.submittedByAccountId, undefined);
+    assert.equal(saved.submittedByUsername, undefined);
+  };
+  await unowned("login-name", "ryanzzy");
+  await unowned("old-name", "Ryan。");
+  await unowned("punctuation", "张志延。");
+  candidates = [authorization(), authorization("same-real-name")];
+  await unowned("ambiguous-name");
+  candidates = [authorization()];
+  candidates[0].access.permissions = ["report:view"];
+  await unowned("no-submit-permission");
+  candidates = [authorization("real-name-manager-001", "张志延", "manager")];
+  candidates[0].access.config.submitScope = { stores: ["fuzzy"], channels: ["reimbursement_fuzzy_manager"] };
+  await unowned("outside-store", "张志延", "reimbursement_peanut_manager");
+  const manager = await upload("manager-name", " 张志延 ", "reimbursement_fuzzy_manager");
+  assert.equal(manager.status, 201);
+  assert.equal(getAdminReimbursementReportDetail((await manager.json()).report.id)!.submittedByAccountId, "real-name-manager-001");
+  candidates = [authorization("real-name-partner-001", "新姓名", "partner")];
+  await unowned("name-after-edit");
+  const renamed = await upload("new-real-name", "新姓名");
+  assert.equal(renamed.status, 201);
+  assert.equal(getAdminReimbursementReportDetail((await renamed.json()).report.id)!.submittedByAccountId, "real-name-partner-001");
+  assert.equal(getAdminReimbursementReportDetail(reportId)!.submittedByDisplayName, "张志延", "later name changes do not rewrite history");
 });
 
 test("createApp serves reimbursement admin page, list, detail, and attachment routes", async () => {
@@ -1669,8 +1792,19 @@ test("unified self deletion includes attributed shortcut uploads and rejects oth
   });
   let selfDeleteEnabled = true;
   const gateway = createServer((request, response) => {
-    assert.equal(request.url, "/internal/authorization/expense");
     assert.equal(request.headers.authorization, "Bearer fixture-self-delete-gateway-token");
+    if (request.url?.startsWith("/internal/shortcut-accounts/expense?")) {
+      assert.equal(new URL(request.url, "http://localhost").searchParams.get("displayName"), "归属店长");
+      response.writeHead(200, { "Content-Type": "application/json" });
+      response.end(JSON.stringify({ success: true, matches: [{ success: true,
+        account: { accountId: ownerId, username, displayName: "归属店长", enabled: true, version: 1 },
+        access: { accountId: ownerId, app: "expense", role: "manager", enabled: true, version: 1, permissions: ["report:submit"],
+          config: { viewScope: { ownership: "self", stores: [], channels: [] }, submitScope: { stores: ["fuzzy"], channels: ["reimbursement_fuzzy_manager"] } },
+        },
+      }] }));
+      return;
+    }
+    assert.equal(request.url, "/internal/authorization/expense");
     const identity = request.headers.cookie?.replace("fixture=", "");
     if (!["owner", "other", "reader", "full"].includes(identity ?? "")) {
       response.writeHead(401).end();
@@ -1707,7 +1841,7 @@ test("unified self deletion includes attributed shortcut uploads and rejects oth
   const upload = await fetch(`${server.baseUrl}/expense/api/shortcut/reports`, {
     method: "POST",
     headers: { Authorization: "Bearer self-delete-shortcut-token", "Idempotency-Key": "self-delete-shortcut-upload-0001" },
-    body: createShortcutForm({ channelCode: "reimbursement_fuzzy_manager", reporter: username }),
+    body: createShortcutForm({ channelCode: "reimbursement_fuzzy_manager", reporter: "归属店长" }),
   });
   assert.equal(upload.status, 201);
   const ownedId = (await upload.json()).report.id;

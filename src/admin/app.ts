@@ -1,4 +1,4 @@
-import { createGatewayAuth, gatewayAuthConfig, type GatewayAuthConfig } from "./gateway-auth.js";
+import { createGatewayAuth, gatewayAuthConfig, resolveShortcutAccount, type GatewayAuthConfig } from "./gateway-auth.js";
 import { actionChannels, hasPermission, requirePermission, submissionChannels, canViewResource, canDeleteReport, reportAccessScope } from "./authorization.js";
 import crypto from "node:crypto";
 import fs from "node:fs";
@@ -638,12 +638,6 @@ export function createApp(input?: {
           maxLength: MAX_SHORTCUT_REPORTER_LENGTH,
           required: true,
         });
-        const submittedBy = (config.reimbursementAccounts ?? []).find(
-          (account) =>
-            account.role === "manager" &&
-            account.username === reporter &&
-            getAllowedSubmissionChannelCodes(account).includes(channel.code),
-        );
         const note = parseShortcutText(request.body?.note, {
           field: "note",
           label: "备注",
@@ -692,6 +686,21 @@ export function createApp(input?: {
         activeShortcutRequestKeys.add(idempotencyKey);
         ownsActiveShortcutKey = true;
 
+        let submittedBy: ReimbursementAccessPrincipal | undefined;
+        if (gateway.mode === "unified") {
+          try {
+            submittedBy = await resolveShortcutAccount(gateway, reporter, channel.code);
+          } catch {
+            response.status(503).json({ success: false, error: { message: "账号归属服务暂不可用，请稍后使用同一份报账重试。" } });
+            return;
+          }
+        } else {
+          const matches = (config.reimbursementAccounts ?? []).filter((account) =>
+            account.role === "manager" && account.displayName === reporter &&
+            getAllowedSubmissionChannelCodes(account).includes(channel.code));
+          submittedBy = matches.length === 1 ? matches[0] : undefined;
+        }
+
         const attachment = existingRawMessage?.attachments[0] ??
           saveUploadedReimbursementImage({
             buffer: request.file.buffer,
@@ -713,6 +722,7 @@ export function createApp(input?: {
             source: "shortcut_api",
             submittedByAccountId: submittedBy?.accountId,
             submittedByUsername: submittedBy?.username,
+            submittedByDisplayName: submittedBy?.displayName,
             submittedByRole: submittedBy?.role,
             timeZone: config.timeZone,
           },

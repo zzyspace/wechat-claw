@@ -433,9 +433,12 @@ npm run admin:dev
 - `/expense/submit` 是唯一统一报账入口；服务端按 `admin`、`partner`、`manager` 角色返回并校验可提交门店
 - `WECHATY_ADMIN_GUEST_USERNAME/WECHATY_ADMIN_GUEST_PASSWORD` 已废弃且不会授予登录权限
 - 店长报账以不可编辑的 `submitted_by_account_id` 记录账号所有权；同门店的不同店长互不可见，历史微信群报账因没有该字段暂不向店长展示
-- 统一账号模式可单独授予 `report:delete:self`（删除本人上传），需同时有 `report:view`。它仅允许删除查看范围内 `submitted_by_account_id` 与登录账号一致的记录，包含已有账号归属的快捷指令记录；无归属记录不按报账人姓名追认。原 `report:delete` 仍可删除查看范围内的所有记录。快捷指令的归属匹配方式保持不变，代表系统登记的账号归属。删除仍为物理删除报账记录，原始消息和附件文件保留，页面没有恢复功能。
+- 统一账号模式可单独授予 `report:delete:self`（删除本人上传），需同时有 `report:view`。它仅允许删除查看范围内 `submitted_by_account_id` 与登录账号一致的记录，包含已有账号归属的快捷指令记录；无归属记录不按报账人姓名追认。原 `report:delete` 仍可删除查看范围内的所有记录。删除仍为物理删除报账记录，原始消息和附件文件保留，页面没有恢复功能。
 - 修改管理员或角色账号配置后，执行 `sudo systemctl restart wechat-claw-reimbursement-admin.service admin-auth-gateway.service` 使新配置生效
 - 快捷指令接口使用独立 Bearer Token，不接受后台 Basic Auth；请求体为 `multipart/form-data`，包含 `image`、`note`、`channelCode`、`reporter`，并要求 8 至 256 个可打印 ASCII 字符的 `Idempotency-Key` 请求头
+- 统一账号模式下，快捷指令的 `reporter` 去掉首尾空格后，与账号管理中的真实姓名 `displayName` 精确匹配，不回退匹配登录名。每次新报账实时查询 Gateway，只有账号及报账授权均启用、具备 `report:submit` 且允许提交该门店的唯一候选，才保存账号 ID、登录名、真实姓名及角色快照；适用于管理员、合伙人和店长。未匹配或同门店存在多个候选时仍接收报账，但不自动关联账号。
+- 账号归属查询失败时，在保存图片和识别前返回 `503`，使用原 `Idempotency-Key` 重试即可；已完成报账的相同请求直接返回原记录，不重新查询姓名或改写历史归属。姓名匹配是共享快捷指令 Token 下的归属兼容规则，不是个人身份认证。
+- 旧账号模式仅使用 `WECHATY_REIMBURSEMENT_ACCOUNTS_JSON` 中显式配置的 `displayName` 匹配唯一且门店授权相符的店长；未配置真实姓名时不会再使用登录名认领。发布时先更新 Gateway 的内部姓名查询接口，再更新报账服务。
 - 快捷指令接口会同步调用现有报账模型并写入正式报账链路；成功响应中的 `receipt` 可直接交给“显示结果”动作
 - `deploy/deploy-wechat-claw.sh` 现在会自动：
   - 安装 [deploy/wechat-claw-reimbursement-admin.service](/Users/ryan/DataDisk/Work/AI/wechat-claw/deploy/wechat-claw-reimbursement-admin.service)
