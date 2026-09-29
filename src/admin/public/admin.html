@@ -2241,6 +2241,7 @@ body > .topbar .center-switcher-menu { top: calc(100% + 9px); left: auto; }
         batchTask: null,
         batchTaskPollTimer: null,
         deletingIds: new Set(),
+        initialized: false,
         editingReport: null,
         editOptionsRequestId: 0,
         editCategoriesReady: false,
@@ -3321,6 +3322,12 @@ body > .topbar .center-switcher-menu { top: calc(100% + 9px); left: auto; }
         };
       }
 
+      function linkedReportId(hash = location.hash) {
+        const match = /^#report=([1-9]\d*)$/.exec(hash);
+        const id = match ? Number(match[1]) : NaN;
+        return Number.isSafeInteger(id) ? id : null;
+      }
+
       function writeFiltersFromUrl() {
         const params = new URLSearchParams(location.search);
         for (const name of [
@@ -3364,7 +3371,7 @@ body > .topbar .center-switcher-menu { top: calc(100% + 9px); left: auto; }
         }
 
         const query = params.toString();
-        history.replaceState(null, "", query ? `${BASE_PATH}?${query}` : BASE_PATH);
+        history.replaceState(null, "", (query ? `${BASE_PATH}?${query}` : BASE_PATH) + (linkedReportId() ? location.hash : ""));
       }
 
       function buildListParams() {
@@ -3555,6 +3562,7 @@ body > .topbar .center-switcher-menu { top: calc(100% + 9px); left: auto; }
         detailAbortController?.abort();
         detailAbortController = null;
         const wasOpen = !elements.detailModal.hidden;
+        if (linkedReportId()) history.replaceState(null, "", `${location.pathname}${location.search}`);
         elements.detailModal.hidden = true;
         elements.detailDialog.inert = false;
         elements.detailDialog.removeAttribute("aria-busy");
@@ -3816,6 +3824,7 @@ body > .topbar .center-switcher-menu { top: calc(100% + 9px); left: auto; }
       }
 
       async function loadDetail(reportId) {
+        history.replaceState(null, "", `${location.pathname}${location.search}#report=${reportId}`);
         const requestVersion = ++detailRequestVersion;
         detailAbortController?.abort();
         const controller = new AbortController();
@@ -4784,6 +4793,9 @@ body > .topbar .center-switcher-menu { top: calc(100% + 9px); left: auto; }
             await loadManualImportOptions();
           }
           await loadReports();
+          state.initialized = true;
+          const requestedReportId = linkedReportId();
+          if (requestedReportId) await loadDetail(requestedReportId);
           if (state.canImport) {
             resumeStoredBatchImportTask();
           }
@@ -4792,6 +4804,12 @@ body > .topbar .center-switcher-menu { top: calc(100% + 9px); left: auto; }
         }
       }
 
+      window.addEventListener("hashchange", () => {
+        if (!state.initialized) return;
+        const reportId = linkedReportId();
+        if (reportId) void loadDetail(reportId);
+        else if (!elements.detailModal.hidden) closeDetailModal();
+      });
       writeFiltersFromUrl();
       syncDateRangeLabel();
       void initialize();

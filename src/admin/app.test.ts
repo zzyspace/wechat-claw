@@ -1928,3 +1928,9 @@ test("edit category options require edit permission, independent of import permi
   assert.equal(payload.channels,undefined);assert.equal((await request("editor","manual-import-options")).status,403);
   assert.equal((await request("reader","edit-report-options")).status,403);assert.equal((await request("importer","edit-report-options")).status,403);
 });
+
+test("report detail deep links accept only safe positive record ids", () => {
+  const html=fs.readFileSync(path.resolve(process.cwd(),"src/admin/public/admin.html"),"utf8");
+  const code=html.slice(html.indexOf("      function linkedReportId("),html.indexOf("      function writeFiltersFromUrl("));
+  for (const [hash,expected] of [["#report=123",123],["#report=0",null],["#report=-1",null],["#report=1x",null],["#report=9007199254740992",null],["#report=1&other=2",null],["",null]] as const) assert.equal(runInNewContext(code+"\nlinkedReportId(hash)",{hash}),expected);
+});

@@ -287,3 +287,11 @@
   .mobile-detail-attachment svg{width:15px;height:15px;pointer-events:none}
   .mobile-detail-attachment:active{opacity:.65}
 }
+
+.project-table [data-group-row],.detail-record-table [data-record-id],.mobile-detail-record[data-record-id]{cursor:pointer}
+.record-detail-link{color:inherit;text-decoration:none}
+.record-detail-link:focus-visible{outline:2px solid var(--brand);outline-offset:3px;border-radius:3px}
+@media(max-width:740px){
+  .mobile-detail-amount{position:relative;top:-2px}
+  .mobile-detail-attachment,.mobile-detail-unavailable{transform:translateY(-4px)}
+}
