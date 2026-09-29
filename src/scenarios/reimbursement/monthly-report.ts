@@ -130,7 +130,7 @@ export function monthlyDetails(records: MonthlyRecord[], selection: { projectId:
   const page = selected.slice(selection.offset, selection.offset + selection.limit);
   const attachments = canAttachment ? listAdminBillAttachmentsByReportIds(page.map(record => record.id)) : new Map();
   return { total: selected.length, offset: selection.offset, limit: selection.limit, items: page.map(record => ({
-    id: record.id, createdAt: record.createdAt, reporter: record.reporter,
+    id: record.id, createdAt: record.createdAt, reporter: record.reporter, amount: record.amount, currency: record.currency,
     expenseCategory: record.expenseCategory, expenseCategoryLabel: getReimbursementExpenseCategoryLabel(record.expenseCategory), note: record.note,
     ...(canAttachment ? { billAttachment: attachments.get(record.id) } : {}),
   })) };

@@ -65,7 +65,7 @@ test("monthly page, API, details, export and assets enforce explicit permission 
   assert.equal((await request("owner",api+"?month=2026-09&store=peanut")).status,404);
   assert.equal((await request("owner",api+"/export?month=2026-09&store=peanut")).status,404);
   const selection="&projectId=manager&reporter="+encodeURIComponent("张志延")+"&currency=CNY";
-  const details=await (await request("owner",api+"/details"+query+selection)).json();assert.equal(details.total,1);assert.equal(details.items[0].reporter,"李晨晨");assert.equal(details.items[0].billAttachment.id,attachment);assert.doesNotMatch(JSON.stringify(details.items),/ocrText|localPath|submittedBy|amount/);
+  const details=await (await request("owner",api+"/details"+query+selection)).json();assert.equal(details.total,1);assert.equal(details.items[0].reporter,"李晨晨");assert.equal(details.items[0].billAttachment.id,attachment);assert.equal(details.items[0].amount,5);assert.equal(details.items[0].currency,"CNY");assert.doesNotMatch(JSON.stringify(details.items),/ocrText|localPath|submittedBy/);
   const noAttachments=await (await request("no-attachments",api+"/details"+query+selection)).json();assert.equal(noAttachments.canAttachment,false);assert(noAttachments.items.every((r:any)=>!("billAttachment" in r)));
   assert.equal((await request("no-attachments",`/expense/api/attachments/${attachment}/content`)).status,403);
   assert.equal((await request("owner",`/expense/api/attachments/${attachment}/content`)).status,200);

@@ -38,7 +38,7 @@
 
 - `GET /options`：允许门店、项目规则、固定报账人顺序、当前月份、附件能力。
 - `GET /?month=YYYY-MM&store=fuzzy`：整月汇总。读取完整月度记录，不受普通列表 1000 条分页上限影响。
-- `GET /details?month=...&store=...&projectId=...&reporter=...&currency=...&offset=0&limit=50`：五列详情，最多每页 100 条，保留原始姓名。只返回创建时间、报账人、类别、备注、附件预览元数据和内部定位 ID；不返回 OCR、账号标识或文件路径。
+- `GET /details?month=...&store=...&projectId=...&reporter=...&currency=...&offset=0&limit=50`：六列详情，最多每页 100 条，保留原始姓名。只返回创建时间、报账人、类别、备注、附件预览元数据、金额、币种和内部定位 ID；不返回 OCR、账号标识或文件路径。
 - `GET /export?month=...&store=...&currency=...&reporter=...&q=...`：按照相同排序和筛选导出 CSV。用户文本进行公式注入转义，负数金额仍保留数值格式。
 
 页面为同源原生 HTML/CSS/JS，无 React/CDN 或内联脚本依赖，独立 CSP 已在真实浏览器下核验。附件缩略图沿用报账后台的主图片；预览支持已加载条目间切换。
