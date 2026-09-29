@@ -620,7 +620,7 @@ export function createApp(input?: {
     response.set("Content-Security-Policy", "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' blob:; connect-src 'self'; font-src 'self'; base-uri 'none'; frame-ancestors 'self'; form-action 'self'");
     response.sendFile(path.join(staticDir, "monthly", "index.html"));
   });
-  for (const asset of ["app.js", "styles.css"]) {
+  for (const asset of ["app.js", "styles.css", "report-detail.js", "report-detail.css"]) {
     app.get(`${ADMIN_BASE_PATH}/monthly/${asset}`, ...monthlyPageAuth, (_request, response) => response.sendFile(path.join(staticDir, "monthly", asset)));
   }
   app.post(

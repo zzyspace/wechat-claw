@@ -1,3 +1,4 @@
+import { buildReportDetailAssets } from "./build-report-detail-assets.mjs";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -16,3 +17,5 @@ fs.cpSync(sourceDir, targetDir, {
   force: true,
   recursive: true,
 });
+
+buildReportDetailAssets(sourceDir, targetDir);

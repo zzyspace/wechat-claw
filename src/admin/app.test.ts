@@ -165,6 +165,11 @@ test("detail presentation preserves fields and honors attachment and edit permis
         BASE_PATH: "/expense", DEFAULT_TIME_ZONE: "Asia/Shanghai", STORE_LABELS_BY_CHANNEL_CODE: new Map(),
       });
       const markup = elements.detailContent.innerHTML;
+      const sharedSource = fs.readFileSync(path.resolve(process.cwd(), "dist/admin/public/monthly/report-detail.js"), "utf8");
+      const sharedMarkup = runInNewContext(`${sharedSource}\nwindow.ExpenseReportDetail.render(report, options)`, {
+        window: {}, report, options: { canAttachment, canEdit, timeZone: "Asia/Shanghai" },
+      });
+      assert.equal(sharedMarkup, markup, "Monthly source details must match the canonical admin template");
       assert.equal(markup.includes("data-detail-edit"), canEdit);
       assert.equal(markup.includes("/expense/api/attachments/9/content"), canAttachment);
       assert.equal(markup.includes("/expense/api/attachments/10/content"), canAttachment);

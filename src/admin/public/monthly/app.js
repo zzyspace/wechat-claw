@@ -2,7 +2,7 @@
   'use strict';
   const API = '/expense/api/monthly-reports';
   const $ = id => document.getElementById(id);
-  const s = { options: null, data: null, store: '', month: '', currency: 'CNY', reporter: '', query: '', loading: true, error: '', serial: 0, group: null, details: [], detailTotal: 0, detailLoading: false, detailError: '', detailSerial: 0, canAttachment: false, attachments: [], attachmentIndex: 0 };
+  const s = { sourceSerial:0, editSerial:0, sourceSaving:false, sourceChanged:false, options: null, data: null, store: '', month: '', currency: 'CNY', reporter: '', query: '', loading: true, error: '', serial: 0, group: null, details: [], detailTotal: 0, detailLoading: false, detailError: '', detailSerial: 0, canAttachment: false, attachments: [], attachmentIndex: 0 };
   const icons = {receipt:'M6 3h12v18l-3-2-3 2-3-2-3 2V3Zm3 5h6m-6 4h6',left:'m14 6-6 6 6 6',right:'m9 6 6 6-6 6',calendar:'M4 5h16v16H4V5Zm0 5h16M8 3v4m8-4v4',search:'M21 21l-5-5M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16',download:'M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5',moon:'M20 15A9 9 0 0 1 9 3a9 9 0 1 0 11 12Z',sun:'M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5',close:'m6 6 12 12M6 18 18 6',info:'M12 11v6m0-10v.1M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0',store:'M4 10v11h16V10M3 10l2-7h14l2 7M9 21v-7h6v7M3 10c0 4 6 4 6 0 0 4 6 4 6 0 0 4 6 4 6 0'};
   const icon = name => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${icons[name] || ''}"/></svg>`;
   const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -75,7 +75,7 @@
     } catch(error) { if(serial===s.serial&&error.name!=='AbortError')s.error=error.message; }
     finally { if(serial===s.serial){s.loading=false;render();} }
   }
-  function closeDialog(id) { if($(id).open)$(id).close(); }
+  function closeDialog(id) { if((id==='sourceEditDialog'||id==='sourceReportDialog')&&s.sourceSaving)return; if($(id).open)$(id).close(); }
   function modalTop(title,id,label) { return `<div class="drawer-inner"><div class="drawer-top"><span>${esc(label)}</span><button class="icon-button" data-close="${id}" aria-label="关闭面板">${icon('close')}</button></div><h2 id="${id==='detailDialog'?'detailTitle':id==='rulesDialog'?'rulesTitle':'attachmentTitle'}">${esc(title)}</h2>`; }
   function showDialog(id) { $(id).showModal(); document.body.classList.add('dialog-open'); }
   function mobileDetailRecord(record) {
@@ -85,14 +85,14 @@
     const amountHtml = number === null ? '<span class="mobile-detail-amount is-missing">待复核</span>' : `<span class="mobile-detail-amount${number.length > 10 ? ' is-large' : ''}">${currency === 'CNY' ? '<small>¥</small>' : ''}<span>${esc(number)}</span>${currency === 'CNY' ? '' : `<small>${esc(currency)}</small>`}</span>`;
     const attachment = record.billAttachment;
     const attachmentHtml = s.canAttachment && attachment?.exists ? `<button class="mobile-detail-attachment" data-attachment="${attachment.id}" aria-label="查看${esc(record.reporter)}的附件"><img src="/expense/api/attachments/${attachment.id}/content" alt="${esc(record.reporter || '报账人')}的报账附件" loading="lazy"></button>` : `<span class="mobile-detail-unavailable">${!s.canAttachment ? '无附件权限' : attachment ? '已清理' : '无附件'}</span>`;
-    return `<article class="mobile-detail-record" role="listitem" data-record-id="${record.id}"><div class="mobile-detail-heading"><div class="mobile-detail-identity"><strong><a class="record-detail-link" href="/expense#report=${record.id}">${esc(record.reporter || '未知')}</a></strong>${category({code:record.expenseCategory,label:record.expenseCategoryLabel})}</div>${amountHtml}</div><div class="mobile-detail-body"><div class="mobile-detail-copy"><div class="mobile-detail-note">${record.note?.trim() ? remark(record.note) : '<span class="mobile-detail-empty">暂无备注</span>'}</div><div class="mobile-detail-footer"><div class="mobile-detail-time">${createdAt(record.createdAt)}</div></div></div>${attachmentHtml}</div></article>`;
+    return `<article class="mobile-detail-record" role="listitem" data-record-id="${record.id}"><div class="mobile-detail-heading"><div class="mobile-detail-identity"><strong><button class="record-detail-link" data-source-record="${record.id}" type="button">${esc(record.reporter || '未知')}</button></strong>${category({code:record.expenseCategory,label:record.expenseCategoryLabel})}</div>${amountHtml}</div><div class="mobile-detail-body"><div class="mobile-detail-copy"><div class="mobile-detail-note">${record.note?.trim() ? remark(record.note) : '<span class="mobile-detail-empty">暂无备注</span>'}</div><div class="mobile-detail-footer"><div class="mobile-detail-time">${createdAt(record.createdAt)}</div></div></div>${attachmentHtml}</div></article>`;
   }
   function renderDetail() {
     const g=s.group;if(!g)return;
     const focusOnLoadMore = document.activeElement?.matches('[data-action="more"]');
     $('detailDialog').innerHTML = modalTop(g.project,'detailDialog','项目汇总 / 报账详情')+`<div class="drawer-tags">${reporterTag(g.reporter)}${g.categories.map(category).join('')}</div><div class="drawer-summary"><div><label>${esc(s.data.store.name)} · ${esc(s.month)}</label><strong>${esc(currencyLabel(g.currency))} ${amount(g)}</strong></div><span>共 ${g.recordCount} 笔报账</span></div>${g.missingAmountCount?`<p class="amount-warning">${g.missingAmountCount} 笔金额待确认</p>`:''}${g.projectId==='manager'?'<div class="rule-note">店长报账统一归入张志延。以下报账人保留每笔记录的原始姓名。</div>':''}<div class="detail-heading"><b>报账记录</b><span>按创建时间排列</span></div>
       ${s.detailError?`<div class="report-error" role="alert">${esc(s.detailError)} <button data-action="more">重试</button></div>`:''}
-      <div class="detail-table-scroll" tabindex="0" role="region" aria-label="报账记录六列表格，可横向滚动"><table class="detail-record-table" aria-label="报账记录"><thead><tr><th>创建时间</th><th>报账人</th><th>类别</th><th>备注</th><th>附件</th><th class="detail-amount-heading">金额</th></tr></thead><tbody>${s.details.map(r=>`<tr data-record-id="${r.id}"><td class="column-created-at"><a class="record-detail-link" href="/expense#report=${r.id}">${createdAt(r.createdAt)}</a></td><td class="detail-reporter">${reporterTag(r.reporter)}</td><td class="detail-category">${category({code:r.expenseCategory,label:r.expenseCategoryLabel})}</td><td class="note-cell">${remark(r.note)}</td><td class="column-bill">${!s.canAttachment?'<span class="bill-placeholder">无权限</span>':!r.billAttachment?'<span class="bill-placeholder">无</span>':!r.billAttachment.exists?'<span class="bill-placeholder warn">已清理</span>':`<button class="bill-link" data-attachment="${r.billAttachment.id}" aria-label="查看${esc(r.reporter)}的附件"><img src="/expense/api/attachments/${r.billAttachment.id}/content" alt="报账附件" loading="lazy"></button>`}</td><td class="detail-amount">${detailAmount(r)}</td></tr>`).join('')}</tbody></table></div>
+      <div class="detail-table-scroll" tabindex="0" role="region" aria-label="报账记录六列表格，可横向滚动"><table class="detail-record-table" aria-label="报账记录"><thead><tr><th>创建时间</th><th>报账人</th><th>类别</th><th>备注</th><th>附件</th><th class="detail-amount-heading">金额</th></tr></thead><tbody>${s.details.map(r=>`<tr data-record-id="${r.id}"><td class="column-created-at"><button class="record-detail-link" data-source-record="${r.id}" type="button">${createdAt(r.createdAt)}</button></td><td class="detail-reporter">${reporterTag(r.reporter)}</td><td class="detail-category">${category({code:r.expenseCategory,label:r.expenseCategoryLabel})}</td><td class="note-cell">${remark(r.note)}</td><td class="column-bill">${!s.canAttachment?'<span class="bill-placeholder">无权限</span>':!r.billAttachment?'<span class="bill-placeholder">无</span>':!r.billAttachment.exists?'<span class="bill-placeholder warn">已清理</span>':`<button class="bill-link" data-attachment="${r.billAttachment.id}" aria-label="查看${esc(r.reporter)}的附件"><img src="/expense/api/attachments/${r.billAttachment.id}/content" alt="报账附件" loading="lazy"></button>`}</td><td class="detail-amount">${detailAmount(r)}</td></tr>`).join('')}</tbody></table></div>
       <div class="mobile-detail-list" role="list" aria-label="报账记录">${s.details.map(mobileDetailRecord).join('')}</div>
       ${s.detailLoading?'<p class="loading-line" role="status">正在加载记录…</p>':s.details.length<s.detailTotal&&!s.detailError?'<div class="load-more"><button data-action="more">加载更多记录</button></div>':''}<div class="drawer-foot">已显示 ${s.details.length} / ${s.detailTotal} 笔</div></div>`;
     if(focusOnLoadMore)$('detailDialog').querySelector('[data-action="more"]')?.focus({preventScroll:true});
@@ -117,6 +117,62 @@
     $('attachmentDialog').innerHTML=modalTop('附件预览','attachmentDialog','报账附件')+`<div class="attachment-preview-meta"><span>${esc(a.reporter)}</span><span>${s.attachmentIndex+1} / ${s.attachments.length}</span></div><div class="attachment-preview-stage"><button class="attachment-preview-nav previous" data-action="prevAttachment" aria-label="上一个附件" ${s.attachmentIndex===0?'disabled':''}>${icon('left')}</button><img src="/expense/api/attachments/${a.id}/content" alt="报账附件"><button class="attachment-preview-nav next" data-action="nextAttachment" aria-label="下一个附件" ${s.attachmentIndex===s.attachments.length-1?'disabled':''}>${icon('right')}</button></div><p class="attachment-error" role="alert" hidden>附件无法加载，可能已被清理或无权访问。</p></div>`;
     $('attachmentDialog').querySelector('img').addEventListener('error',()=>{$('attachmentDialog').querySelector('.attachment-error').hidden=false;});
   }
+  function sourceShell(title, body) {
+    return `<div class="detail-dialog"><div class="detail-grip"></div><div class="detail-topbar"><h2 id="sourceReportDialogTitle">${esc(title)}</h2><button id="sourceReportDialogClose" data-close="sourceReportDialog" aria-label="关闭报账详情">${icon('close')}</button></div><div class="detail-scroll" id="sourceReportScroll">${body}</div></div>`;
+  }
+  function paintSourceReport() {
+    $('sourceReportDialog').innerHTML = sourceShell(`报账 #${s.sourceReport.id}`, window.ExpenseReportDetail.render(s.sourceReport, { timeZone:s.options.timeZone, canAttachment:s.sourceCanAttachment, canEdit:s.sourceCanEdit }));
+  }
+  async function openSourceReport(id) {
+    if (!Number.isSafeInteger(id) || id <= 0) return;
+    const serial = ++s.sourceSerial;
+    s.sourceAbort?.abort();s.sourceAbort=new AbortController();s.sourceReport=null;s.sourceChanged=false;
+    s.sourceReturnFocus=document.activeElement;
+    $('sourceReportDialog').innerHTML=sourceShell(`报账 #${id}`,'<p class="detail-empty" role="status">正在加载报账详情…</p>');
+    if(!$('sourceReportDialog').open)showDialog('sourceReportDialog');
+    try {
+      const [payload,session]=await Promise.all([json(`/expense/api/reports/${id}`,s.sourceAbort.signal),json('/expense/api/session',s.sourceAbort.signal)]);
+      if(serial!==s.sourceSerial||!$('sourceReportDialog').open)return;
+      s.sourceReport=payload.report;s.sourceCanAttachment=session.permissions?.canAttachment??true;s.sourceCanEdit=session.permissions?.canEdit??session.permissions?.canWrite===true;
+      paintSourceReport();$('sourceReportDialogClose').focus({preventScroll:true});
+    }catch(error){if(serial===s.sourceSerial&&error.name!=='AbortError')$('sourceReportDialog').innerHTML=sourceShell(`报账 #${id}`,`<p class="detail-empty" role="alert">${esc(error.message)}</p>`);}
+  }
+  async function refreshAfterSourceEdit() {
+    const previous=s.group;
+    await loadSummary();
+    if(!previous||s.group!==previous)return;
+    const updated=s.data?.groups.find(g=>g.projectId===previous.projectId&&g.reporter===previous.reporter&&g.currency===previous.currency);
+    if(!updated){closeDialog('detailDialog');return;}
+    s.group=updated;s.details=[];s.detailTotal=updated.recordCount;s.detailLoading=false;s.detailError='';await loadDetails();
+  }
+  async function openSourceEdit() {
+    if(!s.sourceReport||!s.sourceCanEdit)return;
+    const serial=++s.editSerial,report=s.sourceReport;
+    $('sourceEditDialog').innerHTML=`<div class="drawer-inner"><div class="drawer-top"><h2 id="sourceEditTitle">编辑报账 #${report.id}</h2><button data-close="sourceEditDialog" aria-label="关闭编辑">${icon('close')}</button></div><form id="sourceEditForm"><div class="source-edit-grid"><label>金额（元）<input id="sourceEditAmount" type="number" step="any" placeholder="留空表示不修改" value="${esc(report.amount??'')}"></label><label>类别<select id="sourceEditCategory" required disabled><option value="">正在加载类别…</option></select></label></div><label>当前备注（只读）<div class="source-edit-note">${esc(report.note||'暂无备注')}</div></label><label>追加备注（选填）<textarea id="sourceEditNote" maxlength="1000" placeholder="仅追加，不覆盖已有备注"></textarea></label><p id="sourceEditStatus" role="status">正在加载类别…</p><div class="source-edit-actions"><button type="button" data-close="sourceEditDialog">取消</button><button id="sourceEditSave" class="primary" disabled>保存修改</button></div></form></div>`;
+    showDialog('sourceEditDialog');
+    try {
+      const options=await json('/expense/api/edit-report-options');
+      if(serial!==s.editSerial||!$('sourceEditDialog').open)return;
+      $('sourceEditCategory').replaceChildren(new Option('请选择类别',''),...options.categories.map(c=>new Option(c.label,c.code)));
+      if(report.expenseCategory&&![...$('sourceEditCategory').options].some(c=>c.value===report.expenseCategory))$('sourceEditCategory').add(new Option(report.expenseCategoryLabel||report.expenseCategory,report.expenseCategory));
+      $('sourceEditCategory').value=report.expenseCategory;$('sourceEditCategory').disabled=false;$('sourceEditSave').disabled=false;$('sourceEditStatus').textContent='';
+    }catch(error){if(serial===s.editSerial&&$('sourceEditDialog').open)$('sourceEditStatus').textContent=error.message;}
+  }
+  async function saveSourceEdit(event) {
+    event.preventDefault();if(!s.sourceReport||!s.sourceCanEdit||s.sourceSaving||$('sourceEditSave').disabled)return;
+    const report=s.sourceReport,patch={updatedAt:report.updatedAt},amountText=$('sourceEditAmount').value.trim(),categoryValue=$('sourceEditCategory').value,note=$('sourceEditNote').value.trim();
+    if(amountText){const value=Number(amountText);if(!Number.isFinite(value)){$('sourceEditStatus').textContent='金额必须是有效数字。';return;}if(report.amount==null||value!==Number(report.amount))patch.amount=value;}
+    if(categoryValue&&categoryValue!==report.expenseCategory)patch.expenseCategory=categoryValue;
+    if(note)patch.noteToAppend=note;
+    if(Object.keys(patch).length===1){$('sourceEditStatus').textContent='没有需要保存的修改。';return;}
+    s.sourceSaving=true;$('sourceEditSave').disabled=true;$('sourceEditStatus').textContent='正在保存…';
+    try {
+      const response=await fetch(`/expense/api/reports/${report.id}`,{method:'PATCH',headers:{Accept:'application/json','Content-Type':'application/json'},body:JSON.stringify(patch)}),data=await response.json();
+      if(!response.ok||!data.success)throw new Error(data.error?.message||'保存失败，请重新打开详情后重试。');
+      s.sourceReport={...report,...data.report,expenseCategoryLabel:$('sourceEditCategory').selectedOptions[0]?.textContent||report.expenseCategoryLabel};s.sourceChanged=true;s.sourceSaving=false;closeDialog('sourceEditDialog');paintSourceReport();notify('报账已更新，关闭详情后刷新月报。');
+    }catch(error){$('sourceEditStatus').textContent=error.message;}finally{s.sourceSaving=false;if($('sourceEditSave'))$('sourceEditSave').disabled=false;}
+  }
+
   function rules() {
     const list=s.options.projects;
     $('rulesDialog').innerHTML=modalTop('项目归类规则','rulesDialog','项目名称与固定顺序')+`<p class="rules-intro">店长报账仅按来源渠道归类；花卉仅按类别识别；其他项目按指定字样匹配，并按类别兜底。每位报账人名下，项目按以下顺序显示。</p><ol class="rules-list">${list.map(p=>`<li><b>${esc(p.name)}</b><p>${esc(p.description)}</p><div class="keywords">${p.keywords.map(k=>`<span>${esc(k)}</span>`).join('')}</div></li>`).join('')}</ol><section class="rule-note"><b>冲突与兜底</b><p>来源为店长报账群的记录优先合并，不以 OCR、备注或类别识别店长报账；花卉类别优先于字样匹配，宿舍房租优先于房租。其他多个项目命中，按上方顺序归入第一个。</p><p>未命中指定项目时，房租、水电、工资按类别兜底，食材归入其他食材，其余归入其他项目。每笔只计入一次。</p></section><section class="rule-note"><b>固定排序</b><p>${s.options.reporters.map(esc).join(' → ')} → 其他报账人；每人名下再按项目顺序排列。</p><p>店长报账在汇总中显示为张志延，原始姓名不变。不同类别可合并到同一项目，类别作为信息保留。</p></section></div>`;showDialog('rulesDialog');
@@ -153,8 +209,7 @@
       if (record) {
         const id = Number(record.dataset.recordId);
         if (Number.isSafeInteger(id) && id > 0) {
-          const url = `/expense#report=${id}`;
-          if (e.ctrlKey || e.metaKey) window.open(url, '_blank', 'noopener'); else location.assign(url);
+          void openSourceReport(id);
         }
         return;
       }
@@ -163,6 +218,9 @@
       return;
     }
     if(target.disabled)return;
+    if(target.dataset.sourceRecord){void openSourceReport(Number(target.dataset.sourceRecord));return;}
+    if(target.hasAttribute('data-detail-edit')){void openSourceEdit();return;}
+    if(target.hasAttribute('data-detail-attachments')){const section=$('sourceReportDialog').querySelector('#detailSources');if(section){section.open=true;section.scrollIntoView({block:'start'});}return;}
     if(target.dataset.close){closeDialog(target.dataset.close);return;}
     if(target.dataset.store){s.store=target.dataset.store;clearFilters();loadSummary();return;}
     if(target.dataset.group!==undefined){openDetail(Number(target.dataset.group));return;}
@@ -179,10 +237,14 @@
       case 'nextAttachment':s.attachmentIndex++;renderAttachment();break;
     }
   });
-  for(const id of ['detailDialog','rulesDialog','attachmentDialog']){
-    $(id).addEventListener('click',e=>{if(e.target===$(id)){const r=$(id).getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)closeDialog(id);}});
+  document.addEventListener('submit',event=>{if(event.target.id==='sourceEditForm')void saveSourceEdit(event);});
+  for(const id of ['detailDialog','rulesDialog','attachmentDialog','sourceReportDialog','sourceEditDialog']){
+    $(id).addEventListener('cancel',event=>{if((id==='sourceEditDialog'||id==='sourceReportDialog')&&s.sourceSaving)event.preventDefault();});
+    $(id).addEventListener('click',e=>{if(e.target===$(id)){if(id==='sourceReportDialog'){closeDialog(id);return;}const r=$(id).getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)closeDialog(id);}});
     $(id).addEventListener('close',()=>{
-      if(id==='detailDialog'){s.group=null;s.detailSerial++;s.detailAbort?.abort();s.detailLoading=false;closeDialog('attachmentDialog');}
+      if(id==='sourceReportDialog'){s.sourceSerial++;s.sourceAbort?.abort();const changed=s.sourceChanged;s.sourceChanged=false;s.sourceReport=null;closeDialog('sourceEditDialog');s.sourceReturnFocus?.focus({preventScroll:true});if(changed)void refreshAfterSourceEdit();}
+      if(id==='sourceEditDialog'){s.editSerial++;if($('sourceReportDialog').open)$('sourceReportDialog').querySelector('[data-detail-edit]')?.focus({preventScroll:true});}
+      if(id==='detailDialog'){s.group=null;s.detailSerial++;s.detailAbort?.abort();s.detailLoading=false;closeDialog('attachmentDialog');closeDialog('sourceReportDialog');}
       if(id==='attachmentDialog'&&$('detailDialog').open)s.attachmentFocus?.focus({preventScroll:true});
       if(!document.querySelector('dialog[open]'))document.body.classList.remove('dialog-open');
     });
