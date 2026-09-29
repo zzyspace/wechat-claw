@@ -13,7 +13,8 @@ test("migrateDatabase adds reimbursement submitter audit columns to existing dat
       channel_code TEXT,
       channel_name TEXT NOT NULL,
       reporter TEXT NOT NULL,
-      voucher_date TEXT NOT NULL
+      voucher_date TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
     CREATE TABLE reimbursement_batch_import_jobs (
       id TEXT PRIMARY KEY,
@@ -38,5 +39,7 @@ test("migrateDatabase adds reimbursement submitter audit columns to existing dat
   }
   const indexes = db.prepare("PRAGMA index_list(reimbursement_reports)").all() as Array<{ name: string }>;
   assert.equal(indexes.some((index) => index.name === "idx_reimbursement_reports_submitter_channel"), true);
+  assert.equal(indexes.some((index) => index.name === "idx_reimbursement_reports_channel_created_at"), true);
+  migrateDatabase(db); // Index creation is safe to repeat on existing databases.
   db.close();
 });

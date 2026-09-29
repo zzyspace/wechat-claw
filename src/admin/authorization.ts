@@ -6,7 +6,7 @@ const CHANNEL_STORES: Record<string, string> = {
   reimbursement_fuzzy: "fuzzy", reimbursement_peanut: "peanut", reimbursement_fuzzyqz: "fuzzyqz",
   reimbursement_fuzzy_manager: "fuzzy", reimbursement_peanut_manager: "peanut", reimbursement_fuzzy_qz_manager: "fuzzyqz",
 };
-const PERMISSIONS = ["report:view", "attachment:view", "report:submit", "report:edit", "report:delete", "report:delete:self", "report:import", "task:view:any"];
+const PERMISSIONS = ["report:monthly:view", "report:view", "attachment:view", "report:submit", "report:edit", "report:delete", "report:delete:self", "report:import", "task:view:any"];
 export interface ExpenseScope { ownership?: "self" | "any"; stores: "all" | string[]; channels: "all" | string[] }
 export interface ExpensePolicy { permissions: string[]; viewScope: ExpenseScope; submitScope: ExpenseScope; importScope: ExpenseScope }
 function record(value: unknown): Record<string, unknown> {
@@ -41,7 +41,7 @@ export function validateExpenseAuthorization(value: unknown): AdminSession {
     // Accounts created before separate import scopes keep their previous scope.
     importScope: scope(config.importScope ?? config.submitScope, false),
   };
-  const dependentPermissions = ["attachment:view", "report:edit", "report:delete", "report:delete:self", "report:import", "task:view:any"];
+  const dependentPermissions = ["report:monthly:view", "attachment:view", "report:edit", "report:delete", "report:delete:self", "report:import", "task:view:any"];
   if ((!permissions.includes("report:view") && !permissions.includes("report:submit")) ||
       dependentPermissions.some((permission) => permissions.includes(permission)) && !permissions.includes("report:view") ||
       permissions.includes("report:view") && effectiveChannels(policy.viewScope).length === 0 ||

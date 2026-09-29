@@ -1866,6 +1866,9 @@ body > .topbar .center-switcher-menu { top: calc(100% + 9px); left: auto; }
                 <svg class="chevron" viewBox="0 0 20 20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m7 4 6 6-6 6" /></svg>
               </button>
             </form>
+            <form method="get" action="/expense/monthly" id="monthlyReportForm" hidden>
+              <button type="submit" class="submit-button"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3h14v18H5zM8 8h8M8 12h3M14 12h2M8 16h3M14 16h2"/></svg><span>月度报表</span></button>
+            </form>
             <button class="button-primary" id="manualImportOpen" type="button" hidden>手工补录</button>
             <button class="button-primary" id="batchImportOpen" type="button" hidden>批量补录</button>
           </div>
@@ -3959,6 +3962,7 @@ body > .topbar .center-switcher-menu { top: calc(100% + 9px); left: auto; }
         }
 
         document.getElementById("newReportForm").hidden = payload.permissions?.canSubmit !== true;
+        document.getElementById("monthlyReportForm").hidden = payload.permissions?.canMonthlyReport !== true;
         state.canEdit = payload.permissions?.canEdit ?? payload.permissions?.canWrite === true;
         state.canDelete = (payload.permissions?.canDelete ?? payload.permissions?.canWrite === true) || payload.permissions?.canDeleteSelf === true;
         state.canImport = payload.permissions?.canImport ?? payload.permissions?.canWrite === true;

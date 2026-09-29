@@ -1,3 +1,5 @@
+import { createMonthlyReportRouter } from "./monthly-report-routes.js";
+import { MONTHLY_REPORT_PERMISSION } from "../scenarios/reimbursement/monthly-report.js";
 import { createGatewayAuth, gatewayAuthConfig, resolveShortcutAccount, type GatewayAuthConfig } from "./gateway-auth.js";
 import { actionChannels, hasPermission, requirePermission, submissionChannels, canViewResource, canDeleteReport, reportAccessScope } from "./authorization.js";
 import crypto from "node:crypto";
@@ -613,6 +615,14 @@ export function createApp(input?: {
   app.get([`${ADMIN_BASE_PATH}/submit`, `${ADMIN_BASE_PATH}/submit/`], adminAuth, requirePermission("report:submit"), (_request, response) => {
     response.sendFile(path.join(staticDir, "submit.html"));
   });
+  const monthlyPageAuth = [adminAuth, requirePermission("report:view"), requirePermission(MONTHLY_REPORT_PERMISSION)];
+  app.get([`${ADMIN_BASE_PATH}/monthly`, `${ADMIN_BASE_PATH}/monthly/`], ...monthlyPageAuth, (_request, response) => {
+    response.set("Content-Security-Policy", "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' blob:; connect-src 'self'; font-src 'self'; base-uri 'none'; frame-ancestors 'self'; form-action 'self'");
+    response.sendFile(path.join(staticDir, "monthly", "index.html"));
+  });
+  for (const asset of ["app.js", "styles.css"]) {
+    app.get(`${ADMIN_BASE_PATH}/monthly/${asset}`, ...monthlyPageAuth, (_request, response) => response.sendFile(path.join(staticDir, "monthly", asset)));
+  }
   app.post(
     SHORTCUT_API_PATH,
     shortcutApiAuth,
@@ -747,6 +757,7 @@ export function createApp(input?: {
   );
 
   app.use(`${ADMIN_BASE_PATH}/api`, adminAuth);
+  app.use(`${ADMIN_BASE_PATH}/api/monthly-reports`, createMonthlyReportRouter(config.timeZone));
   const checkReport: express.RequestHandler = (request, response, next) => {
     const session = getAdminSession(response);
     const report = getAdminReimbursementReportDetail(Number(request.params.id));
@@ -778,6 +789,7 @@ export function createApp(input?: {
           canDeleteSelf: hasPermission(session, "report:delete:self"),
           canImport: hasPermission(session, "report:import"),
         } : {}),
+        canMonthlyReport: hasPermission(session, MONTHLY_REPORT_PERMISSION),
         canWrite: session?.canWrite === true,
         canSubmit: session?.canSubmit === true,
         canViewAllReports: session?.canViewAllReports === true,

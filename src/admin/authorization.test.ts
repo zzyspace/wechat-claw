@@ -163,3 +163,12 @@ test("real names do not change account ownership, and legacy names remain usable
   assert.equal(canViewResource(person,{submittedByAccountId:'other',channelCode:'reimbursement_fuzzy_manager'}),false);
   assert.equal(validateExpenseAuthorization(envelope).displayName,'person');
 });
+
+test("monthly reports are separately granted and depend on report viewing", () => {
+  const denied = validateExpenseAuthorization(envelope);
+  assert.equal(hasPermission(denied,"report:monthly:view"),false);
+  const allowed=validateExpenseAuthorization({...envelope,access:{...envelope.access,permissions:["report:view","report:monthly:view"]}});
+  assert.equal(hasPermission(allowed,"report:monthly:view"),true);
+  assert.deepEqual(reportAccessScope(allowed),reportAccessScope(denied));
+  assert.throws(()=>validateExpenseAuthorization({...envelope,access:{...envelope.access,permissions:["report:monthly:view"]}}));
+});

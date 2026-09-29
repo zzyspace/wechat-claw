@@ -115,6 +115,9 @@ export function migrateDatabase(db: Database.Database) {
     CREATE INDEX IF NOT EXISTS idx_reimbursement_reports_channel_date
       ON reimbursement_reports(channel_code, voucher_date);
 
+    CREATE INDEX IF NOT EXISTS idx_reimbursement_reports_channel_created_at
+      ON reimbursement_reports(channel_code, created_at);
+
     CREATE INDEX IF NOT EXISTS idx_reimbursement_reports_reporter_date
       ON reimbursement_reports(reporter, voucher_date);
 

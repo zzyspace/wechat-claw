@@ -1757,7 +1757,7 @@ function listAdminSourcesByReportIds(
   return grouped;
 }
 
-function listAdminBillAttachmentsByReportIds(
+export function listAdminBillAttachmentsByReportIds(
   reportIds: number[],
 ): Map<number, AdminReimbursementListAttachmentPreview> {
   const grouped = new Map<number, AdminReimbursementListAttachmentPreview>();

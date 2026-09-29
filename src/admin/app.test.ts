@@ -1139,6 +1139,7 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
         role: "admin",
       },
       permissions: {
+        canMonthlyReport: true,
         canWrite: true,
         canSubmit: true,
         canViewAllReports: true,
@@ -1158,6 +1159,7 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
         role: "partner",
       },
       permissions: {
+        canMonthlyReport: false,
         canWrite: false,
         canSubmit: true,
         canViewAllReports: true,
