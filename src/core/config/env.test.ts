@@ -237,6 +237,7 @@ test("getAppConfig parses WECHATY_CHANNELS_JSON with mixed delivery targets", ()
 test("getAppConfig defaults reimbursement extraction to OpenAI Luna", () => {
   applyEnv({
     WECHATY_PUPPET: "wechaty-puppet-wechat",
+    WECHATY_CHANNELS_JSON: JSON.stringify([{ code: "fixture", enabled: true, scenario: "reimbursement", match: { type: "room_topic", value: "fixture" }, deliveryTargets: [], summarySchedule: "" }]),
     WECHATY_REIMBURSEMENT_EXTRACTION_PROVIDER: undefined,
     WECHATY_REIMBURSEMENT_EXTRACTION_MODEL: undefined,
     WECHATY_REIMBURSEMENT_EXTRACTION_RETRY_MODEL: undefined,
