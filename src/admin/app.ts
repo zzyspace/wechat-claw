@@ -846,6 +846,13 @@ export function createApp(input?: {
     });
   });
 
+  app.get(`${ADMIN_BASE_PATH}/api/edit-report-options`, requirePermission("report:edit"), (_request, response) => {
+    response.json({ success: true,
+      categories: REIMBURSEMENT_EXPENSE_CATEGORY_DEFINITIONS.map(({ code, label }) => ({ code, label })),
+      timeZone: config.timeZone,
+    });
+  });
+
   app.get(`${ADMIN_BASE_PATH}/api/manual-import-options`, requirePermission("report:import"), (_request, response) => {
     response.status(200).json({
       success: true,

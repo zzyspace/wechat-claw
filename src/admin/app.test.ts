@@ -1911,3 +1911,20 @@ test("unified self deletion includes attributed shortcut uploads and rejects oth
   assert(getAdminReimbursementReportDetail(otherId));
   assert(getAdminReimbursementReportDetail(outsideId));
 });
+
+test("edit category options require edit permission, independent of import permission", async (t) => {
+  applyEnv({ WECHATY_ADMIN_USERNAME: "admin", WECHATY_ADMIN_PASSWORD: "fixture-password" });
+  const gateway=createServer((request,response)=>{
+    const role=request.headers.cookie?.replace("fixture=","");
+    const permissions=["report:view",...(role==="editor"?["report:edit"]:role==="importer"?["report:import"]:[])];
+    response.setHeader("Content-Type","application/json");response.end(JSON.stringify({success:true,account:{accountId:"edit-options-fixture",username:"fixture",enabled:true,version:1},access:{accountId:"edit-options-fixture",app:"expense",role:"partner",enabled:true,version:1,permissions,config:{viewScope:{ownership:"any",stores:"all",channels:"all"},submitScope:{stores:[],channels:[]},importScope:{stores:"all",channels:"all"}}}}));
+  });
+  gateway.listen(0,"127.0.0.1");await once(gateway,"listening");t.after(()=>new Promise<void>(resolve=>gateway.close(()=>resolve())));
+  const address=gateway.address();assert(address&&typeof address!=="string");
+  const server=await startServer(undefined,{mode:"unified",url:`http://127.0.0.1:${address.port}`,token:"edit-category-options-fixture-token-001"});t.after(()=>server.close());
+  const request=(who:string,route:string)=>fetch(server.baseUrl+"/expense/api/"+route,{headers:{Cookie:`fixture=${who}`}});
+  const options=await request("editor","edit-report-options");assert.equal(options.status,200);
+  const payload=await options.json();assert.deepEqual(payload.categories.map((c:{code:string})=>c.code),["food","flower","salary","rent","utilities","manager_reimbursement","planned_expense","other"]);
+  assert.equal(payload.channels,undefined);assert.equal((await request("editor","manual-import-options")).status,403);
+  assert.equal((await request("reader","edit-report-options")).status,403);assert.equal((await request("importer","edit-report-options")).status,403);
+});

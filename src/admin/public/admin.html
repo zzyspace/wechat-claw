@@ -2242,6 +2242,8 @@ body > .topbar .center-switcher-menu { top: calc(100% + 9px); left: auto; }
         batchTaskPollTimer: null,
         deletingIds: new Set(),
         editingReport: null,
+        editOptionsRequestId: 0,
+        editCategoriesReady: false,
         savingReport: false,
         detailReport: null,
         editingFromDetail: false,
@@ -4010,7 +4012,6 @@ body > .topbar .center-switcher-menu { top: calc(100% + 9px); left: auto; }
             `<option value="${escapeHtml(category.code)}">${escapeHtml(category.label)}</option>`,
           ),
         ].join("");
-        elements.editReportExpenseCategory.innerHTML = elements.manualExpenseCategory.innerHTML;
         elements.batchChannelCode.innerHTML = elements.manualChannelCode.innerHTML;
         resetManualImportForm();
         resetBatchImportForm();
@@ -4138,7 +4139,7 @@ body > .topbar .center-switcher-menu { top: calc(100% + 9px); left: auto; }
         elements.editReportStatus.classList.toggle("error", isError);
       }
 
-      function openEditReportModal(reportId, detailReport = null) {
+      async function openEditReportModal(reportId, detailReport = null) {
         if (!state.canEdit || state.savingReport) {
           return;
         }
@@ -4149,9 +4150,12 @@ body > .topbar .center-switcher-menu { top: calc(100% + 9px); left: auto; }
           return;
         }
 
+        const requestId = ++state.editOptionsRequestId;
+        state.editCategoriesReady = false;
         state.editingReport = { ...report };
         elements.editReportForm.reset();
-        if (detailReport && report.expenseCategory && ![...elements.editReportExpenseCategory.options].some((option) => option.value === report.expenseCategory)) {
+        elements.editReportExpenseCategory.innerHTML = '<option value="">请选择类别</option>';
+        if (report.expenseCategory && ![...elements.editReportExpenseCategory.options].some((option) => option.value === report.expenseCategory)) {
           elements.editReportExpenseCategory.add(new Option(report.expenseCategoryLabel || report.expenseCategory, report.expenseCategory));
         }
         elements.editReportModalTitle.textContent = `编辑报账 #${report.id}`;
@@ -4162,9 +4166,33 @@ body > .topbar .center-switcher-menu { top: calc(100% + 9px); left: auto; }
         elements.editReportExpenseCategory.value = report.expenseCategory || "";
         elements.editReportCurrentNote.textContent = String(report.note || "").trim() || "暂无备注";
         elements.editReportNoteToAppend.value = "";
-        setEditReportStatus("");
+        elements.editReportExpenseCategory.disabled = true;
+        elements.editReportSubmit.disabled = true;
+        setEditReportStatus("正在加载类别...");
         elements.editReportModal.hidden = false;
-        window.setTimeout(() => elements.editReportAmount.focus(), 0);
+        window.setTimeout(() => { if (!elements.editReportModal.hidden && requestId === state.editOptionsRequestId) elements.editReportAmount.focus(); }, 0);
+        try {
+          const response = await fetch(buildAuthFetchUrl(`${BASE_PATH}/api/edit-report-options`), { headers: { Accept: "application/json" } });
+          const payload = await response.json();
+          if (!response.ok || !payload.success || !Array.isArray(payload.categories) || !payload.categories.length) {
+            throw new Error(payload?.error?.message || "编辑类别加载失败，请关闭弹窗后重试。");
+          }
+          if (requestId !== state.editOptionsRequestId || elements.editReportModal.hidden) return;
+          elements.editReportExpenseCategory.replaceChildren(new Option("请选择类别", ""), ...payload.categories.map(category => new Option(category.label, category.code)));
+          if (report.expenseCategory && ![...elements.editReportExpenseCategory.options].some(option => option.value === report.expenseCategory)) {
+            elements.editReportExpenseCategory.add(new Option(report.expenseCategoryLabel || report.expenseCategory, report.expenseCategory));
+          }
+          elements.editReportExpenseCategory.value = report.expenseCategory || "";
+          state.timeZone = payload.timeZone || state.timeZone;
+          state.editCategoriesReady = true;
+          elements.editReportExpenseCategory.disabled = false;
+          elements.editReportSubmit.disabled = false;
+          setEditReportStatus("");
+        } catch (error) {
+          if (requestId === state.editOptionsRequestId && !elements.editReportModal.hidden) {
+            setEditReportStatus(error instanceof Error ? error.message : "编辑类别加载失败，请关闭弹窗后重试。", true);
+          }
+        }
       }
 
       function closeEditReportModal() {
@@ -4173,6 +4201,8 @@ body > .topbar .center-switcher-menu { top: calc(100% + 9px); left: auto; }
         }
 
         elements.editReportModal.hidden = true;
+        state.editOptionsRequestId++;
+        state.editCategoriesReady = false;
         state.editingReport = null;
         elements.editReportForm.reset();
         setEditReportStatus("");
@@ -4181,7 +4211,7 @@ body > .topbar .center-switcher-menu { top: calc(100% + 9px); left: auto; }
 
       async function submitEditReport() {
         const original = state.editingReport;
-        if (!state.canEdit || state.savingReport || !original) {
+        if (!state.canEdit || !state.editCategoriesReady || state.savingReport || !original) {
           return;
         }
 
