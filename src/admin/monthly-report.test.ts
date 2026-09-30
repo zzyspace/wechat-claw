@@ -103,6 +103,14 @@ test("monthly page, API, details, export and assets enforce explicit permission 
     const supplierCsv=await (await request("all",api+"/export"+query+"&q="+encodeURIComponent(name))).text();
     assert.ok(supplierCsv.includes(`"${name}"`));assert.ok(supplierCsv.includes('"52.00"'));
   }
+  const qiamuyangId=seed({note:"",ocr:"高崎星光工业区内金辉餐料 公户名称：上海恰沐阳国际贸易有限公司",amount:31});
+  const conflictSummary=await (await request("all",api+query)).json();
+  assert.equal(conflictSummary.groups.find((g:any)=>g.projectId==="aomeijia").amountCents,3100);
+  assert.equal(conflictSummary.groups.find((g:any)=>g.projectId==="jinhui").recordCount,2);
+  const conflictDetails=await (await request("all",api+"/details"+query+"&projectId=aomeijia&reporter="+encodeURIComponent("张志延")+"&currency=CNY")).json();
+  assert.equal(conflictDetails.total,1);assert.equal(conflictDetails.items[0].id,qiamuyangId);
+  const conflictCsv=await (await request("all",api+"/export"+query+"&q="+encodeURIComponent("澳美佳"))).text();
+  assert.ok(conflictCsv.includes('"31.00"'));
   revoked=true;
   assert.equal((await request("all",api+query)).status,403);assert.equal((await request("all",api+"/export"+query)).status,403);assert.equal((await request("all","/expense/monthly")).status,403);
 });

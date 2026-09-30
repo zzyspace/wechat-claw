@@ -18,7 +18,7 @@ const MONTHLY_CATEGORY_FALLBACK = new Map<string, string>([
 export const MONTHLY_REPORTERS = ["张志延", "李晨晨", "邓振国"];
 export const MONTHLY_PROJECTS = [
   { id: "kuailv", name: "快驴", keywords: ["快驴"], description: "OCR 或备注包含「快驴」" },
-  { id: "jinhui", name: "金辉", keywords: ["金辉"], description: "OCR 或备注包含「金辉」" },
+  { id: "jinhui", name: "金辉", keywords: ["金辉"], description: "OCR 或备注包含「金辉」；OCR 同时包含其他项目关键词时，其他项目优先" },
   { id: "aomeijia", name: "澳美佳 / 安之乐 / 知其味", keywords: ["澳美佳", "安之乐", "知其味", "恰沐阳"], description: "命中任一字样，合并为同一项目" },
   { id: "jingzhou", name: "景洲", keywords: ["景洲"], description: "OCR 或备注包含「景洲」" },
   { id: "mozan", name: "墨赞", keywords: ["墨赞"], description: "OCR 或备注包含「墨赞」" },
@@ -65,8 +65,11 @@ export function classifyMonthlyRecord(record: MonthlyRecord) {
   const texts = [record.ocrText || "", record.note || ""];
   const includes = (word: string) => texts.some(text => text.includes(word));
   const dorm = includes("宿舍房租");
+  const ocr = record.ocrText || "";
+  const jinhuiOcrConflict = ocr.includes("金辉") && MONTHLY_PROJECTS.some(project =>
+    project.id !== "jinhui" && project.keywords.some(word => ocr.includes(word)));
   for (const project of MONTHLY_PROJECTS) {
-    if (project.id === "manager" || project.id === "rent" && dorm) continue;
+    if (project.id === "manager" || project.id === "rent" && dorm || project.id === "jinhui" && jinhuiOcrConflict) continue;
     if (project.keywords.some(includes)) return { projectId: project.id, reporter: record.reporter.trim() || "未知" };
   }
   return { projectId: MONTHLY_CATEGORY_FALLBACK.get(record.expenseCategory) || "other", reporter: record.reporter.trim() || "未知" };

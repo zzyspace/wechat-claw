@@ -38,12 +38,35 @@ test("Jinhui and Jingzhou match OCR or notes and follow the requested project or
     assert.equal(classifyMonthlyRecord(row({ ocrText: name, expenseCategory: "flower" })).projectId, "flower");
   }
   assert.equal(classifyMonthlyRecord(row({ note: "快驴 金辉" })).projectId, "kuailv");
-  assert.equal(classifyMonthlyRecord(row({ ocrText: "金辉 澳美佳" })).projectId, "jinhui");
+  assert.equal(classifyMonthlyRecord(row({ ocrText: "金辉 澳美佳" })).projectId, "aomeijia");
   assert.equal(classifyMonthlyRecord(row({ note: "澳美佳 景洲" })).projectId, "aomeijia");
   assert.equal(classifyMonthlyRecord(row({ note: "景洲 墨赞" })).projectId, "jingzhou");
   const groups = aggregateMonthlyRecords(["墨赞", "景洲", "澳美佳", "金辉", "快驴"].map((note, index) => row({ id: index + 1, note })));
   assert.deepEqual(groups.map(group => group.project), ["快驴", "金辉", "澳美佳 / 安之乐 / 知其味", "景洲", "墨赞"]);
   assert.equal(monthlyTotals(groups)[0].amountCents, 5000);
+});
+test("all other OCR project keywords outrank Jinhui without changing note-only priority", () => {
+  for (const [word, projectId] of [
+    ["快驴", "kuailv"], ["澳美佳", "aomeijia"], ["安之乐", "aomeijia"], ["知其味", "aomeijia"], ["恰沐阳", "aomeijia"],
+    ["景洲", "jingzhou"], ["墨赞", "mozan"], ["房租", "rent"], ["宿舍房租", "dorm-rent"], ["水电", "utilities"], ["工资", "salary"],
+  ]) {
+    for (const ocrText of [`金辉 ${word}`, `${word} 金辉`]) {
+      assert.equal(classifyMonthlyRecord(row({ ocrText })).projectId, projectId);
+      assert.equal(classifyMonthlyRecord(row({ ocrText, note: "金辉货款" })).projectId, projectId);
+      assert.equal(classifyMonthlyRecord(row({ ocrText, expenseCategory: "flower" })).projectId, "flower");
+      assert.equal(classifyMonthlyRecord(row({ ocrText, channelCode: "reimbursement_fuzzy_manager" })).projectId, "manager");
+    }
+  }
+  assert.equal(classifyMonthlyRecord(row({ ocrText: "金辉 金辉餐料" })).projectId, "jinhui");
+  assert.equal(classifyMonthlyRecord(row({ ocrText: "金辉 花卉 店长报账" })).projectId, "jinhui");
+  assert.equal(classifyMonthlyRecord(row({ ocrText: null, note: "金辉 恰沐阳" })).projectId, "jinhui");
+  assert.equal(classifyMonthlyRecord(row({ ocrText: "金辉", note: "恰沐阳" })).projectId, "jinhui");
+  assert.equal(classifyMonthlyRecord(row({ ocrText: "金辉 景洲 墨赞" })).projectId, "jingzhou");
+  const groups = aggregateMonthlyRecords([
+    row({ id: 1, ocrText: "金辉餐料 公户名称：上海恰沐阳国际贸易有限公司", amount: 20 }),
+    row({ id: 2, ocrText: "金辉送货单", amount: 30 }),
+  ]);
+  assert.deepEqual(groups.map(group => [group.projectId, group.amountCents]), [["jinhui", 3000], ["aomeijia", 2000]]);
 });
 test("reporter order precedes project order, categories merge and currencies never mix", () => {
   const records = [row({ reporter:"邓振国", note:"快驴" }), row({ note:"工资", expenseCategory:"salary" }), row({ reporter:"李晨晨", note:"澳美佳" }), row({ note:"快驴", amount:0.1 }), row({ note:"快驴", expenseCategory:"other", amount:0.2 }), row({ reporter:"其他", note:"快驴" }), row({ note:"快驴", currency:"USD", amount:8 })];
