@@ -304,3 +304,12 @@ button.record-detail-link{display:inline;padding:0;min-height:0;border:0;backgro
 .source-edit-modal input,.source-edit-modal select,.source-edit-modal textarea{width:100%;min-width:0;padding:12px;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--ink);font:inherit;font-size:16px}
 .source-edit-modal textarea{min-height:100px;resize:vertical}.source-edit-note{font-weight:400;padding:12px;background:var(--surface-muted);border-radius:10px;white-space:pre-wrap;overflow-wrap:anywhere}
 .source-edit-actions{display:flex;justify-content:flex-end;gap:10px}#sourceEditStatus{font-size:12px;line-height:1.7;color:var(--soft)}
+
+/* Same full-width top bar and theme control as the reimbursement admin. */
+body > .monthly-topbar{position:relative;z-index:2;display:flex;align-items:center;justify-content:space-between;width:100%;height:auto;min-height:64px;padding:13px 12px;border:0;border-bottom:1px solid var(--line);border-radius:0;box-shadow:none;background:var(--surface)}
+.monthly-topbar .brand{gap:8px;padding:0 7px;font-size:15px;font-weight:700}
+.monthly-topbar .center-icon{width:22px;height:22px;color:var(--brand)}
+.monthly-topbar .topbar-actions{display:flex;align-items:center;gap:6px}
+.monthly-topbar .monthly-return{display:inline-flex;align-items:center;min-height:36px;padding:0 9px;color:var(--soft);font-size:14px;white-space:nowrap;text-decoration:none}
+.monthly-topbar .theme-toggle{display:inline-flex;align-items:center;justify-content:center;width:36px;min-width:36px;min-height:36px;padding:0;flex:0 0 36px;border-color:transparent;border-radius:10px;background:var(--surface-muted)}
+.monthly-topbar .theme-icon{display:grid;place-items:center;width:24px;height:24px;font-family:"Apple Color Emoji","Segoe UI Emoji",sans-serif;font-size:20px;line-height:1}

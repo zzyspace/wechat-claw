@@ -34,7 +34,12 @@
     return `<time class="column-created-at-value" datetime="${esc(date.toISOString())}"><span class="column-created-at-date">${fields.year}-${fields.month}-${fields.day}</span><span class="column-created-at-time">${fields.hour}:${fields.minute}:${fields.second}</span></time>`;
   }
   function currentTheme() { return document.documentElement.dataset.theme || 'light'; }
-  function setTheme(value) { document.documentElement.dataset.theme = value; document.documentElement.style.colorScheme = value; }
+  function setTheme(value) {
+    const theme=value==='dark'?'dark':'light';
+    document.documentElement.dataset.theme=theme;document.documentElement.style.colorScheme=theme;
+    if($('themeIcon'))$('themeIcon').textContent=theme==='dark'?'☀️':'🌙';
+    if($('themeToggle')){$('themeToggle').setAttribute('aria-label',theme==='dark'?'切换到浅色模式':'切换到深色模式');$('themeToggle').setAttribute('aria-pressed',String(theme==='dark'));}
+  }
   try { setTheme(localStorage.getItem('comeover-admin-theme') || localStorage.getItem('reimbursement-admin-theme') || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')); } catch { setTheme('light'); }
   window.addEventListener('storage', e => { if (e.key === 'comeover-admin-theme' && ['light','dark'].includes(e.newValue)) { setTheme(e.newValue); render(); } });
   async function json(url, signal) {
@@ -54,7 +59,7 @@
     const groups = filteredGroups(), filtered = Boolean(s.query.trim() || s.reporter);
     const title = s.options?.stores.find(store => store.id === s.store)?.name || '';
     const reporters = [...new Set([...(s.options?.reporters || []), ...(s.data?.groups || []).map(g=>g.reporter)])];
-    $('app').innerHTML = `<header class="topbar"><a class="brand back-link" href="/expense">${icon('receipt')}报账中心</a><div class="top-right"><a class="back-link" href="/expense">返回后台</a><button data-action="theme" class="icon-button" aria-label="切换${currentTheme()==='light'?'深':'浅'}色模式">${icon(currentTheme()==='light'?'moon':'sun')}</button></div></header>
+    $('app').innerHTML = `
       <section class="hero"><div><h1>门店月度报表</h1><p>按指定项目归类，按报账人汇总，每一笔都可追溯。</p></div><div class="month-control"><button data-action="prevMonth" aria-label="上个月" ${!s.options?'disabled':''}>${icon('left')}</button><label>${icon('calendar')}<input id="month" type="month" min="1900-01" max="2199-12" aria-label="报表月份" value="${esc(s.month)}" ${!s.options?'disabled':''}></label><button data-action="nextMonth" aria-label="下个月" ${!s.options?'disabled':''}>${icon('right')}</button></div></section>
       <div class="storebar"><div class="store-tabs" aria-label="选择门店">${(s.options?.stores || []).map(store=>`<button data-store="${esc(store.id)}" aria-pressed="${store.id===s.store}">${esc(store.name)}</button>`).join('')}</div><span class="scope">${icon('store')}${s.data?.store.partial?'仅统计当前账号可见记录':'包含该门店各报账群'}</span></div>
       ${s.error?`<div class="report-error" role="alert"><p>${esc(s.error)}</p><button data-action="retry">重试</button> <a href="/expense">返回报账后台</a></div>`:''}
