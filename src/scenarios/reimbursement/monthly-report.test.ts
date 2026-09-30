@@ -3,7 +3,10 @@ import { test } from "node:test";
 import { aggregateMonthlyRecords, classifyMonthlyRecord, monthRange, monthlyCsv, monthlyStoresForScope, monthlyTotals, type MonthlyRecord } from "./monthly-report.js";
 const row = (overrides: Partial<MonthlyRecord> = {}): MonthlyRecord => ({ id: 1, channelCode: "reimbursement_fuzzy", reporter: "张志延", expenseCategory: "food", amount: 10, currency: "CNY", note: "", ocrText: "", createdAt: "2026-09-01 00:00:00", ...overrides });
 test("project rules use OCR or notes and resolve overlapping matches without duplicates", () => {
-  for (const text of ["澳美佳", "安之乐", "知其味"]) assert.equal(classifyMonthlyRecord(row({ ocrText: text })).projectId, "aomeijia");
+  for (const text of ["澳美佳", "安之乐", "知其味", "恰沐阳"]) {
+    assert.equal(classifyMonthlyRecord(row({ ocrText: `${text}食品配送` })).projectId, "aomeijia");
+    assert.equal(classifyMonthlyRecord(row({ note: `支付${text}货款` })).projectId, "aomeijia");
+  }
   assert.equal(classifyMonthlyRecord(row({ note: "墨赞采购" })).projectId, "mozan");
   assert.equal(classifyMonthlyRecord(row({ ocrText: "快驴 墨赞" })).projectId, "kuailv");
   assert.equal(classifyMonthlyRecord(row({ note: "宿舍房租", expenseCategory: "rent" })).projectId, "dorm-rent");
@@ -11,6 +14,36 @@ test("project rules use OCR or notes and resolve overlapping matches without dup
   assert.equal(classifyMonthlyRecord(row()).projectId, "other-food");
   assert.equal(classifyMonthlyRecord(row({ expenseCategory: "other" })).projectId, "other");
 
+});
+test("Qiamuyang merges into the existing supplier project and preserves higher priority rules", () => {
+  const groups = aggregateMonthlyRecords([
+    row({ id: 1, ocrText: "澳美佳配送", amount: 10 }),
+    row({ id: 2, ocrText: "恰沐阳食品配送", amount: 20 }),
+    row({ id: 3, note: "恰沐阳货款", amount: 30 }),
+  ]);
+  assert.equal(groups.length, 1);
+  assert.equal(groups[0].projectId, "aomeijia");
+  assert.equal(groups[0].project, "澳美佳 / 安之乐 / 知其味");
+  assert.equal(groups[0].recordCount, 3);
+  assert.equal(groups[0].amountCents, 6000);
+  assert.equal(classifyMonthlyRecord(row({ note: "快驴 恰沐阳" })).projectId, "kuailv");
+  assert.equal(classifyMonthlyRecord(row({ note: "恰沐阳", channelCode: "reimbursement_fuzzy_manager" })).projectId, "manager");
+  assert.equal(classifyMonthlyRecord(row({ ocrText: "恰沐阳", expenseCategory: "flower" })).projectId, "flower");
+});
+test("Jinhui and Jingzhou match OCR or notes and follow the requested project order", () => {
+  for (const [name, projectId] of [["金辉", "jinhui"], ["景洲", "jingzhou"]]) {
+    assert.equal(classifyMonthlyRecord(row({ ocrText: `${name}食品配送` })).projectId, projectId);
+    assert.equal(classifyMonthlyRecord(row({ note: `支付${name}货款`, ocrText: null })).projectId, projectId);
+    assert.equal(classifyMonthlyRecord(row({ note: name, channelCode: "reimbursement_fuzzy_manager" })).projectId, "manager");
+    assert.equal(classifyMonthlyRecord(row({ ocrText: name, expenseCategory: "flower" })).projectId, "flower");
+  }
+  assert.equal(classifyMonthlyRecord(row({ note: "快驴 金辉" })).projectId, "kuailv");
+  assert.equal(classifyMonthlyRecord(row({ ocrText: "金辉 澳美佳" })).projectId, "jinhui");
+  assert.equal(classifyMonthlyRecord(row({ note: "澳美佳 景洲" })).projectId, "aomeijia");
+  assert.equal(classifyMonthlyRecord(row({ note: "景洲 墨赞" })).projectId, "jingzhou");
+  const groups = aggregateMonthlyRecords(["墨赞", "景洲", "澳美佳", "金辉", "快驴"].map((note, index) => row({ id: index + 1, note })));
+  assert.deepEqual(groups.map(group => group.project), ["快驴", "金辉", "澳美佳 / 安之乐 / 知其味", "景洲", "墨赞"]);
+  assert.equal(monthlyTotals(groups)[0].amountCents, 5000);
 });
 test("reporter order precedes project order, categories merge and currencies never mix", () => {
   const records = [row({ reporter:"邓振国", note:"快驴" }), row({ note:"工资", expenseCategory:"salary" }), row({ reporter:"李晨晨", note:"澳美佳" }), row({ note:"快驴", amount:0.1 }), row({ note:"快驴", expenseCategory:"other", amount:0.2 }), row({ reporter:"其他", note:"快驴" }), row({ note:"快驴", currency:"USD", amount:8 })];

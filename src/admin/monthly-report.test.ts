@@ -91,6 +91,18 @@ test("monthly page, API, details, export and assets enforce explicit permission 
   assert.equal(flowerDetail.total,1);assert.equal(flowerDetail.items[0].expenseCategory,"flower");
   const projectOptions=await (await request("all",api+"/options")).json();
   assert.deepEqual(projectOptions.projects.slice(-2).map((p:any)=>p.name),["花卉","其他"]);
+  assert.deepEqual(projectOptions.projects.slice(0,5).map((p:any)=>p.name),["快驴","金辉","澳美佳 / 安之乐 / 知其味","景洲","墨赞"]);
+  for (const [name, projectId] of [["金辉", "jinhui"], ["景洲", "jingzhou"]]) {
+    const ocrId=seed({note:"",ocr:`${name}食品配送`,amount:23});
+    const noteId=seed({note:`支付${name}货款`,ocr:"",amount:29});
+    const supplierSummary=await (await request("all",api+query)).json();
+    const supplier=supplierSummary.groups.find((g:any)=>g.projectId===projectId);
+    assert.equal(supplier.project,name);assert.equal(supplier.recordCount,2);assert.equal(supplier.amountCents,5200);
+    const supplierDetail=await (await request("all",api+"/details"+query+`&projectId=${projectId}&reporter=`+encodeURIComponent("张志延")+"&currency=CNY")).json();
+    assert.equal(supplierDetail.total,2);assert.deepEqual(supplierDetail.items.map((item:any)=>item.id),[ocrId,noteId]);
+    const supplierCsv=await (await request("all",api+"/export"+query+"&q="+encodeURIComponent(name))).text();
+    assert.ok(supplierCsv.includes(`"${name}"`));assert.ok(supplierCsv.includes('"52.00"'));
+  }
   revoked=true;
   assert.equal((await request("all",api+query)).status,403);assert.equal((await request("all",api+"/export"+query)).status,403);assert.equal((await request("all","/expense/monthly")).status,403);
 });

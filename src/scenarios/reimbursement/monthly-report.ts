@@ -18,7 +18,9 @@ const MONTHLY_CATEGORY_FALLBACK = new Map<string, string>([
 export const MONTHLY_REPORTERS = ["张志延", "李晨晨", "邓振国"];
 export const MONTHLY_PROJECTS = [
   { id: "kuailv", name: "快驴", keywords: ["快驴"], description: "OCR 或备注包含「快驴」" },
-  { id: "aomeijia", name: "澳美佳 / 安之乐 / 知其味", keywords: ["澳美佳", "安之乐", "知其味"], description: "命中任一字样，合并为同一项目" },
+  { id: "jinhui", name: "金辉", keywords: ["金辉"], description: "OCR 或备注包含「金辉」" },
+  { id: "aomeijia", name: "澳美佳 / 安之乐 / 知其味", keywords: ["澳美佳", "安之乐", "知其味", "恰沐阳"], description: "命中任一字样，合并为同一项目" },
+  { id: "jingzhou", name: "景洲", keywords: ["景洲"], description: "OCR 或备注包含「景洲」" },
   { id: "mozan", name: "墨赞", keywords: ["墨赞"], description: "OCR 或备注包含「墨赞」" },
   { id: "other-food", name: "其他食材", keywords: [], description: "未命中任何指定项目的食材报账" },
   { id: "manager", name: "店长报账", keywords: [], description: "仅按来源渠道：店长报账群的全部记录合并，统一显示为张志延；不依据 OCR、备注或类别识别" },
