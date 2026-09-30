@@ -146,7 +146,7 @@ test("detail presentation preserves fields and honors attachment and edit permis
     html.slice(html.indexOf("      function renderDetail("), html.indexOf("      async function loadDetail(")),
   ].join("\n");
   const report = {
-    id: 72, reporter: '<img src=x onerror="alert(1)">', channelName: "Fuzzy", channelCode: "reimbursement_fuzzy",
+    id: 72, permissions: { canDelete: false }, reporter: '<img src=x onerror="alert(1)">', channelName: "Fuzzy", channelCode: "reimbursement_fuzzy",
     amount: 1234.5, currency: "USD", expenseCategory: "food", expenseCategoryLabel: "食材",
     note: "农 <script>note</script>", ocrText: "OCR <script>ocr</script>", needsReview: true,
     merchant: "测试商户", documentNo: "document-72", voucherType: "receipt", confidence: 0.98,
@@ -159,18 +159,21 @@ test("detail presentation preserves fields and honors attachment and edit permis
   };
   for (const canAttachment of [false, true]) {
     for (const canEdit of [false, true]) {
+      for (const [canDelete, recordDelete] of [[false,true],[true,false],[true,true]] as const) {
+      report.permissions.canDelete = recordDelete;
       const elements = { detailEmpty: { hidden: false }, detailContent: { hidden: true, innerHTML: "" }, detailModalTitle: { textContent: "" } };
       runInNewContext(`${source}\nrenderDetail(report)`, {
-        report, elements, state: { canAttachment, canEdit, timeZone: "Asia/Shanghai" },
+        report, elements, state: { canAttachment, canEdit, canDelete, timeZone: "Asia/Shanghai" },
         BASE_PATH: "/expense", DEFAULT_TIME_ZONE: "Asia/Shanghai", STORE_LABELS_BY_CHANNEL_CODE: new Map(),
       });
       const markup = elements.detailContent.innerHTML;
       const sharedSource = fs.readFileSync(path.resolve(process.cwd(), "dist/admin/public/monthly/report-detail.js"), "utf8");
       const sharedMarkup = runInNewContext(`${sharedSource}\nwindow.ExpenseReportDetail.render(report, options)`, {
-        window: {}, report, options: { canAttachment, canEdit, timeZone: "Asia/Shanghai" },
+        window: {}, report, options: { canAttachment, canEdit, canDelete, timeZone: "Asia/Shanghai" },
       });
       assert.equal(sharedMarkup, markup, "Monthly source details must match the canonical admin template");
       assert.equal(markup.includes("data-detail-edit"), canEdit);
+      assert.equal(markup.includes("data-detail-delete"), canDelete && recordDelete);
       assert.equal(markup.includes("/expense/api/attachments/9/content"), canAttachment);
       assert.equal(markup.includes("/expense/api/attachments/10/content"), canAttachment);
       assert.doesNotMatch(markup, /\/attachments\/11\/content|<script\b|<img src=x/);
@@ -180,6 +183,7 @@ test("detail presentation preserves fields and honors attachment and edit permis
         assert.ok(markup.includes(value), `Missing detail value: ${value}`);
       }
       assert.equal(elements.detailModalTitle.textContent, "报账 #72");
+      }
     }
   }
 });

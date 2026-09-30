@@ -121,7 +121,7 @@
     return `<div class="detail-dialog"><div class="detail-grip"></div><div class="detail-topbar"><h2 id="sourceReportDialogTitle">${esc(title)}</h2><button id="sourceReportDialogClose" data-close="sourceReportDialog" aria-label="关闭报账详情">${icon('close')}</button></div><div class="detail-scroll" id="sourceReportScroll">${body}</div></div>`;
   }
   function paintSourceReport() {
-    $('sourceReportDialog').innerHTML = sourceShell(`报账 #${s.sourceReport.id}`, window.ExpenseReportDetail.render(s.sourceReport, { timeZone:s.options.timeZone, canAttachment:s.sourceCanAttachment, canEdit:s.sourceCanEdit }));
+    $('sourceReportDialog').innerHTML = sourceShell(`报账 #${s.sourceReport.id}`, window.ExpenseReportDetail.render(s.sourceReport, { timeZone:s.options.timeZone, canAttachment:s.sourceCanAttachment, canEdit:s.sourceCanEdit, canDelete:s.sourceCanDelete }));
   }
   async function openSourceReport(id) {
     if (!Number.isSafeInteger(id) || id <= 0) return;
@@ -133,7 +133,7 @@
     try {
       const [payload,session]=await Promise.all([json(`/expense/api/reports/${id}`,s.sourceAbort.signal),json('/expense/api/session',s.sourceAbort.signal)]);
       if(serial!==s.sourceSerial||!$('sourceReportDialog').open)return;
-      s.sourceReport=payload.report;s.sourceCanAttachment=session.permissions?.canAttachment??true;s.sourceCanEdit=session.permissions?.canEdit??session.permissions?.canWrite===true;
+      s.sourceReport=payload.report;s.sourceCanAttachment=session.permissions?.canAttachment??true;s.sourceCanEdit=session.permissions?.canEdit??session.permissions?.canWrite===true;s.sourceCanDelete=(session.permissions?.canDelete??session.permissions?.canWrite===true)||session.permissions?.canDeleteSelf===true;
       paintSourceReport();$('sourceReportDialogClose').focus({preventScroll:true});
     }catch(error){if(serial===s.sourceSerial&&error.name!=='AbortError')$('sourceReportDialog').innerHTML=sourceShell(`报账 #${id}`,`<p class="detail-empty" role="alert">${esc(error.message)}</p>`);}
   }
@@ -145,8 +145,26 @@
     if(!updated){closeDialog('detailDialog');return;}
     s.group=updated;s.details=[];s.detailTotal=updated.recordCount;s.detailLoading=false;s.detailError='';await loadDetails();
   }
+  async function deleteSourceReport() {
+    const report=s.sourceReport;
+    if(!report||!s.sourceCanDelete||report.permissions?.canDelete!==true||s.sourceSaving)return;
+    const amountText=report.amount==null?'待复核':`${Number(report.amount).toFixed(2)} ${report.currency||'CNY'}`;
+    if(!window.confirm(`确认删除报账 #${report.id} 吗？\n报账人：${report.reporter||'未知'}\n金额：${amountText}\n此操作不可恢复。`))return;
+    s.sourceSaving=true;
+    const button=$('sourceReportDialog').querySelector('[data-detail-delete]');
+    if(button){button.disabled=true;button.textContent='正在删除...';}
+    $('sourceReportDialog').querySelector('[data-detail-edit]')?.setAttribute('disabled','');
+    try {
+      const response=await fetch(`/expense/api/reports/${report.id}`,{method:'DELETE',headers:{Accept:'application/json'}}),data=await response.json();
+      if(!response.ok||!data.success)throw new Error(data.error?.message||'删除失败，请重试。');
+      s.sourceChanged=true;s.sourceSaving=false;closeDialog('sourceReportDialog');notify(`已删除报账 #${report.id}`);
+    }catch(error){
+      s.sourceSaving=false;
+      if($('sourceReportDialog').open&&s.sourceReport?.id===report.id){paintSourceReport();$('sourceReportDialog').querySelector('#detailDeleteStatus').textContent=error.message;}
+    }finally{s.sourceSaving=false;}
+  }
   async function openSourceEdit() {
-    if(!s.sourceReport||!s.sourceCanEdit)return;
+    if(!s.sourceReport||!s.sourceCanEdit||s.sourceSaving)return;
     const serial=++s.editSerial,report=s.sourceReport;
     $('sourceEditDialog').innerHTML=`<div class="drawer-inner"><div class="drawer-top"><h2 id="sourceEditTitle">编辑报账 #${report.id}</h2><button data-close="sourceEditDialog" aria-label="关闭编辑">${icon('close')}</button></div><form id="sourceEditForm"><div class="source-edit-grid"><label>金额（元）<input id="sourceEditAmount" type="number" step="any" placeholder="留空表示不修改" value="${esc(report.amount??'')}"></label><label>类别<select id="sourceEditCategory" required disabled><option value="">正在加载类别…</option></select></label></div><label>当前备注（只读）<div class="source-edit-note">${esc(report.note||'暂无备注')}</div></label><label>追加备注（选填）<textarea id="sourceEditNote" maxlength="1000" placeholder="仅追加，不覆盖已有备注"></textarea></label><p id="sourceEditStatus" role="status">正在加载类别…</p><div class="source-edit-actions"><button type="button" data-close="sourceEditDialog">取消</button><button id="sourceEditSave" class="primary" disabled>保存修改</button></div></form></div>`;
     showDialog('sourceEditDialog');
@@ -219,6 +237,7 @@
     }
     if(target.disabled)return;
     if(target.dataset.sourceRecord){void openSourceReport(Number(target.dataset.sourceRecord));return;}
+    if(target.hasAttribute('data-detail-delete')){void deleteSourceReport();return;}
     if(target.hasAttribute('data-detail-edit')){void openSourceEdit();return;}
     if(target.hasAttribute('data-detail-attachments')){const section=$('sourceReportDialog').querySelector('#detailSources');if(section){section.open=true;section.scrollIntoView({block:'start'});}return;}
     if(target.dataset.close){closeDialog(target.dataset.close);return;}

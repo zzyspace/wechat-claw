@@ -1473,6 +1473,11 @@
       #detailModal .detail-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 18px; }
       #detailModal .detail-actions button { min-height: 44px; padding: 8px 10px; border-radius: 12px; font-size: 13px; }
       #detailModal .detail-actions button:only-child { grid-column: 1 / -1; }
+      #detailModal .detail-delete-actions { margin-top: 10px; }
+      #detailModal .detail-delete-actions button { width: 100%; min-height: 44px; padding: 8px 12px; border-radius: 12px; border: 1px solid rgba(255, 59, 48, .22); color: var(--danger, #ff3b30); background: rgba(255, 59, 48, .06); font-size: 13px; }
+      #detailModal .detail-delete-status { margin: 8px 0 0; color: var(--danger, #ff3b30); font-size: 12px; line-height: 1.7; }
+      #detailModal .detail-delete-status:empty { display: none; }
+      :root[data-theme="dark"] #detailModal .detail-delete-actions button, :root[data-theme="dark"] #detailModal .detail-delete-status { color: #ff6961; }
       #detailModal .detail-disclosures { margin-top: 20px; }
       #detailModal .detail-disclosure { padding: 10px 0; border-top: 1px solid var(--line); }
       #detailModal .detail-disclosure summary { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 44px; font-size: 12px; cursor: pointer; list-style: none; }
@@ -3795,6 +3800,8 @@ body > .topbar .center-switcher-menu { top: calc(100% + 9px); left: auto; }
             <button type="button" data-detail-attachments ${state.canAttachment && attachmentCount > 0 ? "" : "disabled"}>${!state.canAttachment ? "无附件权限" : attachmentCount > 0 ? `查看附件 (${attachmentCount})` : hasCleanedAttachments ? "附件已清理" : "暂无附件"}</button>
             ${state.canEdit ? '<button class="button-primary" type="button" data-detail-edit>编辑记录</button>' : ""}
           </div>
+          ${state.canDelete && report.permissions?.canDelete === true ? '<div class="detail-delete-actions"><button type="button" class="button-danger" data-detail-delete>删除记录</button></div>' : ""}
+          <p class="detail-delete-status" id="detailDeleteStatus" role="status" aria-live="polite"></p>
           <div class="detail-disclosures">
             <details class="detail-disclosure" id="detailSources">
               <summary>原始消息与 OCR</summary>
@@ -4297,8 +4304,9 @@ body > .topbar .center-switcher-menu { top: calc(100% + 9px); left: auto; }
         }
       }
 
-      async function deleteReport(reportId) {
-        const report = state.items.find((item) => item.id === reportId);
+      async function deleteReport(reportId, detailReport = null) {
+        if (state.deletingIds.has(reportId) || state.savingReport) return;
+        const report = detailReport?.id === reportId ? detailReport : state.items.find((item) => item.id === reportId);
         if (!canDeleteItem(report)) {
           setStatus("当前账号无权删除这条报账记录。", true);
           return;
@@ -4309,6 +4317,13 @@ body > .topbar .center-switcher-menu { top: calc(100% + 9px); left: auto; }
         }
 
         state.deletingIds.add(reportId);
+        if (state.detailReport?.id === reportId) {
+          const button = elements.detailContent.querySelector("[data-detail-delete]");
+          if (button) { button.disabled = true; button.textContent = "正在删除..."; }
+          elements.detailContent.querySelector("[data-detail-edit]")?.setAttribute("disabled", "");
+          const status = elements.detailContent.querySelector("#detailDeleteStatus");
+          if (status) status.textContent = "";
+        }
         renderTable();
         setStatus(`正在删除报账 #${reportId}...`);
 
@@ -4337,9 +4352,19 @@ body > .topbar .center-switcher-menu { top: calc(100% + 9px); left: auto; }
           setStatus(`已删除报账 #${reportId}`);
           await loadReports();
         } catch (error) {
-          setStatus(error instanceof Error ? error.message : String(error), true);
+          const message = error instanceof Error ? error.message : String(error);
+          setStatus(message, true);
+          if (state.detailReport?.id === reportId) {
+            const status = elements.detailContent.querySelector("#detailDeleteStatus");
+            if (status) status.textContent = message;
+          }
         } finally {
           state.deletingIds.delete(reportId);
+          if (state.detailReport?.id === reportId) {
+            const button = elements.detailContent.querySelector("[data-detail-delete]");
+            if (button) { button.disabled = false; button.textContent = "删除记录"; }
+            elements.detailContent.querySelector("[data-detail-edit]")?.removeAttribute("disabled");
+          }
           renderTable();
         }
       }
@@ -4716,6 +4741,10 @@ body > .topbar .center-switcher-menu { top: calc(100% + 9px); left: auto; }
           const top = section.getBoundingClientRect().top - elements.detailScroll.getBoundingClientRect().top + elements.detailScroll.scrollTop - 16;
           elements.detailScroll.scrollTo({ top: Math.max(0, top), behavior: "instant" });
           (link || sources.querySelector("summary"))?.focus({ preventScroll: true });
+          return;
+        }
+        if (target.closest("[data-detail-delete]") && canDeleteItem(state.detailReport)) {
+          void deleteReport(state.detailReport.id, state.detailReport);
           return;
         }
         if (target.closest("[data-detail-edit]") && state.canEdit) {
