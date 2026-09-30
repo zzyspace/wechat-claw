@@ -15,6 +15,7 @@ import { extractLossReportHeuristically } from "../scenarios/loss-report/heurist
 import { extractLossReportByModel } from "../scenarios/loss-report/model-provider.js";
 import { extractReimbursementReport } from "../scenarios/reimbursement/extractor.js";
 import { importManualReimbursementReport } from "../scenarios/reimbursement/manual-import.js";
+import { parseMonthlyLedgerNote } from "../scenarios/reimbursement/monthly-ledger.js";
 import {
   attachRawMessageToRecentReimbursementReceiptDelivery,
   attachRemarkToReimbursementReport,
@@ -1983,13 +1984,7 @@ function normalizeReceiptCommandExpenseCategory(value: string): ReimbursementExp
 }
 
 function isMonthlyLedgerReceiptCommandText(text: string) {
-  const match = text.match(/^(\d{1,2})月账$/);
-  if (!match) {
-    return false;
-  }
-
-  const month = Number(match[1]);
-  return Number.isInteger(month) && month >= 1 && month <= 12;
+  return parseMonthlyLedgerNote(text)?.text === text;
 }
 
 function cryptoRandomId() {

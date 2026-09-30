@@ -78,7 +78,7 @@ test("updateAdminReimbursementReport applies bot-compatible edits and rejects st
   assert.equal(updated.report.note, "待复核；8月账");
   assert.equal(updated.report.needsReview, false);
   assert.equal(updated.report.evidenceType, "image+text");
-  assert.equal(updated.report.createdAt, "2026-08-30 16:00:00");
+  assert.equal(updated.report.createdAt, "2026-08-31 15:59:59");
   assert.notEqual(updated.report.updatedAt, report.updatedAt);
 
   const stale = updateAdminReimbursementReport({
@@ -251,7 +251,7 @@ test("saveReimbursementReport backdates createdAt when note contains x月账", (
     referenceDateTime: "2026-05-22T10:00:00.000Z",
   });
 
-  assert.equal(formatLocalTimestamp(report.createdAt, "Asia/Shanghai"), "2026-04-30 00:00:00");
+  assert.equal(formatLocalTimestamp(report.createdAt, "Asia/Shanghai"), "2026-04-30 23:59:59");
 });
 
 test("attachRemarkToReimbursementReport backdates createdAt when merged note contains x月账", () => {
@@ -308,7 +308,7 @@ test("attachRemarkToReimbursementReport backdates createdAt when merged note con
   });
 
   assert.equal(updated.note, "平；5月账");
-  assert.equal(formatLocalTimestamp(updated.createdAt, "Asia/Shanghai"), "2026-05-31 00:00:00");
+  assert.equal(formatLocalTimestamp(updated.createdAt, "Asia/Shanghai"), "2026-05-31 23:59:59");
 });
 
 test("mergePrimaryImageIntoTextOnlyReimbursementReport backdates createdAt when merged note contains x月账", () => {
@@ -376,7 +376,7 @@ test("mergePrimaryImageIntoTextOnlyReimbursementReport backdates createdAt when 
   });
 
   assert.equal(updated.note, "平；6月账");
-  assert.equal(formatLocalTimestamp(updated.createdAt, "Asia/Shanghai"), "2026-06-30 00:00:00");
+  assert.equal(formatLocalTimestamp(updated.createdAt, "Asia/Shanghai"), "2026-06-30 23:59:59");
 });
 
 test("mergePrimaryImageIntoTextOnlyReimbursementReport clears text-only needsReview when image has amount", () => {
