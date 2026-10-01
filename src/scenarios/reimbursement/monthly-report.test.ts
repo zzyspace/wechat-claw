@@ -48,7 +48,7 @@ test("Jinhui and Jingzhou match OCR or notes and follow the requested project or
 test("all other OCR project keywords outrank Jinhui without changing note-only priority", () => {
   for (const [word, projectId] of [
     ["快驴", "kuailv"], ["澳美佳", "aomeijia"], ["安之乐", "aomeijia"], ["知其味", "aomeijia"], ["恰沐阳", "aomeijia"],
-    ["景洲", "jingzhou"], ["墨赞", "mozan"], ["房租", "rent"], ["宿舍房租", "dorm-rent"], ["水电", "utilities"], ["工资", "salary"],
+    ["景洲", "jingzhou"], ["墨赞", "mozan"], ["房租", "rent"], ["宿舍房租", "dorm-rent"], ["水电", "utilities"],
   ]) {
     for (const ocrText of [`金辉 ${word}`, `${word} 金辉`]) {
       assert.equal(classifyMonthlyRecord(row({ ocrText })).projectId, projectId);
@@ -115,8 +115,8 @@ test("manager grouping depends only on exact source channels and takes precedenc
   }
 });
 
-test("rent, utilities and salary fall back to category after named project matching", () => {
-  for (const [expenseCategory, projectId] of [["rent", "rent"], ["utilities", "utilities"], ["salary", "salary"]]) {
+test("rent and utilities fall back to category after named project matching", () => {
+  for (const [expenseCategory, projectId] of [["rent", "rent"], ["utilities", "utilities"]]) {
     assert.equal(classifyMonthlyRecord(row({ expenseCategory, note: "", ocrText: null })).projectId, projectId);
     assert.equal(classifyMonthlyRecord(row({ expenseCategory, note: "快驴" })).projectId, "kuailv");
   }
@@ -140,4 +140,22 @@ test("flowers use category only, after manager source and before keyword matches
   assert.equal(groups[2].recordCount,2);assert.equal(groups[2].amountCents,700);
   assert.equal(monthlyTotals(groups)[0].projectCount,3);
   assert.ok(monthlyCsv(groups).includes('"花卉"'));assert.ok(monthlyCsv(groups).includes('"其他"'));assert.ok(!monthlyCsv(groups).includes('待归类'));
+});
+
+
+test("salary uses category only, after manager source and before keywords", () => {
+  for (const text of ["", "快驴", "金辉 工资", "宿舍房租", "水电", "景洲 墨赞"]) {
+    for (const fields of [{ note: text, ocrText: null }, { note: "", ocrText: text }]) {
+      assert.deepEqual(classifyMonthlyRecord(row({ ...fields, expenseCategory: "salary", reporter: " 李晨晨 " })), { projectId: "salary", reporter: "李晨晨" });
+    }
+  }
+  for (const [expenseCategory, projectId] of [["food", "other-food"], ["other", "other"], ["rent", "rent"], ["utilities", "utilities"], ["flower", "flower"]]) {
+    for (const fields of [{ note: "发工资", ocrText: null }, { note: "", ocrText: "工资付款" }]) {
+      assert.equal(classifyMonthlyRecord(row({ ...fields, expenseCategory })).projectId, projectId);
+    }
+  }
+  assert.equal(classifyMonthlyRecord(row({ ocrText: "金辉 工资" })).projectId, "jinhui");
+  for (const channelCode of ["reimbursement_fuzzy_manager", "reimbursement_peanut_manager", "reimbursement_fuzzy_qz_manager"]) {
+    assert.deepEqual(classifyMonthlyRecord(row({ channelCode, expenseCategory: "salary", reporter: "李晨晨" })), { projectId: "manager", reporter: "张志延" });
+  }
 });

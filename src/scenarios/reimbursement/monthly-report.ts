@@ -13,7 +13,7 @@ const MONTHLY_MANAGER_CHANNELS = new Set([
   "reimbursement_fuzzy_manager", "reimbursement_peanut_manager", "reimbursement_fuzzy_qz_manager",
 ]);
 const MONTHLY_CATEGORY_FALLBACK = new Map<string, string>([
-  ["food", "other-food"], ["rent", "rent"], ["utilities", "utilities"], ["salary", "salary"],
+  ["food", "other-food"], ["rent", "rent"], ["utilities", "utilities"],
 ]);
 export const MONTHLY_REPORTERS = ["张志延", "李晨晨", "邓振国"];
 export const MONTHLY_PROJECTS = [
@@ -27,7 +27,7 @@ export const MONTHLY_PROJECTS = [
   { id: "rent", name: "房租", keywords: ["房租"], description: "OCR 或备注包含「房租」，排除宿舍房租；未命中指定项目时按房租类别兜底" },
   { id: "dorm-rent", name: "宿舍房租", keywords: ["宿舍房租"], description: "OCR 或备注包含「宿舍房租」" },
   { id: "utilities", name: "水电", keywords: ["水电"], description: "OCR 或备注包含「水电」；未命中指定项目时按水电类别兜底" },
-  { id: "salary", name: "工资", keywords: ["工资"], description: "OCR 或备注包含「工资」；未命中指定项目时按工资类别兜底" },
+  { id: "salary", name: "工资", keywords: [], description: "仅依据 salary 类别，不匹配 OCR 或备注；店长报账来源优先" },
   { id: "flower", name: "花卉", keywords: [], description: "仅依据 flower 类别，不匹配 OCR 或备注；店长报账来源优先" },
   { id: "other", name: "其他", keywords: [], description: "不属于以上项目的其他记录，金额计入总额" },
 ];
@@ -61,6 +61,7 @@ export function monthlyStoresForScope(scope: MonthlyScope) {
 }
 export function classifyMonthlyRecord(record: MonthlyRecord) {
   if (record.channelCode && MONTHLY_MANAGER_CHANNELS.has(record.channelCode)) return { projectId: "manager", reporter: "张志延" };
+  if (record.expenseCategory === "salary") return { projectId: "salary", reporter: record.reporter.trim() || "未知" };
   if (record.expenseCategory === "flower") return { projectId: "flower", reporter: record.reporter.trim() || "未知" };
   const texts = [record.ocrText || "", record.note || ""];
   const includes = (word: string) => texts.some(text => text.includes(word));

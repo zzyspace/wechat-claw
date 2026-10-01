@@ -111,6 +111,18 @@ test("monthly page, API, details, export and assets enforce explicit permission 
   assert.equal(conflictDetails.total,1);assert.equal(conflictDetails.items[0].id,qiamuyangId);
   const conflictCsv=await (await request("all",api+"/export"+query+"&q="+encodeURIComponent("澳美佳"))).text();
   assert.ok(conflictCsv.includes('"31.00"'));
+  const salaryId=seed({reporter:"李晨晨",category:"salary",note:"快驴",ocr:"金辉 水电",amount:37});
+  seed({reporter:"李晨晨",category:"food",note:"工资",ocr:"工资付款",amount:41});
+  const salarySummary=await (await request("all",api+query)).json();
+  const salaryGroup=salarySummary.groups.find((g:any)=>g.projectId==="salary"&&g.reporter==="李晨晨");
+  assert.equal(salaryGroup.recordCount,2);assert.equal(salaryGroup.amountCents,5000);
+  assert.equal(salarySummary.groups.find((g:any)=>g.projectId==="other-food"&&g.reporter==="李晨晨").amountCents,4100);
+  const salaryDetails=await (await request("all",api+"/details"+query+"&projectId=salary&reporter="+encodeURIComponent("李晨晨")+"&currency=CNY")).json();
+  assert.equal(salaryDetails.total,2);assert(salaryDetails.items.every((item:any)=>item.expenseCategory==="salary"));
+  assert(salaryDetails.items.some((item:any)=>item.id===salaryId));
+  const salaryCsv=await (await request("all",api+"/export"+query+"&q="+encodeURIComponent("工资"))).text();
+  assert.ok(salaryCsv.includes('"50.00"'));assert.ok(!salaryCsv.includes('"41.00"'));
+  assert.match(projectOptions.projects.find((p:any)=>p.id==="salary").description,/仅依据 salary 类别/);
   revoked=true;
   assert.equal((await request("all",api+query)).status,403);assert.equal((await request("all",api+"/export"+query)).status,403);assert.equal((await request("all","/expense/monthly")).status,403);
 });
