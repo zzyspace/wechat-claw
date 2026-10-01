@@ -617,7 +617,7 @@ export function createApp(input?: {
     response.sendFile(path.join(staticDir, "admin.html"));
   });
 
-  app.get(`${ADMIN_BASE_PATH}/list-loading.js`, adminAuth, requirePermission("report:view"), (_request, response) => {
+  app.get(`${ADMIN_BASE_PATH}/api/list-loading.js`, adminAuth, requirePermission("report:view"), (_request, response) => {
     response.sendFile(path.join(staticDir, "list-loading.js"));
   });
 

@@ -936,6 +936,13 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     });
     assert.equal(pageResponse.status, 200);
     const pageHtml = await pageResponse.text();
+    assert.match(pageHtml, /src="\/expense\/api\/list-loading\.js"/);
+    for (const prefix of ["/expense/api", "/reimbursement/api"]) {
+      const asset = await fetch(`${server.baseUrl}${prefix}/list-loading.js`, { headers: createAdminAuthHeaders() });
+      assert.equal(asset.status, 200);
+      assert.match(await asset.text(), /createThumbnailLoader/);
+      assert.equal((await fetch(`${server.baseUrl}${prefix}/list-loading.js`)).status, 401);
+    }
     assert.match(pageHtml, /报账查看后台/);
     assert.match(pageHtml, /<form method="get" action="\/expense\/submit"[^>]*hidden>/);
     assert.match(pageHtml, /<button class="button-primary submit-button" type="submit">/);

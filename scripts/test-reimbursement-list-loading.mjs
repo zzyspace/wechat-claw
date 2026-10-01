@@ -19,7 +19,7 @@ const server = createServer((request, response) => {
   response.on("finish", () => { entry.completed = true; });
   const json = (value) => { response.setHeader("Content-Type", "application/json"); response.end(JSON.stringify(value)); };
   if (url.pathname === "/expense") { response.setHeader("Content-Type", "text/html"); response.end(html); }
-  else if (url.pathname === "/expense/list-loading.js") { response.setHeader("Content-Type", "text/javascript"); response.end(script); }
+  else if (url.pathname === "/expense/api/list-loading.js") { response.setHeader("Content-Type", "text/javascript"); response.end(script); }
   else if (url.pathname === "/auth/api/session") json({ apps: ["expense"] });
   else if (url.pathname === "/expense/api/session") json({ success: true, account: { role: "partner", username: "fixture" }, permissions: { canWrite: false, canAttachment: true, canSubmit: false } });
   else if (url.pathname === "/expense/api/reports") {
