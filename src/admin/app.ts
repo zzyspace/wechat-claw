@@ -2,6 +2,9 @@ import { createMonthlyReportRouter } from "./monthly-report-routes.js";
 import { MONTHLY_REPORT_PERMISSION } from "../scenarios/reimbursement/monthly-report.js";
 import { createGatewayAuth, gatewayAuthConfig, resolveShortcutAccount, type GatewayAuthConfig } from "./gateway-auth.js";
 import { actionChannels, hasPermission, requirePermission, submissionChannels, canViewResource, canDeleteReport, reportAccessScope } from "./authorization.js";
+import { ThumbnailCache, ThumbnailBusyError } from "./thumbnail-cache.js";
+import { requestPerformance, recordRequestStage, setTimingHeader } from "./request-performance.js";
+import { createLogger } from "../core/logging/logger.js";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
@@ -458,6 +461,8 @@ export function createApp(input?: {
     throw new Error(config.reimbursementAccountsParseError);
   }
   const staticDir = resolveStaticDir(input?.staticDir);
+  const requestLogger = createLogger({ resolveConfig: () => config });
+  const thumbnails = new ThumbnailCache(path.join(getStateDirPath(config), "reimbursement", "thumbnails"));
   const batchUploadTempDir = path.join(getStateDirPath(config), "reimbursement", "batch-upload-temp");
   fs.mkdirSync(batchUploadTempDir, { recursive: true });
   const batchImportImageUpload = multer({
@@ -612,6 +617,10 @@ export function createApp(input?: {
     response.sendFile(path.join(staticDir, "admin.html"));
   });
 
+  app.get(`${ADMIN_BASE_PATH}/list-loading.js`, adminAuth, requirePermission("report:view"), (_request, response) => {
+    response.sendFile(path.join(staticDir, "list-loading.js"));
+  });
+
   app.get([`${ADMIN_BASE_PATH}/submit`, `${ADMIN_BASE_PATH}/submit/`], adminAuth, requirePermission("report:submit"), (_request, response) => {
     response.sendFile(path.join(staticDir, "submit.html"));
   });
@@ -756,7 +765,15 @@ export function createApp(input?: {
     },
   );
 
-  app.use(`${ADMIN_BASE_PATH}/api`, adminAuth);
+  app.use(ADMIN_BASE_PATH, requestPerformance(requestLogger));
+  app.use(`${ADMIN_BASE_PATH}/api`, (request, response, next) => {
+    const started = performance.now();
+    return adminAuth(request, response, (error?: unknown) => {
+      recordRequestStage(response, "auth", performance.now() - started);
+      setTimingHeader(response);
+      next(error);
+    });
+  });
   app.use(`${ADMIN_BASE_PATH}/api/monthly-reports`, createMonthlyReportRouter(config.timeZone));
   const checkReport: express.RequestHandler = (request, response, next) => {
     const session = getAdminSession(response);
@@ -1019,7 +1036,9 @@ export function createApp(input?: {
           ...reportAccessScope(session),
           timeZone: config.timeZone,
         },
+        (name, duration) => recordRequestStage(response, name, duration),
       );
+      setTimingHeader(response);
       response.status(200).json({
         success: true,
         ...result,
@@ -1165,8 +1184,54 @@ export function createApp(input?: {
     }
   });
 
+  app.get(`${ADMIN_BASE_PATH}/api/attachments/:attachmentId/thumbnail`, requirePermission("attachment:view"), async (request, response, next) => {
+    try {
+      const started = performance.now();
+      const attachmentId = parsePositiveInteger(request.params.attachmentId, "attachmentId");
+      const attachment = findAdminReimbursementAttachment(attachmentId);
+      const session = getAdminSession(response);
+      if (!attachment?.exists || !session || !canViewResource(session, {
+        channelCode: attachment.reportChannelCode, submittedByAccountId: attachment.reportSubmittedByAccountId,
+      })) {
+        response.status(404).json({ success: false, error: { message: "附件不存在或已被清理。" } });
+        return;
+      }
+      recordRequestStage(response, "attachment", performance.now() - started);
+      if (response.destroyed) return;
+      const thumbnailStarted = performance.now();
+      try {
+        const buffer = await thumbnails.get(attachment.localPath, attachment.sha256);
+        recordRequestStage(response, "thumbnail", performance.now() - thumbnailStarted);
+        if (response.destroyed) return;
+        // Generation is asynchronous: a report/source may have been deleted while it ran.
+        const current = findAdminReimbursementAttachment(attachmentId);
+        if (!current?.exists || current.sha256 !== attachment.sha256 || !canViewResource(session, {
+          channelCode: current.reportChannelCode, submittedByAccountId: current.reportSubmittedByAccountId,
+        })) {
+          response.status(404).json({ success: false, error: { message: "附件不存在或已被清理。" } });
+          return;
+        }
+        setTimingHeader(response);
+        response.type("image/webp").send(buffer);
+      } catch (error) {
+        recordRequestStage(response, "thumbnail", performance.now() - thumbnailStarted);
+        requestLogger.warn("reimbursement thumbnail unavailable", {
+          attachmentId, errorType: error instanceof Error ? error.name : "unknown",
+        });
+        if (response.destroyed) return;
+        setTimingHeader(response);
+        response.status(error instanceof ThumbnailBusyError ? 503 : 422).json({
+          success: false, error: { message: "缩略图暂不可用，请点击查看原图。" },
+        });
+      }
+    } catch (error) {
+      next(error);
+    }
+  });
+
   app.get(`${ADMIN_BASE_PATH}/api/attachments/:attachmentId/content`, requirePermission("attachment:view"), (request, response, next) => {
     try {
+      const started = performance.now();
       const attachmentId = parsePositiveInteger(request.params.attachmentId, "attachmentId");
       const attachment = findAdminReimbursementAttachment(attachmentId);
       const session = getAdminSession(response);
@@ -1197,6 +1262,8 @@ export function createApp(input?: {
         "Content-Disposition",
         `inline; filename*=UTF-8''${encodeURIComponent(buildAttachmentDownloadName(attachment.localPath))}`,
       );
+      recordRequestStage(response, "attachment", performance.now() - started);
+      setTimingHeader(response);
       response.sendFile(attachment.localPath);
     } catch (error) {
       next(error);

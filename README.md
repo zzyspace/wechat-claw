@@ -448,6 +448,16 @@ npm run admin:dev
   - 校验 `WECHATY_ADMIN_PUBLIC_HEALTHZ_URL`
 - [deploy/nginx/reimbursement-admin.locations.conf](/Users/ryan/DataDisk/Work/AI/wechat-claw/deploy/nginx/reimbursement-admin.locations.conf) 是迁移前兼容快照；生产 Nginx 路由由独立的 `server-infra` 项目统一发布。业务部署不会写入或 reload Nginx。
 
+报账列表加载与性能排查：
+
+- 列表通过 `/expense/api/attachments/:attachmentId/thumbnail` 加载最长边 240px 的 WebP；点击附件仍打开原图。缩略图失败显示“查看原图”，不会自动下载原图。
+- 图片只在接近可视区域时加载，浏览器最多并发 3 个；切换筛选会取消旧列表和旧图片请求。相同条件的在途查询合并，补录、编辑、删除完成后的刷新始终重新查询。
+- 缩略图由 `sharp` 按需生成，服务器最多并发 2 个、最多排队 32 个，超出队列返回 503。缓存位于 `${WECHATY_STATE_DIR}/reimbursement/thumbnails`，按内容哈希、源文件状态和规格区分，生成后执行 128 MiB 容量和 30 天文件年龄清理；启动后首次访问也会清理。缓存是可重新生成的派生文件，不改原附件或报账数据。
+- 缩略图每次请求均经过登录、附件权限和记录范围校验；即使缓存存在，报账记录或原附件已删除也返回 404。第一期保留 `Cache-Control: no-store`；页面内的图片 Object URL 仅在当前结果集内复用，筛选切换时释放。
+- 列表和图片请求写入现有日志，事件为 `reimbursement admin request`，包含 `requestId`、路由类型、状态码、完成标记、总耗时和响应字节数；成功请求还包含鉴权、查询、附件检查或缩略图处理耗时。日志不记录筛选文本、Cookie 或令牌。
+- 响应头 `X-Request-Id` 用于对应日志，`Server-Timing` 用于查看各服务端阶段。总耗时是服务端请求生命周期，不代表浏览器完整下载时间；浏览器 Network 面板用于核对排队和传输，Performance 的 `expense:list:fetch` 与 `expense:list:render` 用于区分数据获取和同步页面渲染（不含后续图片加载及绘制）。
+- 隔离浏览器检查：`CHROME_PATH="/path/to/chrome" node scripts/test-reimbursement-list-loading.mjs`。该脚本使用模拟数据和回环接口验证并发、重复提交、快速切换以及窄屏隐藏图片，不访问生产。真实 Safari 和生产网络耗时需发布后另行验证。
+
 手工执行一次 watchdog 巡检：
 
 ```bash

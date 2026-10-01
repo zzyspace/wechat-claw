@@ -1890,12 +1890,13 @@ export function listAdminReimbursementReports(options?: {
   offset?: number;
   submittedByAccountId?: string;
   allowedChannelCodes?: string[];
-}): {
+}, onTiming?: (name: "query" | "attachments", durationMs: number) => void): {
   total: number;
   limit: number;
   offset: number;
   items: AdminReimbursementListItem[];
 } {
+  const queryStarted = performance.now();
   const db = getDatabase();
   const limit =
     Number.isFinite(options?.limit) && Number(options?.limit) > 0 ? Math.min(Number(options?.limit), 1000) : 50;
@@ -2046,8 +2047,11 @@ export function listAdminReimbursementReports(options?: {
   const total = db
     .prepare(`SELECT COUNT(*) as count FROM reimbursement_reports ${whereSql}`)
     .get(params) as { count: number };
+  onTiming?.("query", performance.now() - queryStarted);
   const reports = rows.map((row) => mapReportRow(row));
+  const attachmentsStarted = performance.now();
   const billAttachmentsByReportId = listAdminBillAttachmentsByReportIds(reports.map((report) => report.id));
+  onTiming?.("attachments", performance.now() - attachmentsStarted);
 
   return {
     total: total.count,

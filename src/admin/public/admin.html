@@ -876,8 +876,15 @@
       }
 
       .bill-link {
+        position: relative;
         cursor: zoom-in;
         padding: 4px;
+      }
+
+      .bill-link [data-thumbnail-status] {
+        position: absolute;
+        font-size: 11px;
+        color: var(--ink-soft);
       }
 
       .bill-link img {
@@ -2201,10 +2208,13 @@ body > .topbar .center-switcher-menu { top: calc(100% + 9px); left: auto; }
       </div>
     </div>
 
+    <script src="/expense/list-loading.js"></script>
     <script>
       const BASE_PATH = "/expense";
       const DEFAULT_TIME_ZONE = "Asia/Shanghai";
       const DEFAULT_PAGE_LIMIT = 200;
+      const listRequestGate = ReimbursementListLoading.createRequestGate();
+      const listThumbnails = ReimbursementListLoading.createThumbnailLoader();
       const THEME_STORAGE_KEY = "comeover-admin-theme";
       const BATCH_TASK_STORAGE_KEY = "reimbursement-admin-active-batch-task";
       const DETAIL_CLICK_DELAY_MS = 300;
@@ -2622,7 +2632,7 @@ body > .topbar .center-switcher-menu { top: calc(100% + 9px); left: auto; }
           return `<span class="bill-placeholder warn">已清理</span>`;
         }
 
-        const href = `${BASE_PATH}/api/attachments/${attachment.id}/content`;
+        const href = `${BASE_PATH}/api/attachments/${attachment.id}/thumbnail`;
         return `
           <button
             type="button"
@@ -2631,7 +2641,8 @@ body > .topbar .center-switcher-menu { top: calc(100% + 9px); left: auto; }
             data-attachment-preview-report-id="${item.id}"
             aria-label="查看报账图片 ${item.id}"
           >
-            <img src="${href}" alt="报账图片 ${item.id}" loading="lazy" />
+            <img data-thumbnail-url="${href}" alt="报账图片 ${item.id}" width="72" height="72" decoding="async" style="opacity:0" />
+            <span data-thumbnail-status>加载中</span>
           </button>
         `;
       }
@@ -2875,7 +2886,7 @@ body > .topbar .center-switcher-menu { top: calc(100% + 9px); left: auto; }
                 : `批量补录成功，共生成 ${task.successCount} 条报账记录。`,
               task.failedCount > 0,
             );
-            await loadReports({ resetOffset: true });
+            await loadReports({ resetOffset: true, force: true });
             return;
           }
 
@@ -3262,7 +3273,6 @@ body > .topbar .center-switcher-menu { top: calc(100% + 9px); left: auto; }
 
       const EXTRA_FILTER_LABELS = { search: "关键词", reporter: "报账人", expenseCategory: "类别", note: "备注" };
       const mobileFilterLayout = window.matchMedia("(max-width: 620px)");
-      let listRequestVersion = 0;
 
       function syncFilterPlaceholders() {
         const compactHints = { search: "关键词 / 报账 ID", reporter: "如 张||李", expenseCategory: "如 食材||房租", note: "如 采购&!平" };
@@ -3481,6 +3491,7 @@ body > .topbar .center-switcher-menu { top: calc(100% + 9px); left: auto; }
       }
 
       function renderTable() {
+        listThumbnails.reset({ clearCache: false });
         renderMobileReports();
         elements.tableBody.innerHTML = "";
         elements.emptyState.hidden = state.items.length !== 0;
@@ -3517,6 +3528,7 @@ body > .topbar .center-switcher-menu { top: calc(100% + 9px); left: auto; }
         }
 
         elements.tableBody.appendChild(fragment);
+        listThumbnails.mount(elements.tableBody);
       }
 
       function hasSelectedTextWithin(element) {
@@ -3881,8 +3893,7 @@ body > .topbar .center-switcher-menu { top: calc(100% + 9px); left: auto; }
         }
       }
 
-      async function loadReports({ resetOffset = false, collapseFilters = false } = {}) {
-        const requestVersion = ++listRequestVersion;
+      function loadReports({ resetOffset = false, collapseFilters = false, force = false } = {}) {
         const requestedFilters = readFilters();
         if (resetOffset) {
           state.offset = 0;
@@ -3890,52 +3901,61 @@ body > .topbar .center-switcher-menu { top: calc(100% + 9px); left: auto; }
 
         state.limit = Number.parseInt(readFilters().limit || String(DEFAULT_PAGE_LIMIT), 10) || DEFAULT_PAGE_LIMIT;
         updateUrl();
-        setStatus("正在加载报账列表...");
+        const url = buildAuthFetchUrl(`${BASE_PATH}/api/reports`, buildListParams());
+        return listRequestGate.run(url, async (signal, isCurrent) => {
+          listThumbnails.reset();
+          const started = performance.now();
+          setStatus("正在加载报账列表...");
 
-        try {
-          const response = await fetch(buildAuthFetchUrl(`${BASE_PATH}/api/reports`, buildListParams()), {
-            headers: {
-              Accept: "application/json",
-            },
-          });
-          const payload = await response.json();
-          if (requestVersion !== listRequestVersion) return;
+          try {
+            const response = await fetch(url, {
+              signal,
+              headers: {
+                Accept: "application/json",
+              },
+            });
+            const payload = await response.json();
+            if (!isCurrent() || signal.aborted) return;
 
-          if (!response.ok || !payload.success) {
-            throw new Error(payload?.error?.message || "列表加载失败");
-          }
+            if (!response.ok || !payload.success) {
+              throw new Error(payload?.error?.message || "列表加载失败");
+            }
 
-          state.items = payload.items || [];
-          state.total = payload.total || 0;
-          state.limit = payload.limit || state.limit;
-          state.offset = payload.offset || 0;
-          state.timeZone = payload.timeZone || state.timeZone || DEFAULT_TIME_ZONE;
+            const received = performance.now();
+            state.items = payload.items || [];
+            state.total = payload.total || 0;
+            state.limit = payload.limit || state.limit;
+            state.offset = payload.offset || 0;
+            state.timeZone = payload.timeZone || state.timeZone || DEFAULT_TIME_ZONE;
 
-          renderTable();
-          renderSummary();
-          renderAppliedExtraFilters(requestedFilters);
-          const currentFilters = readFilters();
-          if (collapseFilters && Object.keys(requestedFilters).every((key) => requestedFilters[key] === currentFilters[key])) {
-            setAdvancedFiltersExpanded(false);
-          }
-          setStatus(`已加载 ${state.items.length} 条记录，总计金额 ${sumLoadedAmounts(state.items).toFixed(2)} 元`);
-
-          if (state.selectedReportId && state.items.some((item) => item.id === state.selectedReportId)) {
             renderTable();
-          } else if (state.selectedReportId) {
-            state.selectedReportId = null;
-            closeDetailModal();
+            renderSummary();
+            renderAppliedExtraFilters(requestedFilters);
+            const currentFilters = readFilters();
+            if (collapseFilters && Object.keys(requestedFilters).every((key) => requestedFilters[key] === currentFilters[key])) {
+              setAdvancedFiltersExpanded(false);
+            }
+            setStatus(`已加载 ${state.items.length} 条记录，总计金额 ${sumLoadedAmounts(state.items).toFixed(2)} 元`);
+
+            if (state.selectedReportId && !state.items.some((item) => item.id === state.selectedReportId)) {
+              state.selectedReportId = null;
+              closeDetailModal();
+            }
+            performance.clearMeasures("expense:list:fetch");
+            performance.clearMeasures("expense:list:render");
+            performance.measure("expense:list:fetch", { start: started, end: received });
+            performance.measure("expense:list:render", { start: received, end: performance.now() });
+          } catch (error) {
+            if (!isCurrent() || signal.aborted) return;
+            renderAppliedExtraFilters({});
+            if (Object.keys(EXTRA_FILTER_LABELS).some((key) => requestedFilters[key])) setAdvancedFiltersExpanded(true);
+            state.items = [];
+            state.total = 0;
+            renderTable();
+            renderSummary();
+            setStatus(error instanceof Error ? error.message : String(error), true);
           }
-        } catch (error) {
-          if (requestVersion !== listRequestVersion) return;
-          renderAppliedExtraFilters({});
-          if (Object.keys(EXTRA_FILTER_LABELS).some((key) => requestedFilters[key])) setAdvancedFiltersExpanded(true);
-          state.items = [];
-          state.total = 0;
-          renderTable();
-          renderSummary();
-          setStatus(error instanceof Error ? error.message : String(error), true);
-        }
+        }, { force });
       }
 
 
@@ -4083,7 +4103,7 @@ body > .topbar .center-switcher-menu { top: calc(100% + 9px); left: auto; }
           const reportId = payload.report?.id;
           clearManualImage();
           elements.manualImportModal.hidden = true;
-          await loadReports({ resetOffset: true });
+          await loadReports({ resetOffset: true, force: true });
           setStatus(`补录成功，报账 ID #${reportId}`);
 
           if (reportId) {
@@ -4288,7 +4308,7 @@ body > .topbar .center-switcher-menu { top: calc(100% + 9px); left: auto; }
           elements.editReportModal.hidden = true;
           state.editingReport = null;
           returnToDetailAfterEdit();
-          await loadReports();
+          await loadReports({ force: true });
 
           if (state.selectedReportId === original.id && !elements.detailModal.hidden) {
             await loadDetail(original.id);
@@ -4350,7 +4370,7 @@ body > .topbar .center-switcher-menu { top: calc(100% + 9px); left: auto; }
           }
 
           setStatus(`已删除报账 #${reportId}`);
-          await loadReports();
+          await loadReports({ force: true });
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
           setStatus(message, true);
@@ -4821,7 +4841,7 @@ body > .topbar .center-switcher-menu { top: calc(100% + 9px); left: auto; }
           if (state.canImport) {
             await loadManualImportOptions();
           }
-          await loadReports();
+          await loadReports({ force: true });
           state.initialized = true;
           const requestedReportId = linkedReportId();
           if (requestedReportId) await loadDetail(requestedReportId);

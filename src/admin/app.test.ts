@@ -8,7 +8,7 @@ import { runInNewContext } from "node:vm";
 import { after, test } from "node:test";
 
 import { listScenarioExtractionsByRawMessageId } from "../core/scenarios/scenario-extraction-repository.js";
-import { getAdminReimbursementReportDetail, saveReimbursementReceiptDelivery, saveReimbursementReport } from "../scenarios/reimbursement/repository.js";
+import { deleteReimbursementReport, getAdminReimbursementReportDetail, saveReimbursementReceiptDelivery, saveReimbursementReport } from "../scenarios/reimbursement/repository.js";
 import type { ReimbursementExtractor } from "../scenarios/reimbursement/batch-import.js";
 import { saveRawMessage } from "../core/storage/raw-message-repository.js";
 import { createApp } from "./app.js";
@@ -1942,4 +1942,81 @@ test("report detail deep links accept only safe positive record ids", () => {
   const html=fs.readFileSync(path.resolve(process.cwd(),"src/admin/public/admin.html"),"utf8");
   const code=html.slice(html.indexOf("      function linkedReportId("),html.indexOf("      function writeFiltersFromUrl("));
   for (const [hash,expected] of [["#report=123",123],["#report=0",null],["#report=-1",null],["#report=1x",null],["#report=9007199254740992",null],["#report=1&other=2",null],["",null]] as const) assert.equal(runInNewContext(code+"\nlinkedReportId(hash)",{hash}),expected);
+});
+
+test("thumbnail endpoint checks permissions and source existence even with a warm cache", async (t) => {
+  const sharp = (await import("sharp")).default;
+  applyEnv({ WECHATY_ADMIN_USERNAME: "admin", WECHATY_ADMIN_PASSWORD: "secret-pass" });
+  const source = path.join(stateDir, "thumbnail-source.png");
+  await sharp({ create: { width: 1200, height: 900, channels: 3, background: "#2468ac" } }).png().toFile(source);
+  const original = fs.readFileSync(source);
+  const raw = saveRawMessage({
+    messageExternalId: "thumbnail-source", channelCode: "reimbursement_fuzzy", channelName: "Fuzzy报账群",
+    senderName: "缩略图测试", messageType: "6", textContent: "", dedupeKey: "thumbnail-source",
+    eventReceivedAt: "2026-09-25T01:00:00.000Z",
+    attachments: [{ type: "image", localPath: source, sha256: "thumbnail-source-hash", mimeType: "image/png" }],
+  });
+  const report = saveReimbursementReport({
+    channelCode: "reimbursement_fuzzy", channelName: "Fuzzy报账群", reporter: "缩略图测试", amount: 12,
+    currency: "CNY", expenseCategory: "food", evidenceType: "image+text", confidence: 1, needsReview: false,
+    voucherDate: "2026-09-25", voucherDateSource: "model", note: "", merchant: "", documentNo: "", voucherType: "receipt", ocrText: "",
+    primaryRawMessageId: raw.rawMessageId, timeZone: "Asia/Shanghai", referenceDateTime: "2026-09-25T01:00:00.000Z",
+  });
+  const attachmentId = getAdminReimbursementReportDetail(report.id)!.sources[0].attachments[0].id;
+  let gatewayStatus = 200;
+  let stores: string | string[] = ["fuzzy"];
+  let permissions = ["report:view", "attachment:view"];
+  const gateway = createServer((_request, response) => {
+    response.writeHead(gatewayStatus, { "Content-Type": "application/json" });
+    response.end(JSON.stringify({ success: true,
+      account: { accountId: "thumbnail-test", username: "thumbnail-test", enabled: true, version: 1 },
+      access: { accountId: "thumbnail-test", app: "expense", role: "partner", enabled: true, version: 1, permissions,
+        config: { viewScope: { ownership: "any", stores, channels: "all" }, submitScope: { stores: [], channels: [] } },
+      },
+    }));
+  });
+  gateway.listen(0, "127.0.0.1");
+  await once(gateway, "listening");
+  t.after(() => new Promise<void>((resolve) => gateway.close(() => resolve())));
+  const address = gateway.address();
+  assert(address && typeof address !== "string");
+  const server = await startServer(undefined, {
+    mode: "unified", url: `http://127.0.0.1:${address.port}`, token: "thumbnail-test-internal-token-0001",
+  });
+  t.after(() => server.close());
+  const url = `${server.baseUrl}/expense/api/attachments/${attachmentId}/thumbnail`;
+  const first = await fetch(url);
+  assert.equal(first.status, 200);
+  assert.equal(first.headers.get("cache-control"), "no-store");
+  assert.match(first.headers.get("server-timing")!, /auth;dur=.*attachment;dur=.*thumbnail;dur=/);
+  assert.ok(first.headers.get("x-request-id"));
+  const thumbnail = Buffer.from(await first.arrayBuffer());
+  assert.equal((await sharp(thumbnail).metadata()).width, 240);
+  assert.deepEqual(fs.readFileSync(source), original);
+  const second = await fetch(url);
+  assert.deepEqual(Buffer.from(await second.arrayBuffer()), thumbnail);
+  permissions = ["report:view"];
+  assert.equal((await fetch(url)).status, 403);
+  permissions = ["report:view", "attachment:view"];
+  stores = ["peanut"];
+  assert.equal((await fetch(url)).status, 404);
+  stores = ["fuzzy"];
+  gatewayStatus = 401;
+  assert.equal((await fetch(url)).status, 401);
+  gatewayStatus = 200;
+  const list = await fetch(`${server.baseUrl}/expense/api/reports?createdDateFrom=2026-09-25&createdDateTo=2026-09-25`);
+  assert.equal(list.status, 200);
+  assert.match(list.headers.get("server-timing")!, /auth;dur=.*query;dur=.*attachments;dur=/);
+  fs.writeFileSync(source, "invalid replacement");
+  assert.equal((await fetch(url)).status, 422);
+  fs.writeFileSync(source, original);
+  assert.equal((await fetch(url)).status, 200);
+  fs.unlinkSync(source);
+  assert.equal((await fetch(url)).status, 404);
+  assert.equal((await fetch(url.replace("/thumbnail", "/content"))).status, 404);
+  assert.equal((await fetch(url.replace(String(attachmentId), "99999999"))).status, 404);
+  fs.writeFileSync(source, original);
+  assert.equal((await fetch(url)).status, 200);
+  assert.equal(deleteReimbursementReport(report.id), true);
+  assert.equal((await fetch(url)).status, 404);
 });
