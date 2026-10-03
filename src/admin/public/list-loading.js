@@ -46,7 +46,7 @@
             const blob = await response.blob();
             if (version !== generation || controller.signal.aborted) return;
             const url = URL.createObjectURL(blob);
-            urls.set(entry.url, url);
+            urls.set(entry.url, { url, blob });
             for (const image of entry.images) if (image.isConnected) display(image, url);
           })
           .catch(() => {
@@ -66,7 +66,7 @@
 
     function enqueue(image) {
       const url = image.dataset.thumbnailUrl;
-      if (urls.has(url)) { display(image, urls.get(url)); return; }
+      if (urls.has(url)) { display(image, urls.get(url).url); return; }
       const existing = images.get(url);
       if (existing) { existing.images.add(image); return; }
       const entry = { url, images: new Set([image]) };
@@ -93,7 +93,7 @@
       images.clear();
       for (const controller of controllers) controller.abort();
       if (clearCache) {
-        for (const url of urls.values()) URL.revokeObjectURL(url);
+        for (const cached of urls.values()) URL.revokeObjectURL(cached.url);
         urls.clear();
       }
     }
@@ -112,7 +112,13 @@
       for (const image of container.querySelectorAll("[data-thumbnail-url]")) observer.observe(image);
     }
 
-    return { mount, reset };
+    // The preview owns this URL, so a list refresh cannot revoke its placeholder.
+    function createPreviewUrl(url) {
+      const cached = urls.get(url);
+      return cached ? URL.createObjectURL(cached.blob) : null;
+    }
+
+    return { mount, reset, createPreviewUrl };
   }
 
   global.ReimbursementListLoading = { createRequestGate, createThumbnailLoader };
