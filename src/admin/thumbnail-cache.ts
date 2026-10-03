@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import sharp from "sharp";
+import { generateHeicThumbnail, isHeicDecoderUnavailable } from "./heic-thumbnail.js";
 
 const CACHE_VERSION = "webp-240-q60-v1";
 const CACHE_FILE = /^[a-f0-9]{64}\.webp$/;
@@ -84,9 +85,15 @@ export class ThumbnailCache {
         try { return await fs.readFile(target); }
         catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
       }
-      const buffer = await sharp(sourcePath, { limitInputPixels: 40_000_000, animated: false })
-        .rotate().resize({ width: 240, height: 240, fit: "inside", withoutEnlargement: true })
-        .webp({ quality: 60 }).toBuffer();
+      let buffer: Buffer;
+      try {
+        buffer = await sharp(sourcePath, { limitInputPixels: 40_000_000, animated: false })
+          .rotate().resize({ width: 240, height: 240, fit: "inside", withoutEnlargement: true })
+          .webp({ quality: 60 }).toBuffer();
+      } catch (error) {
+        if (!isHeicDecoderUnavailable(error)) throw error;
+        buffer = await generateHeicThumbnail(sourcePath);
+      }
       const temporary = path.join(this.directory, `${name}.${crypto.randomUUID()}.tmp`);
       try {
         await fs.writeFile(temporary, buffer, { flag: "wx", mode: 0o600 });

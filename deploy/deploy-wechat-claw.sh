@@ -224,6 +224,23 @@ install_dependencies_if_needed() {
   bind_puppeteer_cache_into_runtime
 }
 
+install_heic_decoder_if_needed() {
+  if command -v heif-thumbnailer >/dev/null 2>&1 &&
+    dpkg-query -W -f='${Status}' libheif-plugin-libde265 2>/dev/null | grep -qx 'install ok installed'; then
+    echo "[deploy] HEIC thumbnail decoder is installed"
+    return
+  fi
+
+  if ! command -v apt-get >/dev/null 2>&1; then
+    echo "[deploy] Install heif-thumbnailer and the libde265 HEVC decoder before deploying" >&2
+    exit 1
+  fi
+
+  echo "[deploy] Installing HEIC thumbnail decoder"
+  DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=l \
+    apt-get install -y --no-install-recommends heif-thumbnailer libheif-plugin-libde265
+}
+
 echo "[deploy] Pulling latest code from origin/main"
 run_as_app_user "git pull --ff-only origin main"
 
@@ -287,6 +304,7 @@ systemctl stop "${WATCHDOG_SERVICE_NAME}.service" "${DAILY_RESTART_SERVICE_NAME}
 systemctl disable --now "${SERVICE_NAME}.service"
 
 install_dependencies_if_needed
+install_heic_decoder_if_needed
 
 echo "[deploy] Building TypeScript output"
 run_as_app_user "npm run build"

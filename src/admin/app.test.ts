@@ -2021,7 +2021,7 @@ test("thumbnail endpoint checks permissions and source existence even with a war
   fs.unlinkSync(source);
   assert.equal((await fetch(url)).status, 404);
   assert.equal((await fetch(url.replace("/thumbnail", "/content"))).status, 404);
-  assert.equal((await fetch(url.replace(String(attachmentId), "99999999"))).status, 404);
+  assert.equal((await fetch(url.replace(`/attachments/${attachmentId}/`, "/attachments/99999999/"))).status, 404);
   fs.writeFileSync(source, original);
   assert.equal((await fetch(url)).status, 200);
   assert.equal(deleteReimbursementReport(report.id), true);
