@@ -2,6 +2,9 @@
   'use strict';
   const API = '/expense/api/monthly-reports';
   const $ = id => document.getElementById(id);
+  const MONTH_PATTERN = /^(19|20|21)\d{2}-(0[1-9]|1[0-2])$/;
+  const minMonth = () => s.options?.minMonth || '2026-09';
+  const allowedMonth = month => MONTH_PATTERN.test(month || '') && month >= minMonth();
   const s = { sourceSerial:0, editSerial:0, sourceSaving:false, sourceChanged:false, options: null, data: null, store: '', month: '', currency: 'CNY', reporter: '', query: '', loading: true, error: '', serial: 0, group: null, details: [], detailTotal: 0, detailLoading: false, detailError: '', detailSerial: 0, canAttachment: false, attachments: [], attachmentIndex: 0 };
   const icons = {receipt:'M6 3h12v18l-3-2-3 2-3-2-3 2V3Zm3 5h6m-6 4h6',left:'m14 6-6 6 6 6',right:'m9 6 6 6-6 6',calendar:'M4 5h16v16H4V5Zm0 5h16M8 3v4m8-4v4',search:'M21 21l-5-5M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16',download:'M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5',moon:'M20 15A9 9 0 0 1 9 3a9 9 0 1 0 11 12Z',sun:'M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5',close:'m6 6 12 12M6 18 18 6',info:'M12 11v6m0-10v.1M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0',store:'M4 10v11h16V10M3 10l2-7h14l2 7M9 21v-7h6v7M3 10c0 4 6 4 6 0 0 4 6 4 6 0 0 4 6 4 6 0'};
   const icon = name => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${icons[name] || ''}"/></svg>`;
@@ -60,7 +63,7 @@
     const title = s.options?.stores.find(store => store.id === s.store)?.name || '';
     const reporters = [...new Set([...(s.options?.reporters || []), ...(s.data?.groups || []).map(g=>g.reporter)])];
     $('app').innerHTML = `
-      <section class="hero"><div><h1>门店月度报表</h1><p>按指定项目归类，按报账人汇总，每一笔都可追溯。</p></div><div class="month-control"><button data-action="prevMonth" aria-label="上个月" ${!s.options?'disabled':''}>${icon('left')}</button><label>${icon('calendar')}<input id="month" type="month" min="1900-01" max="2199-12" aria-label="报表月份" value="${esc(s.month)}" ${!s.options?'disabled':''}></label><button data-action="nextMonth" aria-label="下个月" ${!s.options?'disabled':''}>${icon('right')}</button></div></section>
+      <section class="hero"><div><h1>门店月度报表</h1><p>按指定项目归类，按报账人汇总，每一笔都可追溯。</p></div><div class="month-control"><button data-action="prevMonth" aria-label="上个月" ${!s.options||s.month<=minMonth()?'disabled':''}>${icon('left')}</button><label>${icon('calendar')}<input id="month" type="month" min="${esc(minMonth())}" max="2199-12" aria-label="报表月份" value="${esc(s.month)}" ${!s.options?'disabled':''}></label><button data-action="nextMonth" aria-label="下个月" ${!s.options?'disabled':''}>${icon('right')}</button></div></section>
       <div class="storebar"><div class="store-tabs" aria-label="选择门店">${(s.options?.stores || []).map(store=>`<button data-store="${esc(store.id)}" aria-pressed="${store.id===s.store}">${esc(store.name)}</button>`).join('')}</div><span class="scope">${icon('store')}${s.data?.store.partial?'仅统计当前账号可见记录':'包含该门店各报账群'}</span></div>
       ${s.error?`<div class="report-error" role="alert"><p>${esc(s.error)}</p><button data-action="retry">重试</button> <a href="/expense">返回报账后台</a></div>`:''}
       <div id="reportRegion" aria-busy="${s.loading}">${s.loading?'<div class="empty" role="status">正在加载报表…</div>':!s.data?'<div class="empty">当前账号没有可查看的门店。</div>':`
@@ -213,14 +216,18 @@
     s.loading=true;s.error='';render();
     try {
       s.options=await json(`${API}/options`);const url=new URL(location.href);
-      s.month=/^(19|20|21)\d{2}-(0[1-9]|1[0-2])$/.test(url.searchParams.get('month')||'')?url.searchParams.get('month'):s.options.currentMonth;
+      const requestedMonth=url.searchParams.get('month');
+      s.month=allowedMonth(requestedMonth)?requestedMonth:s.options.defaultMonth;
       s.store=s.options.stores.some(store=>store.id===url.searchParams.get('store'))?url.searchParams.get('store'):s.options.stores[0]?.id||'';
       if(s.store)await loadSummary();else{s.loading=false;render();}
     }catch(error){s.loading=false;s.error=error.message;render();}
   }
   document.addEventListener('input',e=>{if(e.target.id==='search'){s.query=e.target.value;render();}});
   document.addEventListener('change',e=>{
-    if(e.target.id==='month'){if(e.target.value){s.month=e.target.value;clearFilters();loadSummary();}}
+    if(e.target.id==='month'){
+      if(!allowedMonth(e.target.value)){e.target.value=s.month;notify('仅支持选择 2026 年 9 月及之后的月份。');return;}
+      s.month=e.target.value;clearFilters();loadSummary();
+    }
     if(e.target.id==='reporter'){s.reporter=e.target.value;render();}
     if(e.target.id==='currency'){s.currency=e.target.value;render();}
   });
@@ -251,7 +258,7 @@
     if(target.dataset.attachment){s.attachmentIndex=s.attachments.findIndex(a=>a.id===Number(target.dataset.attachment));if(s.attachmentIndex>=0){s.attachmentFocus=target;renderAttachment();showDialog('attachmentDialog');}return;}
     switch(target.dataset.action){
       case 'theme':{const theme=currentTheme()==='light'?'dark':'light';setTheme(theme);try{localStorage.setItem('comeover-admin-theme',theme);localStorage.setItem('reimbursement-admin-theme',theme);}catch{}render();break;}
-      case 'prevMonth':case 'nextMonth':{const [y,m]=s.month.split('-').map(Number),date=new Date(y,m-1+(target.dataset.action==='prevMonth'?-1:1),1);if(date.getFullYear()<1900||date.getFullYear()>2199)return;s.month=`${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}`;clearFilters();loadSummary();break;}
+      case 'prevMonth':case 'nextMonth':{const [y,m]=s.month.split('-').map(Number),date=new Date(y,m-1+(target.dataset.action==='prevMonth'?-1:1),1),month=`${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}`;if(!allowedMonth(month))return;s.month=month;clearFilters();loadSummary();break;}
       case 'clear':clearFilters();render();break;
       case 'rules':rules();break;
       case 'retry':s.options&&s.store?loadSummary():init();break;

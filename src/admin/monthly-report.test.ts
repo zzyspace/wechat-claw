@@ -7,12 +7,23 @@ import { createServer } from "node:http";
 import { test } from "node:test";
 import { createApp } from "./app.js";
 import { getDatabase } from "../core/storage/database.js";
+import { getMonthlyMonthSelection, MIN_MONTHLY_REPORT_MONTH } from "./monthly-report-routes.js";
 
 const stateDir=fs.mkdtempSync(path.join(os.tmpdir(),"monthly-report-test-"));
 process.env.WECHATY_STATE_DIR=stateDir;
 process.env.WECHATY_TIMEZONE="Asia/Shanghai";
 process.env.WECHATY_PUPPET="wechaty-puppet-wechat";
 process.env.WECHATY_CHANNELS_JSON='[]';
+
+test("monthly month selection uses the prior month in the application timezone and the first supported month", () => {
+  assert.deepEqual(getMonthlyMonthSelection("Asia/Shanghai", new Date("2026-10-03T08:00:00Z")), { minMonth: "2026-09", defaultMonth: "2026-09", currentMonth: "2026-10" });
+  assert.deepEqual(getMonthlyMonthSelection("Asia/Shanghai", new Date("2027-01-03T08:00:00Z")), { minMonth: "2026-09", defaultMonth: "2026-12", currentMonth: "2027-01" });
+  assert.equal(getMonthlyMonthSelection("Asia/Shanghai", new Date("2026-10-31T15:59:59Z")).defaultMonth, "2026-09");
+  assert.equal(getMonthlyMonthSelection("Asia/Shanghai", new Date("2026-10-31T16:00:00Z")).defaultMonth, "2026-10");
+  assert.equal(getMonthlyMonthSelection("UTC", new Date("2026-10-31T16:00:00Z")).defaultMonth, "2026-09");
+  assert.equal(getMonthlyMonthSelection("Asia/Shanghai", new Date("2026-09-03T08:00:00Z")).defaultMonth, MIN_MONTHLY_REPORT_MONTH);
+  assert.equal(getMonthlyMonthSelection("Asia/Shanghai", new Date("2026-08-03T08:00:00Z")).defaultMonth, MIN_MONTHLY_REPORT_MONTH);
+});
 
 test("monthly page, API, details, export and assets enforce explicit permission and row scope", async t => {
   let revoked=false;
@@ -56,6 +67,16 @@ test("monthly page, API, details, export and assets enforce explicit permission 
   const page=await request("all","/expense/monthly");assert.equal(page.status,200);assert.match(page.headers.get("content-security-policy")||"",/script-src 'self'/);assert.doesNotMatch(await page.text(),/示例|react|unpkg/);
   assert.equal((await request("all","/expense/monthly/app.js")).status,200);
   const options=await (await request("owner",api+"/options")).json();assert.equal(options.stores.length,1);assert.equal(options.stores[0].partial,true);
+  const expectedMonths=getMonthlyMonthSelection("Asia/Shanghai");
+  for(const field of ["minMonth","defaultMonth","currentMonth"] as const)assert.equal(options[field],expectedMonths[field]);
+  assert.equal(options.timeZone,"Asia/Shanghai");
+  for(const month of ["2026-08","2026-07","2025-12"]){
+    for(const suffix of ["", "/details", "/export"]){
+      const blocked=await request("all",api+suffix+`?month=${month}&store=fuzzy&projectId=kuailv&reporter=`+encodeURIComponent("张志延")+"&currency=CNY");
+      assert.equal(blocked.status,400,`${suffix||"summary"}: ${month}`);
+      assert.equal((await blocked.json()).error.message,"月度报表仅支持 2026-09 及之后的月份。");
+    }
+  }
   const summary=await (await request("all",api+query)).json();
   const kuailv=summary.groups.find((g:any)=>g.projectId==="kuailv"&&g.currency==="CNY");assert.equal(kuailv.recordCount,1007);assert.equal(kuailv.amountCents,101000);
   assert.equal(summary.totals.find((x:any)=>x.currency==="CNY").amountCents,103100);assert.equal(summary.totals.find((x:any)=>x.currency==="CNY").missingAmountCount,1);
