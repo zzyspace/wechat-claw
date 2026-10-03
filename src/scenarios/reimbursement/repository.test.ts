@@ -56,12 +56,30 @@ test("updateAdminReimbursementReport applies bot-compatible edits and rejects st
     ocrText: null,
     confidence: 0.45,
     needsReview: true,
+    submittedByAccountId: "reporter-edit-owner",
+    submittedByUsername: "original-login",
+    submittedByDisplayName: "原提交人",
+    submittedByRole: "manager",
     primaryRawMessageId: primaryMessage.rawMessageId,
   });
 
-  const updated = updateAdminReimbursementReport({
+  const renamed = updateAdminReimbursementReport({
     reimbursementReportId: report.id,
     expectedUpdatedAt: report.updatedAt,
+    reporter: "新报账人",
+  });
+  assert.equal(renamed.status, "updated");
+  if (renamed.status !== "updated") return;
+  assert.deepEqual(renamed.report, {
+    ...report,
+    reporter: "新报账人",
+    updatedAt: renamed.report.updatedAt,
+  }, "renaming must preserve attribution, review state, dates and all other report fields");
+  assert.equal(getAdminReimbursementReportDetail(report.id)?.sources[0]?.senderName, "小编");
+
+  const updated = updateAdminReimbursementReport({
+    reimbursementReportId: report.id,
+    expectedUpdatedAt: renamed.report.updatedAt,
     amount: -16.46,
     expenseCategory: "food",
     noteToAppend: "8月账",
@@ -74,6 +92,7 @@ test("updateAdminReimbursementReport applies bot-compatible edits and rejects st
     return;
   }
   assert.equal(updated.report.amount, -16.46);
+  assert.equal(updated.report.reporter, "新报账人");
   assert.equal(updated.report.expenseCategory, "food");
   assert.equal(updated.report.note, "待复核；8月账");
   assert.equal(updated.report.needsReview, false);
@@ -84,11 +103,13 @@ test("updateAdminReimbursementReport applies bot-compatible edits and rejects st
   const stale = updateAdminReimbursementReport({
     reimbursementReportId: report.id,
     expectedUpdatedAt: report.updatedAt,
+    reporter: "过期修改",
     amount: 99,
   });
   assert.equal(stale.status, "conflict");
   if (stale.status === "conflict") {
     assert.equal(stale.report.amount, -16.46);
+    assert.equal(stale.report.reporter, "新报账人");
   }
 });
 

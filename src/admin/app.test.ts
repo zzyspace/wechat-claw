@@ -2027,3 +2027,80 @@ test("thumbnail endpoint checks permissions and source existence even with a war
   assert.equal(deleteReimbursementReport(report.id), true);
   assert.equal((await fetch(url)).status, 404);
 });
+
+
+test("reporter edits validate names, preserve ownership and reject unauthorized or stale writes", async (t) => {
+  applyEnv({ WECHATY_ADMIN_USERNAME: "admin", WECHATY_ADMIN_PASSWORD: "secret-pass" });
+  const gateway = createServer((request, response) => {
+    const identity = request.headers.cookie?.replace("fixture=", "") || "reader";
+    const accountId = identity === "owner" ? "reporter-owner" : `reporter-${identity}`;
+    const canEdit = identity === "editor" || identity === "outside-editor";
+    response.setHeader("Content-Type", "application/json");
+    response.end(JSON.stringify({
+      success: true,
+      account: { accountId, username: identity, displayName: "新报账人", enabled: true, version: 1 },
+      access: { accountId, app: "expense", role: "partner", enabled: true, version: 1,
+        permissions: ["report:view", "report:delete:self", ...(canEdit ? ["report:edit"] : [])],
+        config: {
+          viewScope: { ownership: identity === "editor" || identity === "reader" ? "any" : "self", stores: ["fuzzy"], channels: "all" },
+          submitScope: { stores: [], channels: [] },
+        },
+      },
+    }));
+  });
+  gateway.listen(0, "127.0.0.1");
+  await once(gateway, "listening");
+  t.after(() => new Promise<void>(resolve => gateway.close(() => resolve())));
+  const address = gateway.address();
+  assert(address && typeof address !== "string");
+  const server = await startServer(undefined, {
+    mode: "unified", url: `http://127.0.0.1:${address.port}`, token: "reporter-edit-fixture-internal-token",
+  });
+  t.after(() => server.close());
+  const raw = saveRawMessage({
+    messageExternalId: "reporter-edit-fixture", dedupeKey: "reporter-edit-fixture",
+    channelCode: "reimbursement_fuzzy", channelName: "Fuzzy报账群", senderName: "原报账人",
+    messageType: "manual_import", textContent: "原始凭证", eventReceivedAt: "2026-09-20T01:00:00.000Z", attachments: [],
+  });
+  const report = saveReimbursementReport({
+    channelCode: "reimbursement_fuzzy", channelName: "Fuzzy报账群", reporter: "原报账人",
+    amount: 12.5, currency: "CNY", expenseCategory: "food", voucherDate: "2026-09-20", voucherDateSource: "message",
+    note: "原备注", evidenceType: "text", merchant: null, documentNo: null, voucherType: null, ocrText: null,
+    confidence: 1, needsReview: true, primaryRawMessageId: raw.rawMessageId,
+    submittedByAccountId: "reporter-owner", submittedByUsername: "owner-login", submittedByDisplayName: "原提交人", submittedByRole: "manager",
+    timeZone: "Asia/Shanghai", referenceDateTime: "2026-09-20T01:00:00.000Z",
+  });
+  const before = getAdminReimbursementReportDetail(report.id)!;
+  const request = (identity: string, route: string, patch?: Record<string, unknown>) => fetch(`${server.baseUrl}/expense/api${route}`, {
+    method: patch ? "PATCH" : "GET",
+    headers: { Cookie: `fixture=${identity}`, "Content-Type": "application/json" },
+    ...(patch ? { body: JSON.stringify(patch) } : {}),
+  });
+  const route = `/reports/${report.id}`;
+  for (const [identity, status] of [["reader", 403], ["owner", 403], ["outside-editor", 404]] as const) {
+    assert.equal((await request(identity, route, { reporter: "越权修改", updatedAt: report.updatedAt })).status, status);
+  }
+  for (const reporter of ["", "   ", null, 123, { name: "姓名" }]) {
+    const response = await request("editor", route, { reporter, updatedAt: report.updatedAt });
+    assert.equal(response.status, 400);
+    assert.equal((await response.json()).error.field, "reporter");
+  }
+  assert.deepEqual(getAdminReimbursementReportDetail(report.id), before);
+  const response = await request("editor", route, { reporter: "  新报账人  ", updatedAt: report.updatedAt });
+  assert.equal(response.status, 200);
+  const renamed = (await response.json()).report;
+  assert.equal(renamed.reporter, "新报账人");
+  assert.notEqual(renamed.updatedAt, report.updatedAt);
+  assert.deepEqual(getAdminReimbursementReportDetail(report.id), { ...before, reporter: "新报账人", updatedAt: renamed.updatedAt });
+  const listing = await request("editor", `/reports?reporter=${encodeURIComponent("新报账人")}`);
+  assert.equal((await listing.json()).items.some((item: { id: number }) => item.id === report.id), true);
+  const owner = await request("owner", route);
+  assert.equal(owner.status, 200);
+  assert.equal((await owner.json()).report.permissions.canDelete, true);
+  assert.equal((await request("other", route)).status, 404, "matching display names must not grant access");
+  assert.equal((await request("editor", route, { reporter: "过期修改", updatedAt: report.updatedAt })).status, 409);
+  assert.equal(getAdminReimbursementReportDetail(report.id)?.reporter, "新报账人");
+  const amountOnly = await request("editor", route, { amount: 20, updatedAt: renamed.updatedAt });
+  assert.equal(amountOnly.status, 200);
+  assert.equal((await amountOnly.json()).report.reporter, "新报账人", "omitting reporter preserves its current value");
+});

@@ -1086,9 +1086,11 @@ export function createApp(input?: {
     try {
       const reportId = parsePositiveInteger(request.params.id, "id");
       const expectedUpdatedAt = parseRequiredString(request.body?.updatedAt, "updatedAt", "更新时间");
+      const hasReporter = hasOwnField(request.body, "reporter");
       const hasAmount = hasOwnField(request.body, "amount");
       const hasExpenseCategory = hasOwnField(request.body, "expenseCategory");
       const hasNoteToAppend = hasOwnField(request.body, "noteToAppend");
+      const reporter = hasReporter ? parseRequiredString(request.body.reporter, "reporter", "报账人") : undefined;
       const amount = hasAmount ? parseAdminEditAmount(request.body.amount) : undefined;
       const expenseCategory = hasExpenseCategory
         ? parseExpenseCategory(request.body.expenseCategory)
@@ -1106,13 +1108,14 @@ export function createApp(input?: {
         );
       }
 
-      if (!hasAmount && !hasExpenseCategory && !noteToAppend) {
-        throw new AdminValidationError("请至少修改金额、类别或追加一条备注。", "report");
+      if (!hasReporter && !hasAmount && !hasExpenseCategory && !noteToAppend) {
+        throw new AdminValidationError("请至少修改报账人、金额、类别或追加一条备注。", "report");
       }
 
       const result = updateAdminReimbursementReport({
         reimbursementReportId: reportId,
         expectedUpdatedAt,
+        reporter,
         amount,
         expenseCategory,
         noteToAppend: noteToAppend || undefined,

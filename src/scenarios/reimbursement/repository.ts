@@ -830,6 +830,7 @@ export type AdminReimbursementReportUpdateResult =
 export function updateAdminReimbursementReport(input: {
   reimbursementReportId: number;
   expectedUpdatedAt: string;
+  reporter?: string;
   amount?: number;
   expenseCategory?: ReimbursementExpenseCategory;
   noteToAppend?: string;
@@ -868,6 +869,7 @@ export function updateAdminReimbursementReport(input: {
         `
           UPDATE reimbursement_reports
           SET
+            reporter = ?,
             amount = ?,
             expense_category = ?,
             note = ?,
@@ -880,6 +882,7 @@ export function updateAdminReimbursementReport(input: {
         `,
       )
       .run(
+        input.reporter ?? existing.reporter,
         hasAmount ? input.amount : existing.amount,
         hasExpenseCategory
           ? input.expenseCategory || DEFAULT_REIMBURSEMENT_EXPENSE_CATEGORY

@@ -174,7 +174,7 @@
   async function openSourceEdit() {
     if(!s.sourceReport||!s.sourceCanEdit||s.sourceSaving)return;
     const serial=++s.editSerial,report=s.sourceReport;
-    $('sourceEditDialog').innerHTML=`<div class="drawer-inner"><div class="drawer-top"><h2 id="sourceEditTitle">编辑报账 #${report.id}</h2><button data-close="sourceEditDialog" aria-label="关闭编辑">${icon('close')}</button></div><form id="sourceEditForm"><div class="source-edit-grid"><label>金额（元）<input id="sourceEditAmount" type="number" step="any" placeholder="留空表示不修改" value="${esc(report.amount??'')}"></label><label>类别<select id="sourceEditCategory" required disabled><option value="">正在加载类别…</option></select></label></div><label>当前备注（只读）<div class="source-edit-note">${esc(report.note||'暂无备注')}</div></label><label>追加备注（选填）<textarea id="sourceEditNote" maxlength="1000" placeholder="仅追加，不覆盖已有备注"></textarea></label><p id="sourceEditStatus" role="status">正在加载类别…</p><div class="source-edit-actions"><button type="button" data-close="sourceEditDialog">取消</button><button id="sourceEditSave" class="primary" disabled>保存修改</button></div></form></div>`;
+    $('sourceEditDialog').innerHTML=`<div class="drawer-inner"><div class="drawer-top"><h2 id="sourceEditTitle">编辑报账 #${report.id}</h2><button data-close="sourceEditDialog" aria-label="关闭编辑">${icon('close')}</button></div><form id="sourceEditForm"><label>报账人<input id="sourceEditReporter" required autocomplete="off" placeholder="请输入报账人姓名" value="${esc(report.reporter||'')}"></label><div class="source-edit-grid"><label>金额（元）<input id="sourceEditAmount" type="number" step="any" placeholder="留空表示不修改" value="${esc(report.amount??'')}"></label><label>类别<select id="sourceEditCategory" required disabled><option value="">正在加载类别…</option></select></label></div><label>当前备注（只读）<div class="source-edit-note">${esc(report.note||'暂无备注')}</div></label><label>追加备注（选填）<textarea id="sourceEditNote" maxlength="1000" placeholder="仅追加，不覆盖已有备注"></textarea></label><p id="sourceEditStatus" role="status">正在加载类别…</p><div class="source-edit-actions"><button type="button" data-close="sourceEditDialog">取消</button><button id="sourceEditSave" class="primary" disabled>保存修改</button></div></form></div>`;
     showDialog('sourceEditDialog');
     try {
       const options=await json('/expense/api/edit-report-options');
@@ -186,7 +186,9 @@
   }
   async function saveSourceEdit(event) {
     event.preventDefault();if(!s.sourceReport||!s.sourceCanEdit||s.sourceSaving||$('sourceEditSave').disabled)return;
-    const report=s.sourceReport,patch={updatedAt:report.updatedAt},amountText=$('sourceEditAmount').value.trim(),categoryValue=$('sourceEditCategory').value,note=$('sourceEditNote').value.trim();
+    const report=s.sourceReport,patch={updatedAt:report.updatedAt},reporter=$('sourceEditReporter').value.trim(),amountText=$('sourceEditAmount').value.trim(),categoryValue=$('sourceEditCategory').value,note=$('sourceEditNote').value.trim();
+    if(!reporter){$('sourceEditStatus').textContent='报账人不能为空。';return;}
+    if(reporter!==report.reporter)patch.reporter=reporter;
     if(amountText){const value=Number(amountText);if(!Number.isFinite(value)){$('sourceEditStatus').textContent='金额必须是有效数字。';return;}if(report.amount==null||value!==Number(report.amount))patch.amount=value;}
     if(categoryValue&&categoryValue!==report.expenseCategory)patch.expenseCategory=categoryValue;
     if(note)patch.noteToAppend=note;

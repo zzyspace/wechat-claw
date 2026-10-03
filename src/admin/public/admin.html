@@ -2166,6 +2166,10 @@ body > .topbar .center-switcher-menu { top: calc(100% + 9px); left: auto; }
             </div>
             <form id="editReportForm" class="manual-import-form">
               <div class="manual-import-grid">
+                <div class="field field-wide">
+                  <label for="editReportReporter">报账人</label>
+                  <input id="editReportReporter" name="reporter" required autocomplete="off" placeholder="请输入报账人姓名" />
+                </div>
                 <div class="field">
                   <label for="editReportAmount">金额（元）</label>
                   <input id="editReportAmount" name="amount" type="number" step="any" inputmode="decimal" placeholder="留空表示不修改" />
@@ -2348,6 +2352,7 @@ body > .topbar .center-switcher-menu { top: calc(100% + 9px); left: auto; }
         editReportModalTitle: document.getElementById("editReportModalTitle"),
         editReportSummary: document.getElementById("editReportSummary"),
         editReportForm: document.getElementById("editReportForm"),
+        editReportReporter: document.getElementById("editReportReporter"),
         editReportAmount: document.getElementById("editReportAmount"),
         editReportExpenseCategory: document.getElementById("editReportExpenseCategory"),
         editReportCurrentNote: document.getElementById("editReportCurrentNote"),
@@ -4241,6 +4246,7 @@ body > .topbar .center-switcher-menu { top: calc(100% + 9px); left: auto; }
         }
         elements.editReportModalTitle.textContent = `编辑报账 #${report.id}`;
         elements.editReportSummary.textContent = `${report.channelName} · ${report.reporter}`;
+        elements.editReportReporter.value = report.reporter || "";
         elements.editReportAmount.value = report.amount === null || report.amount === undefined
           ? ""
           : String(report.amount);
@@ -4296,11 +4302,21 @@ body > .topbar .center-switcher-menu { top: calc(100% + 9px); left: auto; }
           return;
         }
 
+        const reporter = elements.editReportReporter.value.trim();
         const amountText = elements.editReportAmount.value.trim();
         const expenseCategory = elements.editReportExpenseCategory.value.trim();
         const noteToAppend = elements.editReportNoteToAppend.value.trim();
         const payload = { updatedAt: original.updatedAt };
         const changes = [];
+
+        if (!reporter) {
+          setEditReportStatus("报账人不能为空。", true);
+          return;
+        }
+        if (reporter !== original.reporter) {
+          payload.reporter = reporter;
+          changes.push(`报账人 ${reporter}`);
+        }
 
         if (amountText) {
           const amount = Number(amountText);
