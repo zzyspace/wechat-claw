@@ -1828,6 +1828,11 @@ body > .topbar { height: auto; min-height: 64px; padding-block: 13px; border: 0;
 /* Anchor the menu below the full header, including wrapped mobile rows. */
 body > .topbar > .center-switcher { position: static; }
 body > .topbar .center-switcher-menu { top: calc(100% + 9px); left: auto; }
+.center-switcher-option[data-center="business"] svg { color: #007aff; }
+:root[data-theme="dark"] .center-switcher-option[data-center="business"] svg { color: #72b5ff; }
+/* Shared selector palette, independent of each dashboard's page colors. */
+.center-switcher-menu { --ink:#17202a; --line:#e3e8ef; --surface:#fff; --surface-strong:#fff; --surface-muted:#f5f7fa; --soft:#f5f7fa; --brand:#007aff; --brand-soft:#eaf3ff; background:var(--surface-strong); color:var(--ink); font-family:-apple-system,"SF Pro Text","PingFang SC","Microsoft YaHei",sans-serif; line-height:1.5; box-shadow:0 24px 60px rgba(28,28,30,.22); }
+:root[data-theme="dark"] .center-switcher-menu { --ink:#f1f4f8; --line:#343942; --surface:#1d2026; --surface-strong:#1d2026; --surface-muted:#262a31; --soft:#262a31; --brand:#72b5ff; --brand-soft:#23354c; }
 </style>
   </head>
   <body>
@@ -1839,6 +1844,7 @@ body > .topbar .center-switcher-menu { top: calc(100% + 9px); left: auto; }
             <svg class="center-switcher-chevron" id="centerSwitcherChevron" viewBox="0 0 20 20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" hidden><path d="m5 7 5 5 5-5"/></svg>
           </button>
           <div class="center-switcher-menu" id="centerSwitcherMenu" role="menu" hidden>
+            <a class="center-switcher-option" data-center="business" role="menuitem" href="/business" hidden><svg viewBox="0 0 32 32" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M7 26V16M16 26V6M25 26V11"/></svg><span>营业数据</span><span></span></a>
             <a class="center-switcher-option" data-center="expense" role="menuitem" href="/expense" aria-current="page"><svg viewBox="0 0 32 32" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="7" width="22" height="19" rx="4" fill="currentColor" fill-opacity=".16"/><path d="M8 7V5.5A2.5 2.5 0 0 1 10.5 3H22"/><path d="M10 13h8"/><path d="m12 17 2.2 2.2 3.5-3.7"/><circle cx="24" cy="24" r="4" fill="currentColor" stroke="none"/><path d="M24 22v4M22 24h4" stroke="white" stroke-width="1.8"/></svg><span>报账中心</span><span class="center-switcher-check" aria-hidden="true">✓</span></a>
             <a class="center-switcher-option" data-center="invoice" role="menuitem" href="/invoice"><svg viewBox="0 0 32 32" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="3.5" width="18" height="25" rx="3"/><path d="M11 9h10M11 14h8M11 19h5"/><circle cx="23" cy="23.5" r="4"/><path d="m21.3 23.5 1.2 1.2 2.2-2.5"/></svg><span>发票中心</span><span></span></a>
             <a class="center-switcher-option" data-center="staff" role="menuitem" href="/staff"><svg viewBox="0 0 32 32" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="16" cy="10" r="5"/><path d="M6.5 27c.8-6.2 4-9.2 9.5-9.2s8.7 3 9.5 9.2"/></svg><span>员工中心</span><span></span></a>
