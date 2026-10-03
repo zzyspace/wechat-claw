@@ -1,18 +1,23 @@
 import express from "express";
-import { getAdminSession } from "./auth.js";
+import { getAdminSession, type AdminSession } from "./auth.js";
 import { hasPermission, reportAccessScope, requirePermission } from "./authorization.js";
 import { getZonedDateParts } from "../core/runtime/timezone.js";
 import { aggregateMonthlyRecords, MONTHLY_PROJECTS, MONTHLY_REPORT_PERMISSION, MONTHLY_REPORTERS, monthlyCsv, monthlyDetails, monthlyStoresForScope, monthlyTotals, monthRange, MonthlyReportValidationError, readMonthlyRecords } from "../scenarios/reimbursement/monthly-report.js";
 
 export const MIN_MONTHLY_REPORT_MONTH = "2026-09";
 
-export function getMonthlyMonthSelection(timeZone: string, now = new Date()) {
+function minimumMonthlyReportMonth(session?: Pick<AdminSession, "role">) {
+  return session?.role === "admin" ? "1900-01" : MIN_MONTHLY_REPORT_MONTH;
+}
+
+export function getMonthlyMonthSelection(timeZone: string, now = new Date(), session?: Pick<AdminSession, "role">) {
   const parts = getZonedDateParts(now, timeZone);
   const currentMonth = `${parts.year}-${String(parts.month).padStart(2, "0")}`;
   const previousYear = parts.month === 1 ? parts.year - 1 : parts.year;
   const previousMonth = parts.month === 1 ? 12 : parts.month - 1;
   const previous = `${previousYear}-${String(previousMonth).padStart(2, "0")}`;
-  return { minMonth: MIN_MONTHLY_REPORT_MONTH, defaultMonth: previous < MIN_MONTHLY_REPORT_MONTH ? MIN_MONTHLY_REPORT_MONTH : previous, currentMonth };
+  const minMonth = minimumMonthlyReportMonth(session);
+  return { minMonth, defaultMonth: previous < minMonth ? minMonth : previous, currentMonth };
 }
 
 export function createMonthlyReportRouter(timeZone: string) {
@@ -31,8 +36,8 @@ export function createMonthlyReportRouter(timeZone: string) {
   function read(request: express.Request, response: express.Response) {
     const month = text(request.query.month, "月份", 7), store = text(request.query.store, "门店", 30);
     monthRange(month, timeZone);
-    if (month < MIN_MONTHLY_REPORT_MONTH) throw new MonthlyReportValidationError("月度报表仅支持 2026-09 及之后的月份。");
     const session = getAdminSession(response)!;
+    if (month < minimumMonthlyReportMonth(session)) throw new MonthlyReportValidationError("月度报表仅支持 2026-09 及之后的月份。");
     const data = readMonthlyRecords({ month, store, timeZone, scope: reportAccessScope(session) });
     if (!data) { response.status(404).json({ success: false, error: { message: "门店不存在或无权查看。" } }); return null; }
     return { ...data, month, session };
@@ -40,7 +45,7 @@ export function createMonthlyReportRouter(timeZone: string) {
   router.get("/options", (_request, response) => {
     const session = getAdminSession(response)!;
     response.json({ success: true, stores: monthlyStoresForScope(reportAccessScope(session)).map(({ channels: _channels, ...store }) => store), projects: MONTHLY_PROJECTS, reporters: MONTHLY_REPORTERS,
-      ...getMonthlyMonthSelection(timeZone), timeZone, dateBasis: "createdAt", canAttachment: hasPermission(session, "attachment:view") });
+      ...getMonthlyMonthSelection(timeZone, new Date(), session), timeZone, dateBasis: "createdAt", canAttachment: hasPermission(session, "attachment:view") });
   });
   router.get("/", (request, response, next) => {
     try {

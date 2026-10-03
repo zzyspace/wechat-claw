@@ -29,12 +29,13 @@ test("monthly page, API, details, export and assets enforce explicit permission 
   let revoked=false;
   const gateway=createServer((request,response)=>{
     const who=request.headers.cookie?.replace("fixture=","");
-    if(!["all","owner","reader","no-attachments"].includes(who||"")){response.writeHead(401).end();return;}
+    if(!["all","owner","reader","no-attachments","admin","scoped-admin"].includes(who||"")){response.writeHead(401).end();return;}
     const permissions=["report:view"];
     if(who!=="reader"&&!revoked)permissions.push("report:monthly:view");
     if(who!=="no-attachments")permissions.push("attachment:view");
-    const accountId=who==="owner"?"owner":`user-${who}`;
-    response.setHeader("Content-Type","application/json");response.end(JSON.stringify({success:true,account:{accountId,username:accountId,enabled:true,version:1},access:{accountId,app:"expense",role:who==="reader"?"admin":"partner",enabled:true,version:1,permissions,config:{viewScope:who==="owner"?{ownership:"self",stores:["fuzzy"],channels:["reimbursement_fuzzy_manager"]}:{ownership:"any",stores:"all",channels:"all"},submitScope:{stores:[],channels:[]}}}}));
+    const scoped=who==="owner"||who==="scoped-admin";
+    const accountId=scoped?"owner":`user-${who}`;
+    response.setHeader("Content-Type","application/json");response.end(JSON.stringify({success:true,account:{accountId,username:accountId,enabled:true,version:1},access:{accountId,app:"expense",role:["reader","admin","scoped-admin"].includes(who||"")?"admin":who==="owner"?"manager":"partner",enabled:true,version:1,permissions,config:{viewScope:scoped?{ownership:"self",stores:["fuzzy"],channels:["reimbursement_fuzzy_manager"]}:{ownership:"any",stores:"all",channels:"all"},submitScope:{stores:[],channels:[]}}}}));
   });
   gateway.listen(0,"127.0.0.1");await once(gateway,"listening");t.after(()=>new Promise<void>(resolve=>gateway.close(()=>resolve())));const address=gateway.address();assert(address&&typeof address!=="string");
   const app=createApp({gatewayAuth:{mode:"unified",url:`http://127.0.0.1:${address.port}`,token:"monthly-report-fixture-internal-token-001"}});
@@ -144,6 +145,38 @@ test("monthly page, API, details, export and assets enforce explicit permission 
   const salaryCsv=await (await request("all",api+"/export"+query+"&q="+encodeURIComponent("工资"))).text();
   assert.ok(salaryCsv.includes('"50.00"'));assert.ok(!salaryCsv.includes('"41.00"'));
   assert.match(projectOptions.projects.find((p:any)=>p.id==="salary").description,/仅依据 salary 类别/);
+  const adminOptions=await (await request("admin",api+"/options")).json();
+  assert.equal(adminOptions.minMonth,"1900-01");
+  assert.equal(adminOptions.defaultMonth,expectedMonths.defaultMonth);
+  for(const who of ["all","owner","no-attachments"]){
+    assert.equal((await (await request(who,api+"/options")).json()).minMonth,"2026-09");
+    for(const suffix of ["","/details","/export"]){
+      assert.equal((await request(who,api+suffix+"?month=2026-08&store=fuzzy")).status,400);
+    }
+  }
+  const historicalQuery="?month=2026-08&store=fuzzy&projectId=kuailv&reporter="+encodeURIComponent("张志延")+"&currency=CNY";
+  const historicalSummary=await request("admin",api+historicalQuery);
+  assert.equal(historicalSummary.status,200);
+  assert.equal((await historicalSummary.json()).totals[0].amountCents,99900);
+  const historicalDetails=await request("admin",api+"/details"+historicalQuery);
+  assert.equal(historicalDetails.status,200);
+  assert.equal((await historicalDetails.json()).total,1);
+  const historicalExport=await request("admin",api+"/export"+historicalQuery);
+  assert.equal(historicalExport.status,200);
+  assert.match(await historicalExport.text(),/"999.00"/);
+  for(const suffix of ["","/details","/export"]){
+    assert.equal((await request("reader",api+suffix+historicalQuery)).status,403,"admin role still requires monthly permission");
+    assert.equal((await request("admin",api+suffix+historicalQuery.replace("2026-08","1899-12"))).status,400);
+  }
+  seed({channel:"reimbursement_fuzzy_manager",created:"2026-08-10 00:00:00",amount:3});
+  seed({channel:"reimbursement_fuzzy_manager",created:"2026-08-10 00:00:00",owner:"other",amount:5});
+  const scopedHistorical=await (await request("scoped-admin",api+historicalQuery)).json();
+  assert.equal(scopedHistorical.groups.length,1);
+  assert.equal(scopedHistorical.totals[0].amountCents,300,"admin history retains ownership and channel scope");
+  for(const suffix of ["","/details","/export"]){
+    assert.equal((await request("scoped-admin",api+suffix+historicalQuery.replace("store=fuzzy","store=peanut"))).status,404);
+  }
   revoked=true;
+  assert.equal((await request("admin",api+historicalQuery)).status,403);
   assert.equal((await request("all",api+query)).status,403);assert.equal((await request("all",api+"/export"+query)).status,403);assert.equal((await request("all","/expense/monthly")).status,403);
 });

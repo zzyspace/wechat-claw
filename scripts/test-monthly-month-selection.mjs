@@ -7,13 +7,13 @@ import puppeteer from "puppeteer";
 // Isolated public assets and fake reports; no application state or credentials.
 const root = new URL("../dist/admin/public/monthly/", import.meta.url);
 const assets = new Map(await Promise.all(["index.html", "app.js", "styles.css", "report-detail.js", "report-detail.css"].map(async name => [name, await fs.readFile(new URL(name, root))])));
-let currentMonth = "2026-10", defaultMonth = "2026-09";
+let currentMonth = "2026-10", defaultMonth = "2026-09", minMonth = "2026-09";
 const requestedMonths = [];
 const server = createServer((request, response) => {
   const url = new URL(request.url, "http://fixture");
   const json = value => { response.setHeader("Content-Type", "application/json"); response.end(JSON.stringify(value)); };
   if (url.pathname === "/expense/api/monthly-reports/options") {
-    json({ success: true, currentMonth, defaultMonth, minMonth: "2026-09", timeZone: "Asia/Shanghai", stores: [{ id: "fuzzy", name: "Fuzzy", partial: false }], projects: [], reporters: [], canAttachment: false });
+    json({ success: true, currentMonth, defaultMonth, minMonth, timeZone: "Asia/Shanghai", stores: [{ id: "fuzzy", name: "Fuzzy", partial: false }], projects: [], reporters: [], canAttachment: false });
   } else if (url.pathname === "/expense/api/monthly-reports") {
     const month = url.searchParams.get("month"); requestedMonths.push(month);
     json({ success: true, month, store: { id: "fuzzy", name: "Fuzzy", partial: false }, groups: [], totals: [{ currency: "CNY", amountCents: 0, recordCount: 0, missingAmountCount: 0, groupCount: 0, projectCount: 0 }] });
@@ -73,6 +73,20 @@ try {
   assert.equal(await page.$eval("#month", input => input.min), "2026-09");
   assert.equal(await page.$eval('[data-action="prevMonth"]', button => button.disabled), true);
   assert.ok(requestedMonths.every(month => month >= "2026-09"));
+  minMonth = "1900-01"; // Administrator options supplied by the server.
+  for (const width of [1440, 390]) {
+    await page.setViewport({ width, height: 1000 });
+    await visit("", "2026-09");
+    assert.equal(await page.$eval("#month", input => input.min), "1900-01");
+    await page.click('[data-action="prevMonth"]'); await selected("2026-08");
+    await changeMonth("2025-12"); await selected("2025-12");
+    await visit("?month=2026-07", "2026-07");
+    await visit("?month=1900-01", "1900-01");
+    assert.equal(await page.$eval('[data-action="prevMonth"]', button => button.disabled), true);
+  }
+  minMonth = "2026-09";
+  await visit("?month=2026-08", "2026-09");
+  assert.equal(await page.$eval('[data-action="prevMonth"]', button => button.disabled), true);
   assert.deepEqual(errors, []);
   console.log(JSON.stringify({ passed: true, previousMonthDefault: true, minimumAndInputGuard: true, navigationBoundary: true, urlMonths: true, yearRollover: true, mobile: true }, null, 2));
 } finally {
