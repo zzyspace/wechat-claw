@@ -112,6 +112,21 @@ export function migrateDatabase(db: Database.Database) {
       FOREIGN KEY(raw_message_id) REFERENCES raw_messages(id) ON DELETE CASCADE
     );
 
+    CREATE TABLE IF NOT EXISTS monthly_operating_reports (
+      store_id TEXT NOT NULL,
+      month TEXT NOT NULL,
+      currency TEXT NOT NULL,
+      income_cents INTEGER,
+      operating_income_cents INTEGER,
+      dividend_cents INTEGER,
+      allocations_json TEXT NOT NULL DEFAULT '[]',
+      note TEXT NOT NULL DEFAULT '',
+      revision INTEGER NOT NULL DEFAULT 1,
+      updated_by TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      PRIMARY KEY (store_id, month, currency)
+    );
+
     CREATE INDEX IF NOT EXISTS idx_reimbursement_reports_channel_date
       ON reimbursement_reports(channel_code, voucher_date);
 
@@ -194,6 +209,11 @@ export function migrateDatabase(db: Database.Database) {
     CREATE INDEX IF NOT EXISTS idx_reimbursement_batch_import_items_job_status_index
       ON reimbursement_batch_import_items(job_id, status, item_index);
   `);
+
+  const operatingColumns = db.prepare("PRAGMA table_info(monthly_operating_reports)").all() as Array<{ name: string }>;
+  if (!operatingColumns.some(column => column.name === "operating_income_cents")) {
+    db.exec("ALTER TABLE monthly_operating_reports ADD COLUMN operating_income_cents INTEGER");
+  }
 
   const columns = db.prepare(`PRAGMA table_info(raw_messages)`).all() as Array<{ name: string }>;
   const hasEventReceivedAt = columns.some((column) => column.name === "event_received_at");

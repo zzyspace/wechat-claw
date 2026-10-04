@@ -61,7 +61,7 @@ test("monthly page, API, details, export and assets enforce explicit permission 
   const attachment=Number(db.prepare("INSERT INTO message_attachments(raw_message_id,attachment_type,local_path,sha256,mime_type) VALUES(?,'image',?,'fixture','image/svg+xml')").run(message,imagePath).lastInsertRowid);
   db.prepare("INSERT INTO reimbursement_report_sources(reimbursement_report_id,raw_message_id,role) VALUES(?,?,'primary')").run(owned,message);
   const query="?month=2026-09&store=fuzzy",api="/expense/api/monthly-reports";
-  for(const route of ["/expense/monthly","/expense/monthly/","/expense/monthly/app.js","/expense/monthly/styles.css","/expense/monthly/report-detail.js","/expense/monthly/report-detail.css",api+query,api+"/options",api+"/details"+query,api+"/export"+query]){
+  for(const route of ["/expense/monthly","/expense/monthly/","/expense/monthly/app.js","/expense/monthly/styles.css","/expense/monthly/report-detail.js","/expense/monthly/report-detail.css","/expense/monthly/report-switcher.js","/expense/monthly/report-switcher.css",api+query,api+"/options",api+"/details"+query,api+"/export"+query]){
     assert.equal((await request("reader",route)).status,403,route);
     assert.equal((await request("none",route)).status,401,route);
   }

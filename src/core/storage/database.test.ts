@@ -5,6 +5,20 @@ import Database from "better-sqlite3";
 
 import { migrateDatabase } from "./database.js";
 
+test("operating revenue migration preserves the total and leaves the new revenue unset", () => {
+  const db = new Database(":memory:");
+  db.exec(`CREATE TABLE monthly_operating_reports (
+    store_id TEXT, month TEXT, currency TEXT, income_cents INTEGER, dividend_cents INTEGER,
+    allocations_json TEXT, note TEXT, revision INTEGER, updated_by TEXT, updated_at TEXT,
+    PRIMARY KEY (store_id, month, currency));
+    INSERT INTO monthly_operating_reports VALUES('fuzzy','2026-09','CNY',30000000,5000000,'[]','original',3,'fixture','before');`);
+  migrateDatabase(db);
+  migrateDatabase(db);
+  assert.deepEqual(db.prepare("SELECT income_cents,operating_income_cents,revision,note FROM monthly_operating_reports").get(),
+    { income_cents: 30000000, operating_income_cents: null, revision: 3, note: "original" });
+  db.close();
+});
+
 test("migrateDatabase adds reimbursement submitter audit columns to existing databases", () => {
   const db = new Database(":memory:");
   db.exec(`

@@ -1,4 +1,5 @@
 import { createMonthlyReportRouter } from "./monthly-report-routes.js";
+import { createOperatingReportRouter } from "./operating-report-routes.js";
 import { MONTHLY_REPORT_PERMISSION } from "../scenarios/reimbursement/monthly-report.js";
 import { createGatewayAuth, gatewayAuthConfig, resolveShortcutAccount, type GatewayAuthConfig } from "./gateway-auth.js";
 import { actionChannels, hasPermission, requirePermission, submissionChannels, canViewResource, canDeleteReport, reportAccessScope } from "./authorization.js";
@@ -629,8 +630,15 @@ export function createApp(input?: {
     response.set("Content-Security-Policy", "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' blob:; connect-src 'self'; font-src 'self'; base-uri 'none'; frame-ancestors 'self'; form-action 'self'");
     response.sendFile(path.join(staticDir, "monthly", "index.html"));
   });
-  for (const asset of ["app.js", "styles.css", "report-detail.js", "report-detail.css"]) {
+  for (const asset of ["app.js", "styles.css", "report-detail.js", "report-detail.css", "report-switcher.js", "report-switcher.css"]) {
     app.get(`${ADMIN_BASE_PATH}/monthly/${asset}`, ...monthlyPageAuth, (_request, response) => response.sendFile(path.join(staticDir, "monthly", asset)));
+  }
+  app.get([`${ADMIN_BASE_PATH}/monthly/operating`, `${ADMIN_BASE_PATH}/monthly/operating/`], ...monthlyPageAuth, (_request, response) => {
+    response.set("Content-Security-Policy", "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' blob:; connect-src 'self'; font-src 'self'; base-uri 'none'; frame-ancestors 'self'; form-action 'self'");
+    response.sendFile(path.join(staticDir, "operating", "index.html"));
+  });
+  for (const asset of ["app.js", "styles.css"]) {
+    app.get(`${ADMIN_BASE_PATH}/monthly/operating/${asset}`, ...monthlyPageAuth, (_request, response) => response.sendFile(path.join(staticDir, "operating", asset)));
   }
   app.post(
     SHORTCUT_API_PATH,
@@ -774,6 +782,7 @@ export function createApp(input?: {
       next(error);
     });
   });
+  app.use(`${ADMIN_BASE_PATH}/api/monthly-reports/operating`, createOperatingReportRouter(config.timeZone));
   app.use(`${ADMIN_BASE_PATH}/api/monthly-reports`, createMonthlyReportRouter(config.timeZone));
   const checkReport: express.RequestHandler = (request, response, next) => {
     const session = getAdminSession(response);

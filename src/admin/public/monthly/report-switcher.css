@@ -1,0 +1,21 @@
+/* Reuse the admin center switcher's chevron, selected state, menu and backdrop. */
+.report-nav-group{display:flex;align-items:center;gap:12px;min-width:0}
+body > .topbar .report-nav-group .brand{padding:0;flex-shrink:0}
+.report-nav-divider{height:18px;width:1px;background:var(--line);flex-shrink:0}
+.report-switcher{position:relative}
+.report-switcher-trigger{display:inline-flex;align-items:center;gap:7px;min-height:44px;padding:0 7px;border:0;border-radius:10px;background:transparent;color:var(--soft);font:inherit;font-size:14px;font-weight:500;white-space:nowrap;cursor:pointer;touch-action:manipulation}
+.report-switcher-trigger:focus-visible{outline:3px solid var(--brand-soft);outline-offset:2px}
+.report-switcher-chevron{width:15px;height:15px;flex-shrink:0}
+.report-switcher.is-open .report-switcher-chevron{transform:rotate(180deg)}
+body.report-menu-open > .topbar{position:relative;z-index:21}
+.report-switcher-backdrop{position:fixed;z-index:20;inset:0;background:rgba(28,28,30,.28);backdrop-filter:blur(2px)}
+.report-switcher-menu{position:absolute;z-index:22;top:calc(100% + 10px);left:0;width:210px;padding:8px;border:1px solid var(--line);border-radius:20px;background:var(--surface);color:var(--ink);box-shadow:0 24px 60px rgba(28,28,30,.22)}
+.report-switcher-option{display:grid;grid-template-columns:1fr 20px;align-items:center;gap:12px;min-height:56px;padding:0 14px;border-radius:14px;color:var(--ink);font-size:15px;font-weight:600;text-decoration:none;touch-action:manipulation}
+.report-switcher-option[aria-current="page"]{background:var(--brand-soft)}
+.report-switcher-option:focus-visible{outline:2px solid var(--brand);outline-offset:-2px;background:var(--surface-muted)}
+.report-switcher-check{color:var(--brand);font-size:20px;font-weight:800;text-align:center}
+.report-switcher-menu[hidden],.report-switcher-backdrop[hidden]{display:none}
+@media(hover:hover) and (pointer:fine){.report-switcher-trigger:hover,.report-switcher-option:hover{background:var(--surface-muted)}}
+@media(max-width:740px){.report-nav-group{gap:8px}.report-switcher{position:static}.report-switcher-menu{left:14px;right:auto}.report-switcher-trigger{font-size:13px;padding:0 4px}}
+@media(max-width:480px){body > .topbar .monthly-return,body > .topbar .return-link{display:none}}
+@media(prefers-reduced-motion:no-preference){.report-switcher-chevron{transition:transform .18s ease}}
