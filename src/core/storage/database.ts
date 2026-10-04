@@ -118,6 +118,8 @@ export function migrateDatabase(db: Database.Database) {
       currency TEXT NOT NULL,
       income_cents INTEGER,
       operating_income_cents INTEGER,
+      historical_expense_cents INTEGER,
+      historical_food_cents INTEGER,
       dividend_cents INTEGER,
       allocations_json TEXT NOT NULL DEFAULT '[]',
       note TEXT NOT NULL DEFAULT '',
@@ -213,6 +215,12 @@ export function migrateDatabase(db: Database.Database) {
   const operatingColumns = db.prepare("PRAGMA table_info(monthly_operating_reports)").all() as Array<{ name: string }>;
   if (!operatingColumns.some(column => column.name === "operating_income_cents")) {
     db.exec("ALTER TABLE monthly_operating_reports ADD COLUMN operating_income_cents INTEGER");
+  }
+
+  for (const column of ["historical_expense_cents", "historical_food_cents"]) {
+    if (!operatingColumns.some(existing => existing.name === column)) {
+      db.exec(`ALTER TABLE monthly_operating_reports ADD COLUMN ${column} INTEGER`);
+    }
   }
 
   const columns = db.prepare(`PRAGMA table_info(raw_messages)`).all() as Array<{ name: string }>;

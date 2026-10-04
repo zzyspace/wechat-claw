@@ -6,23 +6,26 @@ export interface OperatingInput {
   /** Total income; distinct from operating revenue. */
   incomeCents: number | null;
   operatingIncomeCents: number | null;
+  historicalExpenseCents?: number | null;
+  historicalFoodCents?: number | null;
   dividendCents: number | null;
   allocations: Array<{ name: string; amountCents: number }>;
   note: string;
   revision: number;
 }
 export interface OperatingRecord extends OperatingInput { updatedAt: string }
+export const OPERATING_LIVE_COST_START_MONTH = "2026-09";
 export class OperatingConflictError extends Error {}
 export function safeOperatingSum(a: number, b: number) {
   const sum = a + b;
   if (!Number.isSafeInteger(sum)) throw new MonthlyReportValidationError("金额超出安全精度范围。");
   return sum;
 }
-export function parseOperatingInput(body: unknown): OperatingInput {
+export function parseOperatingInput(body: unknown, current?: OperatingRecord | null): OperatingInput {
   if (!body || typeof body !== "object" || Array.isArray(body)) throw new MonthlyReportValidationError("请提交有效的经营数据。");
   const input = body as Record<string, unknown>;
   const keys = ["incomeCents", "operatingIncomeCents", "dividendCents", "allocations", "note", "revision"];
-  if (Object.keys(input).some(key => !keys.includes(key)) || keys.some(key => !(key in input))) throw new MonthlyReportValidationError("经营数据字段无效。");
+  if (Object.keys(input).some(key => ![...keys, "historicalExpenseCents", "historicalFoodCents"].includes(key)) || keys.some(key => !(key in input))) throw new MonthlyReportValidationError("经营数据字段无效。");
   const amount = (value: unknown, label: string, nullable = true): number | null => {
     if (nullable && value === null) return null;
     if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) throw new MonthlyReportValidationError(`${label}须为非负整数分。`);
@@ -30,7 +33,12 @@ export function parseOperatingInput(body: unknown): OperatingInput {
   };
   const incomeCents = amount(input.incomeCents, "总收入"), dividendCents = amount(input.dividendCents, "总分红");
   if (!Array.isArray(input.allocations) || input.allocations.length > 20) throw new MonthlyReportValidationError("最多支持 20 项分红。");
-  const operatingIncomeCents = amount(input.operatingIncomeCents, "营业收入");
+  const operatingIncomeCents = amount(input.operatingIncomeCents, "营业收入") ?? incomeCents;
+  const historicalExpenseCents = amount(input.historicalExpenseCents === undefined ? current?.historicalExpenseCents ?? null : input.historicalExpenseCents, "历史总支出");
+  const historicalFoodCents = amount(input.historicalFoodCents === undefined ? current?.historicalFoodCents ?? null : input.historicalFoodCents, "历史食材成本");
+  if ((historicalExpenseCents === null) !== (historicalFoodCents === null) || historicalExpenseCents !== null && historicalFoodCents! > historicalExpenseCents) {
+    throw new MonthlyReportValidationError("历史总支出与食材成本须同时填写，食材成本不得超过总支出。");
+  }
   const names = new Set<string>();
   const allocations = input.allocations.map(value => {
     if (!value || typeof value !== "object" || Array.isArray(value) || Object.keys(value).some(key => !["name", "amountCents"].includes(key)) || typeof value.name !== "string") throw new MonthlyReportValidationError("分红明细无效。");
@@ -43,10 +51,10 @@ export function parseOperatingInput(body: unknown): OperatingInput {
   if (allocations.length && dividendCents === null || dividendCents !== null && allocated > dividendCents) throw new MonthlyReportValidationError("请填写总分红，且明细合计不能超过总分红。");
   if (typeof input.note !== "string" || input.note.length > 2000) throw new MonthlyReportValidationError("备注最多 2000 字。");
   if (typeof input.revision !== "number" || !Number.isSafeInteger(input.revision) || input.revision < 0 || input.revision >= Number.MAX_SAFE_INTEGER) throw new MonthlyReportValidationError("数据版本无效，请刷新页面。");
-  return { incomeCents, operatingIncomeCents, dividendCents, allocations, note: input.note.trim(), revision: input.revision };
+  return { incomeCents, operatingIncomeCents, historicalExpenseCents, historicalFoodCents, dividendCents, allocations, note: input.note.trim(), revision: input.revision };
 }
 export function readOperatingRecord(store: string, month: string, currency: string): OperatingRecord | null {
-  const row = getDatabase().prepare(`SELECT income_cents AS incomeCents, operating_income_cents AS operatingIncomeCents, dividend_cents AS dividendCents, allocations_json AS allocationsJson,
+  const row = getDatabase().prepare(`SELECT income_cents AS incomeCents, operating_income_cents AS operatingIncomeCents, historical_expense_cents AS historicalExpenseCents, historical_food_cents AS historicalFoodCents, dividend_cents AS dividendCents, allocations_json AS allocationsJson,
     note, revision, updated_at AS updatedAt FROM monthly_operating_reports WHERE store_id=? AND month=? AND currency=?`).get(store, month, currency) as (Omit<OperatingRecord, "allocations"> & { allocationsJson: string }) | undefined;
   if (!row) return null;
   const { allocationsJson, ...fields } = row;
@@ -60,28 +68,40 @@ export function saveOperatingRecord(store: string, month: string, currency: stri
     const current = readOperatingRecord(store, month, currency);
     if ((current?.revision ?? 0) !== input.revision) throw new OperatingConflictError("该月经营数据已被更新，请重新打开编辑后再保存。");
     const updatedAt = new Date().toISOString();
-    getDatabase().prepare(`INSERT INTO monthly_operating_reports(store_id,month,currency,income_cents,operating_income_cents,dividend_cents,allocations_json,note,revision,updated_by,updated_at)
-      VALUES(?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(store_id,month,currency) DO UPDATE SET income_cents=excluded.income_cents,operating_income_cents=excluded.operating_income_cents,dividend_cents=excluded.dividend_cents,
+    getDatabase().prepare(`INSERT INTO monthly_operating_reports(store_id,month,currency,income_cents,operating_income_cents,historical_expense_cents,historical_food_cents,dividend_cents,allocations_json,note,revision,updated_by,updated_at)
+      VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(store_id,month,currency) DO UPDATE SET income_cents=excluded.income_cents,operating_income_cents=excluded.operating_income_cents,historical_expense_cents=excluded.historical_expense_cents,historical_food_cents=excluded.historical_food_cents,dividend_cents=excluded.dividend_cents,
       allocations_json=excluded.allocations_json,note=excluded.note,revision=excluded.revision,updated_by=excluded.updated_by,updated_at=excluded.updated_at`)
-      .run(store, month, currency, input.incomeCents, input.operatingIncomeCents, input.dividendCents, JSON.stringify(input.allocations), input.note, input.revision + 1, actor, updatedAt);
+      .run(store, month, currency, input.incomeCents, input.operatingIncomeCents, input.historicalExpenseCents ?? null, input.historicalFoodCents ?? null, input.dividendCents, JSON.stringify(input.allocations), input.note, input.revision + 1, actor, updatedAt);
     return { ...input, revision: input.revision + 1, updatedAt };
   }).immediate();
 }
-export function operatingSummary(records: MonthlyRecord[], currency: string, finance: OperatingRecord | null, partial: boolean) {
+export function operatingSummary(records: MonthlyRecord[], currency: string, finance: OperatingRecord | null, partial: boolean, month = OPERATING_LIVE_COST_START_MONTH) {
   const totals = monthlyTotals(aggregateMonthlyRecords(records));
-  const total = totals.find(total => total.currency === currency) ?? { currency, amountCents: 0, recordCount: 0, missingAmountCount: 0 };
+  let total = totals.find(total => total.currency === currency) ?? { currency, amountCents: 0, recordCount: 0, missingAmountCount: 0 };
   const categoryTotals = monthlyCategoryTotals(records);
-  const categories = MONTHLY_SUMMARY_CATEGORIES.map(code => categoryTotals.find(c => c.currency === currency && c.code === code) ?? {
+  let categories = MONTHLY_SUMMARY_CATEGORIES.map(code => categoryTotals.find(c => c.currency === currency && c.code === code) ?? {
     code, label: getReimbursementExpenseCategoryLabel(code), currency, amountCents: 0, recordCount: 0, missingAmountCount: 0,
   });
-  const unknownCurrencyCount = totals.find(total => total.currency === "未标注币种")?.recordCount ?? 0;
-  const costComplete = !partial && total.missingAmountCount === 0 && unknownCurrencyCount === 0;
+  let unknownCurrencyCount = totals.find(total => total.currency === "未标注币种")?.recordCount ?? 0;
+  let costComplete = !partial && total.missingAmountCount === 0 && unknownCurrencyCount === 0;
   const visibleFinance = partial ? null : finance;
+  const costSource = month < OPERATING_LIVE_COST_START_MONTH ? "historical" : "monthly";
+  if (costSource === "historical") {
+    const expense = visibleFinance?.historicalExpenseCents ?? null;
+    const food = visibleFinance?.historicalFoodCents ?? null;
+    costComplete = !partial && expense !== null && food !== null;
+    unknownCurrencyCount = 0;
+    total = { currency, amountCents: expense ?? 0, recordCount: 1, missingAmountCount: costComplete ? 0 : 1 };
+    categories = [["food", food], ["other", expense !== null && food !== null ? expense - food : null]].map(([code, value]) => ({
+      code: String(code), label: getReimbursementExpenseCategoryLabel(String(code)), currency,
+      amountCents: typeof value === "number" ? value : 0, recordCount: 1, missingAmountCount: value === null ? 1 : 0,
+    }));
+  }
   const income = visibleFinance?.incomeCents ?? null;
   const profitCents = costComplete && income !== null ? safeOperatingSum(income, -total.amountCents) : null;
   const ratio = (cents: number | null) => income !== null && income > 0 && cents !== null ? cents / income * 100 : null;
   const allocatedCents = (visibleFinance?.allocations ?? []).reduce((sum, item) => safeOperatingSum(sum, item.amountCents), 0);
-  return { total, categories, finance: visibleFinance, costComplete, unknownCurrencyCount, profitCents,
+  return { total, categories, costSource, finance: visibleFinance, costComplete, unknownCurrencyCount, profitCents,
     costRate: costComplete ? ratio(total.amountCents) : null, profitRate: ratio(profitCents),
     allocatedCents, unallocatedCents: visibleFinance?.dividendCents === null || !visibleFinance ? null : visibleFinance.dividendCents - allocatedCents,
     currencies: totals.map(total => total.currency),
@@ -103,7 +123,7 @@ export function operatingCsv(report: ReturnType<typeof operatingSummary>, storeN
     ...(report.finance?.allocations ?? []).map(item => [storeName, month, currency, item.name, amount(item.amountCents), "分红明细"]),
     [storeName, month, currency, "待分配分红", amount(report.unallocatedCents), ""],
     [storeName, month, currency, "备注", "", report.finance?.note ?? ""],
-    [storeName, month, currency, "统计提示", "", `${report.unknownCurrencyCount} 笔币种待确认；六类成本与报账月报同源，按创建月份统计`]];
+    [storeName, month, currency, "统计提示", "", report.costSource === "historical" ? "历史成本按原表录入：食材与其他（总支出减食材）" : `${report.unknownCurrencyCount} 笔币种待确认；六类成本与报账月报同源，按创建月份统计`]];
   return "\ufeff" + rows.map(row => row.map((value, index) => {
     let text = String(value ?? "");
     if (!(index === 4 && /^-?\d+(?:\.\d+)?$/.test(text)) && /^[\s]*[=+@-]|^[\t\r\n]/u.test(text)) text = `'${text}`;

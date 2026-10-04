@@ -38,6 +38,26 @@ test("profit is suppressed for incomplete costs or partial access and is safe fo
   const precise=operatingSummary([],"CNY",{...finance,incomeCents:Number.MAX_SAFE_INTEGER-1},false);
   assert.match(operatingCsv(precise,"Fuzzy","2026-09","CNY"),/90071992547409\.90/);
 });
+test("cost source changes only at September 2026 and historical totals never leak to partial scopes", () => {
+  const record:MonthlyRecord={id:1,channelCode:"reimbursement_fuzzy",reporter:"A",expenseCategory:"salary",amount:9,currency:"CNY",note:"",ocrText:null,createdAt:"2026-08-01"};
+  const finance={incomeCents:2000,operatingIncomeCents:1800,historicalExpenseCents:1200,historicalFoodCents:700,dividendCents:500,allocations:[],note:"",revision:1,updatedAt:"now"};
+  const historical=operatingSummary([record],"CNY",finance,false,"2026-08");
+  assert.equal(historical.costSource,"historical");assert.equal(historical.total.amountCents,1200);assert.equal(historical.profitCents,800);
+  assert.deepEqual(historical.categories.map(c=>[c.code,c.amountCents]),[["food",700],["other",500]]);
+  assert.match(operatingCsv(historical,"Fuzzy","2026-08","CNY"),/历史成本/);
+  const live=operatingSummary([record],"CNY",finance,false,"2026-09");
+  assert.equal(live.costSource,"monthly");assert.equal(live.total.amountCents,900);assert.equal(live.categories.length,6);
+  assert.equal(live.profitCents,1100);
+  const missing=operatingSummary([record],"CNY",null,false,"2025-09");
+  assert.equal(missing.costComplete,false);assert.equal(missing.profitCents,null);assert.equal(missing.total.amountCents,0);
+  const partial=operatingSummary([record],"CNY",finance,true,"2026-08");
+  assert.equal(partial.finance,null);assert.equal(partial.total.amountCents,0);assert.equal(partial.profitCents,null);
+  const {updatedAt: _updatedAt,...input}=finance;
+  const fallback=parseOperatingInput({...input,operatingIncomeCents:null,revision:0});
+  assert.equal(fallback.operatingIncomeCents,2000);
+  assert.throws(()=>parseOperatingInput({...input,historicalFoodCents:1300}));
+  assert.throws(()=>parseOperatingInput({...input,historicalFoodCents:null}));
+});
 test("operating report persists manual inputs and reuses monthly costs without widening permissions", async t => {
   let revoked=false;
   const gateway=createServer((request,response)=>{
@@ -88,6 +108,11 @@ test("operating report persists manual inputs and reuses monthly costs without w
   const zero=await (await request("view",api+emptyQuery)).json();assert.equal(zero.profitCents,0);assert.equal(zero.costRate,null);assert.equal(zero.finance.dividendCents,0);assert.equal(zero.finance.operatingIncomeCents,80000);
   for(const bad of ["?month[]=2026-09&store=fuzzy","?month=2026-13&store=fuzzy","?month=1899-12&store=fuzzy","?month=2026-09&store=fuzzy&currency[]=CNY","?month=2026-09&store=fuzzy&currency=EUR"])assert.equal((await request("edit",api+bad)).status,400);
   assert.equal((await request("view",api+query.replace("2026-09","2026-08"))).status,400);assert.equal((await request("edit",api+query.replace("2026-09","2026-08"))).status,200);
+  const historyQuery=query.replace("2026-09","2026-08");
+  assert.equal((await request("edit",api+historyQuery,{...body,operatingIncomeCents:null,historicalExpenseCents:60000,historicalFoodCents:35000})).status,200);
+  const history=await (await request("edit",api+historyQuery)).json();
+  assert.equal(history.finance.operatingIncomeCents,body.incomeCents);assert.equal(history.total.amountCents,60000);
+  assert.deepEqual(history.categories.map((c:any)=>c.code),["food","other"]);assert.equal(history.profitCents,40000);
   const latest=await (await request("edit",api+query)).json();
   assert.equal((await request("edit",api+query,{...body,revision:latest.finance.revision,allocations:[{name:"=1+2",amountCents:40000}],note:"@SUM(A1)"})).status,200);
   const csv=await (await request("view",api+"/export"+query)).text();assert.match(csv,/'=1\+2/);assert.match(csv,/'@SUM/);assert.match(csv,/"总收入","1000.00"/);assert.match(csv,/"营业收入","800.00"/);assert.match(csv,/待分配分红/);assert.match(csv,/100.00/);
