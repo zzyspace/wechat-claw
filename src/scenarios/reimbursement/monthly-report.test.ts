@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { aggregateMonthlyRecords, classifyMonthlyRecord, monthRange, monthlyCsv, monthlyStoresForScope, monthlyTotals, type MonthlyRecord } from "./monthly-report.js";
+import { aggregateMonthlyRecords, classifyMonthlyRecord, monthRange, monthlyCategoryTotals, monthlyCsv, monthlyStoresForScope, monthlyTotals, type MonthlyRecord } from "./monthly-report.js";
 const row = (overrides: Partial<MonthlyRecord> = {}): MonthlyRecord => ({ id: 1, channelCode: "reimbursement_fuzzy", reporter: "张志延", expenseCategory: "food", amount: 10, currency: "CNY", note: "", ocrText: "", createdAt: "2026-09-01 00:00:00", ...overrides });
 test("project rules use OCR or notes and resolve overlapping matches without duplicates", () => {
   for (const text of ["澳美佳", "安之乐", "知其味", "恰沐阳"]) {
@@ -158,4 +158,37 @@ test("salary uses category only, after manager source and before keywords", () =
   for (const channelCode of ["reimbursement_fuzzy_manager", "reimbursement_peanut_manager", "reimbursement_fuzzy_qz_manager"]) {
     assert.deepEqual(classifyMonthlyRecord(row({ channelCode, expenseCategory: "salary", reporter: "李晨晨" })), { projectId: "manager", reporter: "张志延" });
   }
+});
+
+
+test("category totals use saved categories, conserve amounts and keep currencies and missing amounts separate", () => {
+  const records = [
+    row({ amount: 0.1, expenseCategory: "food", note: "工资 房租" }),
+    row({ amount: 0.2, expenseCategory: "food", ocrText: "水电" }),
+    row({ amount: 20, expenseCategory: "salary", channelCode: "reimbursement_fuzzy_manager" }),
+    row({ amount: 30, expenseCategory: "rent", note: "快驴" }),
+    row({ amount: 40, expenseCategory: "utilities" }),
+    row({ amount: 50, expenseCategory: "flower" }),
+    row({ amount: 60, expenseCategory: "manager_reimbursement" }),
+    row({ amount: 70, expenseCategory: "planned_expense" }),
+    row({ amount: -10, expenseCategory: "other" }),
+    row({ amount: null, expenseCategory: "food" }),
+    row({ amount: 90, expenseCategory: "unknown" }),
+    row({ amount: 12, expenseCategory: "salary", currency: "usd" }),
+    row({ amount: 99, expenseCategory: "salary", currency: "" }),
+  ];
+  const categories = monthlyCategoryTotals(records);
+  const cny = categories.filter(c => c.currency === "CNY");
+  assert.deepEqual(cny.map(c => c.label), ["食材", "工资", "房租", "水电", "花卉", "其他"]);
+  assert.deepEqual(cny.map(c => c.amountCents), [30, 2000, 3000, 4000, 5000, 21000]);
+  assert.equal(cny[0].missingAmountCount, 1);
+  for (const total of monthlyTotals(aggregateMonthlyRecords(records))) {
+    const subset = categories.filter(c => c.currency === total.currency);
+    assert.equal(subset.reduce((sum,c) => sum+c.amountCents,0), total.amountCents);
+    assert.equal(subset.reduce((sum,c) => sum+c.recordCount,0), total.recordCount);
+    assert.equal(subset.reduce((sum,c) => sum+c.missingAmountCount,0), total.missingAmountCount);
+  }
+  assert.equal(categories.find(c => c.currency === "USD" && c.code === "salary")?.amountCents,1200);
+  assert.equal(categories.find(c => c.currency === "未标注币种" && c.code === "salary")?.missingAmountCount,1);
+  assert.deepEqual(monthlyCategoryTotals([]),[]);
 });

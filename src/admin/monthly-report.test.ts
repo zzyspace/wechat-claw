@@ -83,7 +83,15 @@ test("monthly page, API, details, export and assets enforce explicit permission 
   assert.equal(summary.totals.find((x:any)=>x.currency==="CNY").amountCents,103100);assert.equal(summary.totals.find((x:any)=>x.currency==="CNY").missingAmountCount,1);
   assert.equal(summary.totals.find((x:any)=>x.currency==="USD").amountCents,800);
   assert.doesNotMatch(JSON.stringify(summary),/submittedBy|ocrText|localPath/);
+  for(const total of summary.totals){
+    const categories=summary.categoryTotals.filter((c:any)=>c.currency===total.currency);
+    assert.equal(categories.length,6);
+    assert.equal(categories.reduce((sum:number,c:any)=>sum+c.amountCents,0),total.amountCents);
+  }
+
   const owner=await (await request("owner",api+query)).json();assert.equal(owner.groups.length,1);assert.equal(owner.groups[0].reporter,"张志延");assert.equal(owner.groups[0].recordCount,1);assert.equal(owner.groups[0].amountCents,500);
+  assert.equal(owner.categoryTotals.find((c:any)=>c.code==="food").amountCents,500);
+  assert.equal(owner.categoryTotals.reduce((sum:number,c:any)=>sum+c.recordCount,0),1,"category totals enforce the same row scope");
   assert.equal((await request("owner",api+"?month=2026-09&store=peanut")).status,404);
   assert.equal((await request("owner",api+"/export?month=2026-09&store=peanut")).status,404);
   const selection="&projectId=manager&reporter="+encodeURIComponent("张志延")+"&currency=CNY";

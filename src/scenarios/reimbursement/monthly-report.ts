@@ -115,6 +115,24 @@ export function monthlyTotals(groups: MonthlyGroup[]) {
   for (const total of totals.values()) total.projectCount = new Set(groups.filter(g => g.currency === total.currency).map(g => g.projectId)).size;
   return [...totals.values()].sort((a, b) => a.currency === "CNY" ? -1 : b.currency === "CNY" ? 1 : a.currency.localeCompare(b.currency));
 }
+export const MONTHLY_SUMMARY_CATEGORIES = ["food", "salary", "rent", "utilities", "flower", "other"] as const;
+export function monthlyCategoryTotals(records: MonthlyRecord[]) {
+  const currencies = new Map<string, Array<{ code: string; label: string; currency: string; amountCents: number; recordCount: number; missingAmountCount: number }>>();
+  for (const record of records) {
+    const currency = currencyOf(record);
+    let categories = currencies.get(currency);
+    if (!categories) {
+      categories = MONTHLY_SUMMARY_CATEGORIES.map(code => ({ code, label: getReimbursementExpenseCategoryLabel(code), currency, amountCents: 0, recordCount: 0, missingAmountCount: 0 }));
+      currencies.set(currency, categories);
+    }
+    const category = categories.find(category => category.code === record.expenseCategory) ?? categories[categories.length - 1];
+    const cents = currency === "未标注币种" ? null : toCents(record.amount);
+    category.recordCount++;
+    if (cents === null) category.missingAmountCount++;
+    else category.amountCents = addCents(category.amountCents, cents);
+  }
+  return [...currencies.values()].flat();
+}
 export function readMonthlyRecords(input: { month: string; store: string; timeZone: string; scope: MonthlyScope }) {
   const store = monthlyStoresForScope(input.scope).find(store => store.id === input.store);
   if (!store) return null;

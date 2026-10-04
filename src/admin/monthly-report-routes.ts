@@ -2,7 +2,7 @@ import express from "express";
 import { getAdminSession, type AdminSession } from "./auth.js";
 import { hasPermission, reportAccessScope, requirePermission } from "./authorization.js";
 import { getZonedDateParts } from "../core/runtime/timezone.js";
-import { aggregateMonthlyRecords, MONTHLY_PROJECTS, MONTHLY_REPORT_PERMISSION, MONTHLY_REPORTERS, monthlyCsv, monthlyDetails, monthlyStoresForScope, monthlyTotals, monthRange, MonthlyReportValidationError, readMonthlyRecords } from "../scenarios/reimbursement/monthly-report.js";
+import { aggregateMonthlyRecords, MONTHLY_PROJECTS, MONTHLY_REPORT_PERMISSION, MONTHLY_REPORTERS, monthlyCategoryTotals, monthlyCsv, monthlyDetails, monthlyStoresForScope, monthlyTotals, monthRange, MonthlyReportValidationError, readMonthlyRecords } from "../scenarios/reimbursement/monthly-report.js";
 
 export const MIN_MONTHLY_REPORT_MONTH = "2026-09";
 
@@ -51,7 +51,7 @@ export function createMonthlyReportRouter(timeZone: string) {
     try {
       const data = read(request, response); if (!data) return;
       const groups = aggregateMonthlyRecords(data.records);
-      response.json({ success: true, month: data.month, store: { id: data.store.id, name: data.store.name, partial: data.store.partial }, groups, totals: monthlyTotals(groups), timeZone });
+      response.json({ success: true, month: data.month, store: { id: data.store.id, name: data.store.name, partial: data.store.partial }, groups, totals: monthlyTotals(groups), categoryTotals: monthlyCategoryTotals(data.records), timeZone });
     } catch (error) { next(error); }
   });
   router.get("/details", (request, response, next) => {
