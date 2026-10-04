@@ -15,3 +15,5 @@
 html{touch-action:pan-x pan-y}
 .top-actions .theme-toggle{display:inline-flex;align-items:center;justify-content:center;width:36px;min-width:36px;min-height:36px;padding:0;flex:0 0 36px;border-color:transparent;border-radius:10px;background:var(--surface-muted)}
 .top-actions .theme-icon{display:grid;place-items:center;width:24px;height:24px;font-family:"Apple Color Emoji","Segoe UI Emoji",sans-serif;font-size:20px;line-height:1}
+
+.cost-sharebar .share-remainder{background:transparent}

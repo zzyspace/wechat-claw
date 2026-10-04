@@ -349,8 +349,10 @@ body > .monthly-topbar{position:relative;z-index:2;display:flex;align-items:cent
 /* Keep rules beside the project heading; export belongs to the page footer. */
 .report-head{flex-wrap:nowrap}
 .report-head>div{min-width:0}
-.report-head .rules-link{border:0;background:transparent;color:var(--brand);font-size:12px;font-weight:400;min-height:44px;padding:0;flex-shrink:0;white-space:nowrap}
+.report-head .rules-link{border:0;background:transparent;color:var(--soft);font-size:12px;font-weight:400;min-height:44px;padding:0;flex-shrink:0;white-space:nowrap}
 .foot.report-footer{align-items:center;gap:17px}
 .report-footer details{flex:1;min-width:0;max-width:none}
 .report-footer .footer-export{min-height:44px;margin-left:auto;flex-shrink:0;font-size:13px;padding:0 15px}
 @media(max-width:740px){.report-head .rules-link{font-size:11px}.foot.report-footer{flex-wrap:wrap;gap:9px}.report-footer .footer-export{font-size:12px}.report-footer .demo{order:3;flex-basis:100%;text-align:center;margin-top:5px}}
+
+.report-head .rules-link{gap:5px}.report-head .rules-link svg{width:14px;height:14px}
