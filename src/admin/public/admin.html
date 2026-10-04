@@ -1834,6 +1834,19 @@ body > .topbar .center-switcher-menu { top: calc(100% + 9px); left: auto; }
 .center-switcher-menu { --ink:#17202a; --line:#e3e8ef; --surface:#fff; --surface-strong:#fff; --surface-muted:#f5f7fa; --soft:#f5f7fa; --brand:#007aff; --brand-soft:#eaf3ff; background:var(--surface-strong); color:var(--ink); font-family:-apple-system,"SF Pro Text","PingFang SC","Microsoft YaHei",sans-serif; line-height:1.5; box-shadow:0 24px 60px rgba(28,28,30,.22); }
 :root[data-theme="dark"] .center-switcher-menu { --ink:#f1f4f8; --line:#343942; --surface:#1d2026; --surface-strong:#1d2026; --surface-muted:#262a31; --soft:#262a31; --brand:#72b5ff; --brand-soft:#23354c; }
 :root[data-theme="dark"] .center-switcher-option[data-management] svg, :root[data-theme="dark"] .center-switcher-option[data-center="accounts"] svg { color:#a1a1aa; }
+
+      /* Match business-data heading typography and vertical spacing. */
+      .page { padding-top: 0; }
+      .hero { min-height: 0; margin-top: 0; margin-bottom: 0; padding-top: 42px; padding-bottom: 27px; }
+      .hero h1 { margin: 0; font-size: 34px; line-height: 1.2; letter-spacing: -1.3px; font-weight: 700; }
+      .hero p { margin: 12px 0 0; font-size: 13px; line-height: 1.5; }
+      @media (max-width: 650px) {
+        .hero { padding-top: 24px; padding-bottom: 19px; }
+        .hero h1 { font-size: 27px; letter-spacing: -.9px; }
+        .hero p { margin-top: 8px; font-size: 11px; }
+      }
+      .hero-actions { margin-top: 14px; }
+      @media (max-width: 650px) { .hero-actions { margin-top: 8px; } }
 </style>
   </head>
   <body>
