@@ -69,9 +69,9 @@
         color: var(--ink);
         font-family: "SF Pro Text", "PingFang SC", "Noto Sans SC", sans-serif;
         background:
-          radial-gradient(circle at top left, var(--glow-start), transparent 32%),
-          radial-gradient(circle at top right, var(--glow-end), transparent 28%),
-          linear-gradient(180deg, var(--bg), var(--bg-accent));
+          radial-gradient(circle at top left, var(--glow-start), transparent 28%),
+          radial-gradient(circle at top right, var(--glow-end), transparent 26%),
+          linear-gradient(180deg, var(--bg) 0%, var(--bg-accent) 100%);
       }
 
       button, input, select { font: inherit; }
@@ -180,7 +180,7 @@
         position: absolute;
         inset: 0;
         z-index: -1;
-        background: radial-gradient(circle at 76% 42%, rgba(104, 181, 255, 0.26), transparent 28%);
+        background: none;
         content: "";
       }
 
@@ -445,7 +445,19 @@
         .footer-actions { width: 100%; margin: 0; }
         .footer-actions button { flex: 1; }
       }
-    </style>
+
+      /* Match the business dashboard heading on desktop and mobile. */
+      .hero { min-height: 0; margin-top: 0; margin-bottom: 0; padding-top: 42px; padding-bottom: 27px; }
+      .hero h1 { margin: 0; font-size: 34px; line-height: 1.2; letter-spacing: -1.3px; font-weight: 700; }
+      .hero p { margin: 12px 0 0; font-size: 13px; line-height: 1.5; }
+      .records-button { margin-top: 14px; }
+      @media (max-width: 650px) {
+        .hero { padding-top: 24px; padding-bottom: 19px; }
+        .hero h1 { font-size: 27px; letter-spacing: -.9px; }
+        .hero p { margin-top: 8px; font-size: 11px; }
+        .records-button { margin-top: 8px; }
+      }
+</style>
   </head>
   <body>
     <main class="page">

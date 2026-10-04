@@ -356,3 +356,8 @@ body > .monthly-topbar{position:relative;z-index:2;display:flex;align-items:cent
 @media(max-width:740px){.report-head .rules-link{font-size:11px}.foot.report-footer{flex-wrap:wrap;gap:9px}.report-footer .footer-export{font-size:12px}.report-footer .demo{order:3;flex-basis:100%;text-align:center;margin-top:5px}}
 
 .report-head .rules-link{gap:5px}.report-head .rules-link svg{width:14px;height:14px}
+
+/* Shared page background: matches store-management in both themes. */
+:root { --bg-accent:#e9edf7; --page-glow-start:rgba(0,122,255,.16); --page-glow-end:rgba(90,200,250,.18); }
+:root[data-theme="dark"] { --bg-accent:#151b25; --page-glow-start:rgba(32,110,210,.22); --page-glow-end:rgba(50,170,210,.14); }
+body { min-height:100vh; background:radial-gradient(circle at top left,var(--page-glow-start),transparent 28%),radial-gradient(circle at top right,var(--page-glow-end),transparent 26%),linear-gradient(180deg,var(--bg) 0%,var(--bg-accent) 100%); }
