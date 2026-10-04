@@ -89,10 +89,9 @@
         min-height: 100vh;
         font-family: "SF Pro Text", "PingFang SC", "Noto Sans SC", sans-serif;
         color: var(--ink);
-        background:
-          radial-gradient(circle at top left, var(--page-glow-start), transparent 28%),
+        --admin-page-background: radial-gradient(circle at top left, var(--page-glow-start), transparent 28%),
           radial-gradient(circle at top right, var(--page-glow-end), transparent 26%),
-          linear-gradient(180deg, var(--bg) 0%, var(--bg-accent) 100%);
+          linear-gradient(180deg, var(--bg) 0%, var(--bg-accent) 100%); background: var(--bg-accent); isolation: isolate;
       }
 
       .page {
@@ -1847,6 +1846,16 @@ body > .topbar .center-switcher-menu { top: calc(100% + 9px); left: auto; }
       }
       .hero-actions { margin-top: 14px; }
       @media (max-width: 650px) { .hero-actions { margin-top: 8px; } }
+
+/* Keep the gradient tied to the viewport, independent of list length. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: var(--admin-page-background);
+}
 </style>
   </head>
   <body>
