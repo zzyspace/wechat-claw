@@ -59,11 +59,11 @@ test("cost source changes only at September 2026 and historical totals never lea
   assert.throws(()=>parseOperatingInput({...input,historicalFoodCents:null}));
 });
 test("operating report persists manual inputs and reuses monthly costs without widening permissions", async t => {
-  let revoked=false;
+  let revoked=false,operatingRevoked=false;
   const gateway=createServer((request,response)=>{
     const who=request.headers.cookie?.replace("fixture=","");
-    if(!["edit","view","partial","reader","other-store"].includes(who||"")){response.writeHead(401).end();return;}
-    const permissions=["report:view",...(who!=="reader"&&!revoked?["report:monthly:view"]:[]),...(["edit","partial","other-store"].includes(who||"")?["report:edit"]:[])];
+    if(!["edit","view","partial","reader","other-store","report-editor"].includes(who||"")){response.writeHead(401).end();return;}
+    const permissions=["report:view",...(who!=="reader"&&!revoked?["report:monthly:view"]:[]),...(!operatingRevoked&&!revoked&&["edit","partial","other-store"].includes(who||"")?["report:operating:edit"]:[]),...(who==="report-editor"?["report:edit"]:[])];
     const partial=who==="partial";
     response.setHeader("Content-Type","application/json");response.end(JSON.stringify({success:true,account:{accountId:who,username:who,enabled:true,version:1},access:{accountId:who,app:"expense",role:who==="edit"?"admin":"partner",enabled:true,version:1,permissions,config:{viewScope:{ownership:partial?"self":"any",stores:partial?["fuzzy"]:who==="other-store"?["peanut"]:"all",channels:partial?["reimbursement_fuzzy_manager"]:"all"},submitScope:{stores:[],channels:[]}}}}));
   });
@@ -88,7 +88,7 @@ test("operating report persists manual inputs and reuses monthly costs without w
   const monthly=await (await request("edit","/expense/api/monthly-reports?month=2026-09&store=fuzzy")).json();assert.deepEqual(initial.categories,monthly.categoryTotals.filter((c:any)=>c.currency==="CNY"));
   assert.deepEqual(initial.categories.map((c:any)=>c.amountCents),[10700,2000,3000,400,500,1400]);
   const body={operatingIncomeCents:80000,incomeCents:100000,dividendCents:50000,allocations:[{name:"LCCZZY",amountCents:40000},{name:"DZG",amountCents:10000}],note:"手工录入",revision:0};
-  assert.equal((await request("view",api+query,body)).status,403);assert.equal((await request("partial",api+query,body)).status,403);assert.equal((await request("other-store",api+query,body)).status,404);
+  assert.equal((await request("view",api+query,body)).status,403);assert.equal((await request("report-editor",api+query,body)).status,403);assert.equal((await (await request("report-editor",api+query)).json()).canEdit,false);assert.equal((await request("partial",api+query,body)).status,403);assert.equal((await request("other-store",api+query,body)).status,404);
   assert.equal((await request("edit",api+query,body,{Origin:"https://attacker.invalid"})).status,403);
   assert.equal((await request("edit",api+query,body,{"Sec-Fetch-Site":"cross-site"})).status,403);
   const saved=await request("edit",api+query,body,{Origin:base});assert.equal(saved.status,200);assert.equal((await saved.json()).finance.revision,1);
@@ -116,5 +116,8 @@ test("operating report persists manual inputs and reuses monthly costs without w
   const latest=await (await request("edit",api+query)).json();
   assert.equal((await request("edit",api+query,{...body,revision:latest.finance.revision,allocations:[{name:"=1+2",amountCents:40000}],note:"@SUM(A1)"})).status,200);
   const csv=await (await request("view",api+"/export"+query)).text();assert.match(csv,/'=1\+2/);assert.match(csv,/'@SUM/);assert.match(csv,/"总收入","1000.00"/);assert.match(csv,/"营业收入","800.00"/);assert.match(csv,/待分配分红/);assert.match(csv,/100.00/);
+  operatingRevoked=true;
+  const readOnly=await request("edit",api+query);assert.equal(readOnly.status,200);assert.equal((await readOnly.json()).canEdit,false);
+  assert.equal((await request("edit",api+query,body)).status,403,"revoking only operating edit takes effect without removing monthly viewing");
   revoked=true;assert.equal((await request("edit",api+query)).status,403);assert.equal((await request("edit",api+query,body)).status,403);assert.equal((await request("edit",page)).status,403);
 });

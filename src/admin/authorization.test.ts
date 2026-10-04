@@ -14,6 +14,17 @@ const envelope = {
     } },
 };
 
+test("operating editing is explicit, depends on monthly viewing, and does not grant report editing", () => {
+  const make = (permissions: string[]) => validateExpenseAuthorization({ ...envelope, access: { ...envelope.access, permissions } });
+  const session = make(["report:view", "report:monthly:view", "report:operating:edit"]);
+  assert.equal(hasPermission(session, "report:operating:edit"), true);
+  assert.equal(hasPermission(session, "report:edit"), false);
+  assert.equal(session.canWrite, false);
+  assert.equal(hasPermission(make(["report:view", "report:monthly:view", "report:edit"]), "report:operating:edit"), false);
+  assert.throws(() => make(["report:view", "report:operating:edit"]));
+  assert.throws(() => make(["report:monthly:view", "report:operating:edit"]));
+});
+
 test("expense viewing and submission scopes are independent of role", () => {
   const session = validateExpenseAuthorization(envelope);
   assert.equal(hasPermission(session, "report:delete"), false);
