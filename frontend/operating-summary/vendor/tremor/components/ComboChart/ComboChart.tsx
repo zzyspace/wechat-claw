@@ -600,6 +600,8 @@ interface ComboChartProps extends React.HTMLAttributes<HTMLDivElement> {
   enableBiaxial?: boolean
   tooltipCallback?: (tooltipCallbackContent: TooltipProps) => void
   customTooltip?: React.ComponentType<TooltipProps>
+  // Local extension: share the hover cursor across charts with the same id.
+  syncId?: string
   barSeries: ChartSeries & {
     type?: "default" | "stacked"
   }
@@ -651,6 +653,7 @@ const ComboChart = React.forwardRef<HTMLDivElement, ComboChartProps>(
       lineSeries = defaultLineSeries,
       tooltipCallback,
       customTooltip,
+      syncId,
 
       className,
       ...other
@@ -790,6 +793,7 @@ const ComboChart = React.forwardRef<HTMLDivElement, ComboChartProps>(
         <ResponsiveContainer>
           <RechartsComposedChart
             data={data}
+            syncId={syncId}
             onClick={
               hasOnValueChange && (activeLegend || activeBar || activeDot)
                 ? () => {

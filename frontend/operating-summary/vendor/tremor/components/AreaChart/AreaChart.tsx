@@ -502,6 +502,8 @@ interface AreaChartProps extends React.HTMLAttributes<HTMLDivElement> {
   fill?: "gradient" | "solid" | "none"
   tooltipCallback?: (tooltipCallbackContent: TooltipProps) => void
   customTooltip?: React.ComponentType<TooltipProps>
+  // Local extension: share the hover cursor across charts with the same id.
+  syncId?: string
 }
 
 const AreaChart = React.forwardRef<HTMLDivElement, AreaChartProps>(
@@ -537,6 +539,7 @@ const AreaChart = React.forwardRef<HTMLDivElement, AreaChartProps>(
       fill = "gradient",
       tooltipCallback,
       customTooltip,
+      syncId,
       ...other
     } = props
     const CustomTooltip = customTooltip
@@ -655,6 +658,7 @@ const AreaChart = React.forwardRef<HTMLDivElement, AreaChartProps>(
         <ResponsiveContainer>
           <RechartsAreaChart
             data={data}
+            syncId={syncId}
             onClick={
               hasOnValueChange && (activeLegend || activeDot)
                 ? () => {

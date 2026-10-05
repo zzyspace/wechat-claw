@@ -9,3 +9,4 @@ storage/
 *.log
 *.sqlite
 *.memory-card.json
+/Claude outputs/

@@ -500,6 +500,8 @@ interface LineChartProps extends React.HTMLAttributes<HTMLDivElement> {
   legendPosition?: "left" | "center" | "right"
   tooltipCallback?: (tooltipCallbackContent: TooltipProps) => void
   customTooltip?: React.ComponentType<TooltipProps>
+  // Local extension: share the hover cursor across charts with the same id.
+  syncId?: string
 }
 
 const LineChart = React.forwardRef<HTMLDivElement, LineChartProps>(
@@ -533,6 +535,7 @@ const LineChart = React.forwardRef<HTMLDivElement, LineChartProps>(
       legendPosition = "right",
       tooltipCallback,
       customTooltip,
+      syncId,
       ...other
     } = props
     const CustomTooltip = customTooltip
@@ -610,6 +613,7 @@ const LineChart = React.forwardRef<HTMLDivElement, LineChartProps>(
         <ResponsiveContainer>
           <RechartsLineChart
             data={data}
+            syncId={syncId}
             onClick={
               hasOnValueChange && (activeLegend || activeDot)
                 ? () => {

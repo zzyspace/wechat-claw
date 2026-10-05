@@ -13,11 +13,11 @@
     "src/components/AreaChart/AreaChart.tsx": "6ee1f2f0c2f45a0017ffef7f827279a9909ccb2c039864b9ed7a88d93dce76a7"
   },
   "localModifications": {
-    "description": "Add optional curveType prop to AreaChart, LineChart and ComboChart; default linear, operating summary uses monotoneX; update line/area hit paths consistently. Upstream hashes above remain the original reference.",
+    "description": "Add optional curveType prop to AreaChart, LineChart and ComboChart; default linear, operating summary uses monotoneX; update line/area hit paths consistently. Add optional syncId prop forwarded to the Recharts chart so the operating summary charts share one hover cursor. Upstream hashes above remain the original reference.",
     "sha256": {
-      "src/components/AreaChart/AreaChart.tsx": "3f1a740dadaf214c048c0747bd4075353a29a8a1e8f36bcb30ec422b2b16d38c",
-      "src/components/LineChart/LineChart.tsx": "3e208eedb8ef150ffb94b7d5f5b86d807492a2855f97c08666573433dfa36d78",
-      "src/components/ComboChart/ComboChart.tsx": "326a461878cf5ef40c7e5aa93fbe94939c3797de00f6b2705513928f8f1177e9"
+      "src/components/AreaChart/AreaChart.tsx": "79fd71f0a1b76ffa0a424a9b84b475baebebc6199a6dd06221f704de2b6945cc",
+      "src/components/LineChart/LineChart.tsx": "598a2c3b5acac8ddaa7c941f459a1bad3a6e709eb241cb15839cfcb4d93dbffe",
+      "src/components/ComboChart/ComboChart.tsx": "d6e82344f814ea84dae1bf33a46a60ec37669e85856e9149e35f243e84eef08e"
     }
   }
 }
