@@ -9,6 +9,15 @@
     "src/utils/cx.ts": "1d84c1b1b8afa7708dd626acf536ae1b7f57b3162b3a959b1cf02c5f22e98592",
     "src/utils/getYAxisDomain.ts": "733d3dfb6977a1e424b289d91d6b26003c2912e1351cc7b78b36d5fc01e2aa64",
     "src/utils/hasOnlyOneValueForKey.ts": "8462786ef38ec3bc72afd58eaf625695eb06926a13b6895a8eb7dd95c8f9f91b",
-    "LICENSE": "6e43333ff4b171baacff233a3672365923eb688bf7ce8724eac42868bc4a08eb"
+    "LICENSE": "6e43333ff4b171baacff233a3672365923eb688bf7ce8724eac42868bc4a08eb",
+    "src/components/AreaChart/AreaChart.tsx": "6ee1f2f0c2f45a0017ffef7f827279a9909ccb2c039864b9ed7a88d93dce76a7"
+  },
+  "localModifications": {
+    "description": "Add optional curveType prop to AreaChart, LineChart and ComboChart; default linear, operating summary uses monotoneX; update line/area hit paths consistently. Upstream hashes above remain the original reference.",
+    "sha256": {
+      "src/components/AreaChart/AreaChart.tsx": "3f1a740dadaf214c048c0747bd4075353a29a8a1e8f36bcb30ec422b2b16d38c",
+      "src/components/LineChart/LineChart.tsx": "3e208eedb8ef150ffb94b7d5f5b86d807492a2855f97c08666573433dfa36d78",
+      "src/components/ComboChart/ComboChart.tsx": "326a461878cf5ef40c7e5aa93fbe94939c3797de00f6b2705513928f8f1177e9"
+    }
   }
 }

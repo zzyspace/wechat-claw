@@ -582,6 +582,8 @@ type ChartSeries = {
 }
 
 interface ComboChartProps extends React.HTMLAttributes<HTMLDivElement> {
+  // Local extension: smooth curves without changing data values.
+  curveType?: "linear" | "monotoneX"
   data: Record<string, any>[]
   index: string
   startEndOnly?: boolean
@@ -643,6 +645,7 @@ const ComboChart = React.forwardRef<HTMLDivElement, ComboChartProps>(
       tickGap = 5,
       xAxisLabel,
       enableBiaxial = false,
+      curveType = "linear",
 
       barSeries = defaultBarSeries,
       lineSeries = defaultLineSeries,
@@ -1035,7 +1038,7 @@ const ComboChart = React.forwardRef<HTMLDivElement, ComboChartProps>(
                     strokeOpacity={0}
                     key={category}
                     name={category}
-                    type="linear"
+                    type={curveType}
                     dataKey={category}
                     stroke="transparent"
                     fill="transparent"
@@ -1151,7 +1154,7 @@ const ComboChart = React.forwardRef<HTMLDivElement, ComboChartProps>(
                 }}
                 key={`${category}-line-id`}
                 name={category}
-                type="linear"
+                type={curveType}
                 dataKey={category}
                 stroke=""
                 strokeWidth={2}

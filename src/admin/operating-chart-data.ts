@@ -5,7 +5,7 @@ export interface SummaryChartRow {
 }
 export const series = {
   balance: [['income','总收入','blue'],['expense','总支出','gray']],
-  profit: [['profit','盈利','emerald'],['dividend','总分红','violet']],
+  profit: [['profit','盈利','emerald']],
   cost: [['foodRate','食材占比','amber'],['costRate','总成本率','gray']],
 } as const;
 export type ChartKind = keyof typeof series;

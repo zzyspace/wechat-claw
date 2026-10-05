@@ -43,10 +43,12 @@
 
 ## 图表（方案 B / Tremor）
 
-- 使用 Tremor 官方 copy-and-paste LineChart 与 ComboChart，固定提交与原始文件哈希见 `frontend/operating-summary/vendor/tremor/provenance.json`，Apache-2.0 许可证随构建交付。
-- 电脑端：图表位于五项合计和表格之前，左侧收支趋势，右侧盈利与总分红、成本率。手机端只挂载选中的一张图；可切换、收起；五项合计继续隐藏。
-- 无个人分红曲线。金额轴以万元（或万单位所选币种）展示，提示和明细精确到分；百分比分图，使用接口的 foodRate/costRate。真实零和负数保留，空缺月份用 null 断线，不完整成本不绘制。部分范围只显示可见且完整的支出；金额和分红权限不扩大。
-- 原 API 一次读取的 rows 同时用于图表和表格，不增加数据源。筛选、加载失败、权限失效时旧图表立即卸载；表格排序不改变图表时间顺序。月份选择器供键盘和手机精确选月，明细使用现有抽屉。合并期间根据原录入备注标记，不拆分、不生成单月环比。
+- 使用 Tremor 官方 copy-and-paste AreaChart、LineChart 与 ComboChart，固定提交与原始文件哈希见 `frontend/operating-summary/vendor/tremor/provenance.json`，Apache-2.0 许可证随构建交付。
+- 电脑端：图表位于五项合计和表格之前，左侧淡渐变收支面积图，右侧盈利柱状图、成本率，以独立卡片排列。手机端只挂载选中的一张图；可切换、收起；五项合计继续隐藏。
+- 图表不显示总分红及个人分红曲线；总分红与各分红人的表格数据保持不变。金额轴以万元（或万单位所选币种）展示，提示和明细精确到分；百分比分图，使用接口的 foodRate/costRate。真实零和负数保留，空缺月份用 null 断线，不完整成本不绘制。部分范围只显示可见且完整的支出；金额和分红权限不扩大。
+- 原 API 一次读取的 rows 同时用于图表和表格，不增加数据源。筛选、加载失败、权限失效时旧图表立即卸载；表格排序不改变图表时间顺序。图表不提供单独的月份选择、单月数值或明细入口；悬停或点按图形查看提示，下方月度表格继续提供明细抽屉。合并期间根据原录入备注标记，不拆分、不生成单月环比。
 - `npm ci` 后 `npm run build` 自动完成后台/图表类型检查、esbuild 和局部 Tailwind 样式编译。图表生成到 dist，源码位于 frontend；构建依赖需要 devDependencies。没有 CDN，CSP 保持 script-src/style-src self，没有 unsafe-inline/unsafe-eval。图表资源与页面均受经营汇总权限保护。
 - React/Tremor 仅挂载图表区域；无 Tailwind preflight，生成的 utility 选择器限定在 #operatingCharts 内。保留深浅主题，图表无入场动画。
 - 验证：`node --test dist/admin/operating-chart-data.test.js dist/admin/operating-summary.test.js dist/admin/operating-report.test.js`。
+
+- 视觉微调：曲线使用 monotoneX 单调插值，让连接平滑并保留原始数据点；盈利柱和图例使用 #07C160 鲜绿色，合计和表格原有绿色不变。Tremor 的 curveType 扩展与修改后哈希记录在 provenance.json。
