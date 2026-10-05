@@ -19,6 +19,7 @@ test("summary totals preserve unknown amounts, real zero and safe integer precis
   assert.equal(nullableSum([100,-25]),75);assert.throws(()=>nullableSum([Number.MAX_SAFE_INTEGER,1]));
 });
 test("summary routes enforce their own permission and scoped live costs without changing records",async t=>{
+  t.mock.timers.enable({apis:["Date"],now:new Date("2026-10-05T00:00:00Z")});
   let revoked=false;
   const gateway=createServer((request,response)=>{
     const who=request.headers.cookie?.replace("fixture=","");
@@ -74,10 +75,27 @@ test("summary routes enforce their own permission and scoped live costs without 
   assert.deepEqual(db.prepare("SELECT * FROM reimbursement_reports ORDER BY id").all(),before.reports);assert.deepEqual(db.prepare("SELECT * FROM monthly_operating_reports ORDER BY store_id,month").all(),before.finance);
   seed({amount:1,created:"2026-08-31 16:00:00"});assert.equal((await (await request("admin",api+query)).json()).rows[0].expense,35100,"live refresh and Shanghai month boundary");
   seed({amount:null});const missing=await (await request("admin",api+query)).json();assert.equal(missing.rows[0].expense,35100);assert.equal(missing.rows[0].costComplete,false);assert.equal(missing.rows[0].profit,null);assert.equal(missing.totals.profit,null);assert.equal(missing.totals.foodRate,null);
-  db.transaction(()=>{for(let i=0;i<1005;i++)seed({amount:1,created:"2027-01-10 00:00:00"});})();
-  const next=await (await request("admin",api+query.replace("2026","2027"))).json();assert.equal(next.rows[0].expense,100500);assert.equal(next.rows[0].income,null);assert.equal(next.rows[0].dividend,null);
-  saveOperatingRecord("fuzzy","2027-02","CNY",{...history,incomeCents:0,operatingIncomeCents:0,dividendCents:0,allocations:[],historicalExpenseCents:null,historicalFoodCents:null},"fixture");
-  const zero=await (await request("admin",api+query.replace("2026","2027"))).json();assert.equal(zero.rows[0].income,0);assert.equal(zero.rows[0].expense,0);assert.equal(zero.rows[0].foodRate,null);assert.equal(zero.totals.income,null);
+  seed({amount:1,created:"2026-09-30T15:59:59Z"});
+  db.transaction(()=>{for(let i=0;i<1005;i++)seed({amount:1});})();
+  const many=await (await request("admin",api+query)).json();assert.equal(many.rows[0].expense,135700);
+  const unknown=await (await request("admin",api+query.replace("fuzzy","peanut"))).json();assert.equal(unknown.rows[0].income,null);assert.equal(unknown.rows[0].dividend,null);
+  saveOperatingRecord("fuzzyqz","2026-09","CNY",{...history,incomeCents:0,operatingIncomeCents:0,dividendCents:0,allocations:[],historicalExpenseCents:null,historicalFoodCents:null},"fixture");
+  const zero=await (await request("admin",api+query.replace("fuzzy","fuzzyqz"))).json();assert.equal(zero.rows[0].income,0);assert.equal(zero.rows[0].expense,0);assert.equal(zero.rows[0].foodRate,null);assert.equal(zero.totals.income,0);
+  saveOperatingRecord("fuzzy","2026-10","CNY",history,"fixture");
+  saveOperatingRecord("fuzzy","2027-02","EUR",history,"fixture");
+  seed({amount:999,created:"2026-09-30 16:00:00"});
+  seed({amount:999,created:"2026-09-30T16:00:00Z"});
+  seed({amount:999,currency:"JPY",created:"2027-01-10 00:00:00"});
+  const completed=await (await request("admin",api+query)).json();assert.deepEqual(completed.rows,many.rows);assert.deepEqual(completed.totals,many.totals);
+  const options=await (await request("admin",api+"/options"+query)).json();assert.equal(options.years.includes("2027"),false);assert.equal(options.currencies.includes("EUR"),false);assert.equal(options.currencies.includes("JPY"),false);
+  assert.equal((await (await request("admin",api+query.replace("2026","2027"))).json()).rows.length,0);
+  assert.doesNotMatch(await (await request("admin",api+"/export"+query.replace("2026","all"))).text(),/2026-10|2027-/);
+  // The application timezone, not UTC or host timezone, determines when October becomes complete.
+  t.mock.timers.setTime(new Date("2026-10-31T15:59:59Z").getTime());
+  assert.equal((await (await request("admin",api+query)).json()).rows.some((row:any)=>row.month==="2026-10"),false);
+  t.mock.timers.setTime(new Date("2026-10-31T16:00:00Z").getTime());
+  const rolled=await (await request("admin",api+query)).json();assert.equal(rolled.rows[0].month,"2026-10");assert.equal(rolled.rows[0].expense,199800);
+  t.mock.timers.setTime(new Date("2026-10-05T00:00:00Z").getTime());
   saveOperatingRecord("peanut","2026-09","CNY",{...history,allocations:[{name:"=1+2",amountCents:20000}],note:"@SUM(A1)"},"fixture");
   const escaped=await (await request("admin",api+"/export"+query.replace("fuzzy","peanut"))).text();assert.match(escaped,/'=1\+2/);assert.match(escaped,/'@SUM/);
   revoked=true;for(const route of [page,page+"/app.js",api+query,api+"/export"+query])assert.equal((await request("admin",route)).status,403);

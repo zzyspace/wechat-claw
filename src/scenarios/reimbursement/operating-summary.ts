@@ -17,7 +17,7 @@ export function nullableSum(values: Array<number | null>): number | null {
 }
 const ratio = (numerator: number | null, denominator: number | null) => numerator !== null && denominator !== null && denominator > 0 ? numerator / denominator * 100 : null;
 
-export function loadOperatingSummarySource(input: { store: string; minMonth: string; timeZone: string; scope: MonthlyScope }) {
+export function loadOperatingSummarySource(input: { store: string; minMonth: string; currentMonth: string; timeZone: string; scope: MonthlyScope }) {
   const store = monthlyStoresForScope(input.scope).find(store => store.id === input.store);
   if (!store) return null;
   const db = getDatabase();
@@ -26,8 +26,8 @@ export function loadOperatingSummarySource(input: { store: string; minMonth: str
   const finance = store.partial ? [] : db.prepare(`SELECT month,currency,income_cents AS incomeCents,operating_income_cents AS operatingIncomeCents,
     historical_expense_cents AS historicalExpenseCents,historical_food_cents AS historicalFoodCents,dividend_cents AS dividendCents,
     allocations_json AS allocationsJson,note,revision,updated_at AS updatedAt
-    FROM monthly_operating_reports WHERE store_id=? AND month>=? AND month<='2199-12' ORDER BY month`)
-    .all(store.id, input.minMonth) as Array<OperatingRecord & { month: string; currency: string; allocationsJson: string }>;
+    FROM monthly_operating_reports WHERE store_id=? AND month>=? AND month<? ORDER BY month`)
+    .all(store.id, input.minMonth, input.currentMonth) as Array<OperatingRecord & { month: string; currency: string; allocationsJson: string }>;
   const finances = new Map<string, Map<string, OperatingRecord>>();
   for (const row of finance) {
     const { month, currency, allocationsJson, ...values } = row;
@@ -36,11 +36,11 @@ export function loadOperatingSummarySource(input: { store: string; minMonth: str
     finances.set(month, currencies);
   }
   const fromMonth = input.minMonth > OPERATING_LIVE_COST_START_MONTH ? input.minMonth : OPERATING_LIVE_COST_START_MONTH;
-  const params: Record<string, string> = { from: monthRange(fromMonth, input.timeZone).from, to: monthRange("2199-12", input.timeZone).to };
+  const params: Record<string, string> = { from: monthRange(fromMonth, input.timeZone).from, to: monthRange(input.currentMonth, input.timeZone).from };
   const channels = store.channels.map((channel, i) => { params[`channel${i}`] = channel; return `@channel${i}`; });
   if (input.scope.submittedByAccountId) params.owner = input.scope.submittedByAccountId;
   const records = db.prepare(`SELECT id,channel_code AS channelCode,reporter,expense_category AS expenseCategory,amount,currency,note,ocr_text AS ocrText,created_at AS createdAt
-    FROM reimbursement_reports WHERE channel_code IN (${channels.join(",")}) AND created_at>=@from AND created_at<@to
+    FROM reimbursement_reports WHERE channel_code IN (${channels.join(",")}) AND datetime(created_at)>=datetime(@from) AND datetime(created_at)<datetime(@to)
     ${params.owner ? "AND submitted_by_account_id=@owner" : ""} ORDER BY created_at,id`).all(params) as MonthlyRecord[];
   const formatter = new Intl.DateTimeFormat("en-CA", { timeZone: input.timeZone, year: "numeric", month: "2-digit" });
   const months = new Map<string, MonthlyRecord[]>();
@@ -49,7 +49,7 @@ export function loadOperatingSummarySource(input: { store: string; minMonth: str
     if (!Number.isFinite(date.getTime())) throw new MonthlyReportValidationError("存在无法识别的报账创建时间，请先核对。");
     const parts = Object.fromEntries(formatter.formatToParts(date).map(part => [part.type, part.value]));
     const month = `${parts.year}-${parts.month}`;
-    if (month < fromMonth || month > "2199-12") continue;
+    if (month < fromMonth || month >= input.currentMonth) continue;
     const bucket = months.get(month) ?? []; bucket.push(row); months.set(month, bucket);
   }
   return { store: { id: store.id, name: store.name, partial: store.partial }, finances, months };
