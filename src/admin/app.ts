@@ -1,3 +1,5 @@
+import { createOperatingSummaryRouter } from "./operating-summary-routes.js";
+import { OPERATING_SUMMARY_PERMISSION } from "../scenarios/reimbursement/operating-summary.js";
 import { createMonthlyReportRouter } from "./monthly-report-routes.js";
 import { createOperatingReportRouter } from "./operating-report-routes.js";
 import { MONTHLY_REPORT_PERMISSION } from "../scenarios/reimbursement/monthly-report.js";
@@ -630,7 +632,7 @@ export function createApp(input?: {
     response.set("Content-Security-Policy", "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' blob:; connect-src 'self'; font-src 'self'; base-uri 'none'; frame-ancestors 'self'; form-action 'self'");
     response.sendFile(path.join(staticDir, "monthly", "index.html"));
   });
-  for (const asset of ["app.js", "styles.css", "report-detail.js", "report-detail.css", "report-switcher.js", "report-switcher.css"]) {
+  for (const asset of ["app.js", "styles.css", "report-detail.js", "report-detail.css"]) {
     app.get(`${ADMIN_BASE_PATH}/monthly/${asset}`, ...monthlyPageAuth, (_request, response) => response.sendFile(path.join(staticDir, "monthly", asset)));
   }
   app.get([`${ADMIN_BASE_PATH}/monthly/operating`, `${ADMIN_BASE_PATH}/monthly/operating/`], ...monthlyPageAuth, (_request, response) => {
@@ -639,6 +641,23 @@ export function createApp(input?: {
   });
   for (const asset of ["app.js", "styles.css"]) {
     app.get(`${ADMIN_BASE_PATH}/monthly/operating/${asset}`, ...monthlyPageAuth, (_request, response) => response.sendFile(path.join(staticDir, "operating", asset)));
+  }
+  const summaryPageAuth = [adminAuth, requirePermission("report:view"), requirePermission(OPERATING_SUMMARY_PERMISSION)];
+  app.get([`${ADMIN_BASE_PATH}/monthly/summary`, `${ADMIN_BASE_PATH}/monthly/summary/`], ...summaryPageAuth, (_request, response) => {
+    response.set("Content-Security-Policy", "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' blob:; connect-src 'self'; font-src 'self'; base-uri 'none'; frame-ancestors 'self'; form-action 'self'");
+    response.sendFile(path.join(staticDir, "operating-summary", "index.html"));
+  });
+  for (const asset of ["app.js", "styles.css"]) {
+    app.get(`${ADMIN_BASE_PATH}/monthly/summary/${asset}`, ...summaryPageAuth, (_request, response) => response.sendFile(path.join(staticDir, "operating-summary", asset)));
+  }
+  for (const asset of ["report-switcher.js", "report-switcher.css"]) {
+    app.get(`${ADMIN_BASE_PATH}/monthly/${asset}`, adminAuth, requirePermission("report:view"), (_request, response) => {
+      const session = getAdminSession(response);
+      if (!hasPermission(session, MONTHLY_REPORT_PERMISSION) && !hasPermission(session, OPERATING_SUMMARY_PERMISSION)) {
+        response.status(403).json({ success: false, error: { message: "当前账号无权查看报表。" } }); return;
+      }
+      response.sendFile(path.join(staticDir, "monthly", asset));
+    });
   }
   app.post(
     SHORTCUT_API_PATH,
@@ -782,6 +801,7 @@ export function createApp(input?: {
       next(error);
     });
   });
+  app.use(`${ADMIN_BASE_PATH}/api/operating-summary`, createOperatingSummaryRouter(config.timeZone));
   app.use(`${ADMIN_BASE_PATH}/api/monthly-reports/operating`, createOperatingReportRouter(config.timeZone));
   app.use(`${ADMIN_BASE_PATH}/api/monthly-reports`, createMonthlyReportRouter(config.timeZone));
   const checkReport: express.RequestHandler = (request, response, next) => {
@@ -816,6 +836,7 @@ export function createApp(input?: {
           canImport: hasPermission(session, "report:import"),
         } : {}),
         canMonthlyReport: hasPermission(session, MONTHLY_REPORT_PERMISSION),
+        canOperatingSummary: hasPermission(session, OPERATING_SUMMARY_PERMISSION),
         canWrite: session?.canWrite === true,
         canSubmit: session?.canSubmit === true,
         canViewAllReports: session?.canViewAllReports === true,

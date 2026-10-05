@@ -1,0 +1,84 @@
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { once } from "node:events";
+import { createServer } from "node:http";
+import test from "node:test";
+import { createApp } from "./app.js";
+import { getDatabase } from "../core/storage/database.js";
+import { saveOperatingRecord } from "../scenarios/reimbursement/operating-report.js";
+import { nullableSum } from "../scenarios/reimbursement/operating-summary.js";
+
+process.env.WECHATY_STATE_DIR=fs.mkdtempSync(path.join(os.tmpdir(),"operating-summary-test-"));
+process.env.WECHATY_CHANNELS_JSON="[]";
+process.env.WECHATY_TIMEZONE="Asia/Shanghai";
+process.env.WECHATY_PUPPET="wechaty-puppet-wechat";
+test("summary totals preserve unknown amounts, real zero and safe integer precision",()=>{
+  assert.equal(nullableSum([]),null);assert.equal(nullableSum([0,0]),0);assert.equal(nullableSum([100,null]),null);
+  assert.equal(nullableSum([100,-25]),75);assert.throws(()=>nullableSum([Number.MAX_SAFE_INTEGER,1]));
+});
+test("summary routes enforce their own permission and scoped live costs without changing records",async t=>{
+  let revoked=false;
+  const gateway=createServer((request,response)=>{
+    const who=request.headers.cookie?.replace("fixture=","");
+    if(!["admin","summary","monthly","editor","owner","other-store"].includes(who||"")){response.writeHead(401).end();return;}
+    const permissions=["report:view"];
+    if(["monthly","editor"].includes(who||""))permissions.push("report:monthly:view");
+    if(who==="editor")permissions.push("report:operating:edit");
+    if(!revoked&&!["monthly","editor"].includes(who||""))permissions.push("report:operating:summary:view");
+    response.setHeader("Content-Type","application/json");response.end(JSON.stringify({success:true,account:{accountId:who,username:who,enabled:true,version:1},access:{accountId:who,app:"expense",role:who==="admin"||who==="owner"?"admin":"partner",enabled:true,version:1,permissions,config:{viewScope:{ownership:who==="owner"?"self":"any",stores:who==="owner"?["fuzzy"]:who==="other-store"?["peanut"]:"all",channels:who==="owner"?["reimbursement_fuzzy_manager"]:"all"},submitScope:{stores:[],channels:[]}}}}));
+  });
+  gateway.listen(0,"127.0.0.1");await once(gateway,"listening");const ga=gateway.address();assert(ga&&typeof ga!=="string");t.after(()=>new Promise<void>(resolve=>gateway.close(()=>resolve())));
+  const app=createApp({gatewayAuth:{mode:"unified",url:`http://127.0.0.1:${ga.port}`,token:"summary-fixture-authorization-000000000001"}}),server=app.listen(0,"127.0.0.1");await once(server,"listening");const address=server.address();assert(address&&typeof address!=="string");const base=`http://127.0.0.1:${address.port}`;t.after(()=>new Promise<void>(resolve=>server.close(()=>resolve())));
+  const request=(who:string,route:string,method="GET")=>fetch(base+route,{method,headers:{Cookie:`fixture=${who}`}});
+  const api="/expense/api/operating-summary",page="/expense/monthly/summary",query="?store=fuzzy&year=2026&currency=CNY";
+  for(const route of [page,page+"/",page+"/app.js",page+"/styles.css",api+query,api+"/options"+query,api+"/export"+query]){
+    for(const who of ["monthly","editor"])assert.equal((await request(who,route)).status,403,route);
+    assert.equal((await request("none",route)).status,401);
+    const reply=await request("summary",route);assert.equal(reply.status,200);assert.equal(reply.headers.get("Cache-Control"),"no-store");
+  }
+  assert.equal((await request("summary","/expense/monthly")).status,403);
+  assert.equal((await request("summary","/expense/monthly/operating")).status,403);
+  for(const asset of ["report-switcher.js","report-switcher.css"])assert.equal((await request("summary","/expense/monthly/"+asset)).status,200);
+  const session=await (await request("summary","/expense/api/session")).json();assert.equal(session.permissions.canOperatingSummary,true);assert.equal(session.permissions.canMonthlyReport,false);assert.equal((await (await request("monthly","/expense/api/session")).json()).permissions.canOperatingSummary,false);
+  const html=await (await request("admin",page)).text();assert.doesNotMatch(html,/REPORT_ROWS|react|设计预览|data.js/);assert.match(html,/经营及分红汇总/);
+  const db=getDatabase();
+  const insert=db.prepare(`INSERT INTO reimbursement_reports(channel_code,channel_name,reporter,amount,currency,expense_category,voucher_date,voucher_date_source,note,evidence_type,confidence,needs_review,submitted_by_account_id,created_at) VALUES(@channel,'fixture','A',@amount,@currency,@category,'2026-09-01','model','fixture','text',1,0,@owner,@created)`);
+  const seed=(patch:Record<string,unknown>={})=>insert.run({channel:"reimbursement_fuzzy",amount:200,currency:"CNY",category:"food",owner:"admin",created:"2026-09-15 00:00:00",...patch});
+  seed();seed({amount:100,category:"salary"});seed({amount:50,channel:"reimbursement_fuzzy_manager",owner:"owner"});seed({amount:999,channel:"reimbursement_fuzzy_manager",owner:"other",currency:"USD"});
+  seed({amount:900,created:"2026-08-31 15:59:59"}); // Historical receipt must not replace manual historical cost.
+  seed({amount:9,channel:"reimbursement_peanut"});
+  seed({amount:222,channel:"reimbursement_peanut",created:"2026-08-31T15:59:59Z"});
+  const history={incomeCents:100000,operatingIncomeCents:50000,historicalExpenseCents:60000,historicalFoodCents:20000,dividendCents:20000,allocations:[{name:"LCCZZY",amountCents:15000},{name:"DZG",amountCents:5000}],note:"历史",revision:0};
+  saveOperatingRecord("fuzzy","2026-08","CNY",history,"fixture");
+  saveOperatingRecord("fuzzy","2026-09","CNY",{...history,incomeCents:200000,operatingIncomeCents:100000,dividendCents:40000,allocations:[{name:"LCCZZY",amountCents:30000},{name:"DZG",amountCents:10000}],note:"2026年9月"},"fixture");
+  saveOperatingRecord("peanut","2024-01","CNY",history,"fixture");
+  const before={reports:db.prepare("SELECT * FROM reimbursement_reports ORDER BY id").all(),finance:db.prepare("SELECT * FROM monthly_operating_reports ORDER BY store_id,month").all()};
+  const all=await (await request("admin",api+query)).json();assert.equal(all.rows.length,2);assert.deepEqual(all.allocationNames,["LCCZZY","DZG"]);
+  assert.equal(all.rows[0].expense,35000);assert.equal(all.rows[0].food,25000);assert.equal(all.rows[1].expense,60000);
+  assert.equal(all.totals.income,300000);assert.equal(all.totals.expense,95000);assert.equal(all.totals.profit,205000);
+  assert.equal(all.totals.foodRate,30,"weighted by revenue, not average monthly percentages");
+  assert.equal(all.totals.allocations[0].amountCents,45000);assert.equal(all.totals.allocations[1].amountCents,15000);
+  assert.deepEqual((await (await request("admin",api+query.replace("fuzzy","peanut"))).json()).rows.map((row:any)=>row.month),["2026-09"],"ISO timestamps before the cutoff cannot create historical cost rows");
+  assert.doesNotMatch(JSON.stringify(all),/operatingIncomeCents|historicalExpenseCents|ocrText|submittedByAccountId|localPath|canEdit/);
+  const limited=await (await request("summary",api+query)).json();assert.equal(limited.rows.length,1);assert.equal(limited.rows[0].month,"2026-09");assert.equal(limited.minMonth,"2026-09");
+  const owner=await (await request("owner",api+query)).json();assert.equal(owner.store.partial,true);assert.equal(owner.rows.length,1);assert.equal(owner.rows[0].expense,5000);assert.equal(owner.rows[0].income,null);assert.deepEqual(owner.allocationNames,[]);assert.equal(owner.rows[0].note,"");assert.equal(owner.currencies.includes("USD"),false);
+  const ownerOptions=await (await request("owner",api+"/options"+query)).json();assert.equal(ownerOptions.stores.length,1);assert.equal(ownerOptions.years.includes("2024"),false);
+  assert.equal((await request("owner",api+query.replace("fuzzy","peanut"))).status,404);assert.equal((await request("other-store",api+query)).status,404);
+  const csv=await (await request("admin",api+"/export"+query+"&sort=income&direction=asc")).text();const lines=csv.split('\r\n');assert.match(lines[1],/2026-08/);assert.match(lines[2],/2026-09/);assert.match(lines.at(-1)!,/"3000.00","950.00","2050.00"/);assert.ok(!lines[0].includes('"营业收入"'));
+  const ownerCsv=await (await request("owner",api+"/export"+query)).text();assert.doesNotMatch(ownerCsv,/LCCZZY|DZG|2026年9月|2026-08/);
+  assert.equal((await request("summary",api+query,"PUT")).status,404);
+  for(const bad of ["?store=fuzzy&year[]=2026","?store=fuzzy&year=1800","?store=fuzzy&year=2025","?store=fuzzy&year=2026&currency[]=CNY","?store=fuzzy&year=2026&currency=EUR"])assert.equal((await request("summary",api+bad)).status,400,bad);
+  assert.equal((await request("admin",api+"/export"+query+"&sort=__proto__")).status,400);
+  assert.deepEqual(db.prepare("SELECT * FROM reimbursement_reports ORDER BY id").all(),before.reports);assert.deepEqual(db.prepare("SELECT * FROM monthly_operating_reports ORDER BY store_id,month").all(),before.finance);
+  seed({amount:1,created:"2026-08-31 16:00:00"});assert.equal((await (await request("admin",api+query)).json()).rows[0].expense,35100,"live refresh and Shanghai month boundary");
+  seed({amount:null});const missing=await (await request("admin",api+query)).json();assert.equal(missing.rows[0].expense,35100);assert.equal(missing.rows[0].costComplete,false);assert.equal(missing.rows[0].profit,null);assert.equal(missing.totals.profit,null);assert.equal(missing.totals.foodRate,null);
+  db.transaction(()=>{for(let i=0;i<1005;i++)seed({amount:1,created:"2027-01-10 00:00:00"});})();
+  const next=await (await request("admin",api+query.replace("2026","2027"))).json();assert.equal(next.rows[0].expense,100500);assert.equal(next.rows[0].income,null);assert.equal(next.rows[0].dividend,null);
+  saveOperatingRecord("fuzzy","2027-02","CNY",{...history,incomeCents:0,operatingIncomeCents:0,dividendCents:0,allocations:[],historicalExpenseCents:null,historicalFoodCents:null},"fixture");
+  const zero=await (await request("admin",api+query.replace("2026","2027"))).json();assert.equal(zero.rows[0].income,0);assert.equal(zero.rows[0].expense,0);assert.equal(zero.rows[0].foodRate,null);assert.equal(zero.totals.income,null);
+  saveOperatingRecord("peanut","2026-09","CNY",{...history,allocations:[{name:"=1+2",amountCents:20000}],note:"@SUM(A1)"},"fixture");
+  const escaped=await (await request("admin",api+"/export"+query.replace("fuzzy","peanut"))).text();assert.match(escaped,/'=1\+2/);assert.match(escaped,/'@SUM/);
+  revoked=true;for(const route of [page,page+"/app.js",api+query,api+"/export"+query])assert.equal((await request("admin",route)).status,403);
+});

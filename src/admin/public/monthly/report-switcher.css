@@ -19,3 +19,5 @@ body.report-menu-open > .topbar{position:relative;z-index:21}
 @media(max-width:740px){.report-nav-group{gap:8px}.report-switcher{position:static}.report-switcher-menu{left:14px;right:auto}.report-switcher-trigger{font-size:13px;padding:0 4px}}
 @media(max-width:480px){body > .topbar .monthly-return,body > .topbar .return-link{display:none}}
 @media(prefers-reduced-motion:no-preference){.report-switcher-chevron{transition:transform .18s ease}}
+
+.report-switcher-option[hidden]{display:none}

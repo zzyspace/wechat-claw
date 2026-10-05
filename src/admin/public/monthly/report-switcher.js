@@ -5,8 +5,9 @@
   const trigger = document.getElementById('reportSwitcherTrigger');
   const menu = document.getElementById('reportSwitcherMenu');
   const backdrop = document.getElementById('reportSwitcherBackdrop');
-  const links = [...menu.querySelectorAll('[role="menuitem"]')];
-  const destinations = new Map(links.map(link => [link, link.getAttribute('href')]));
+  const allLinks = [...menu.querySelectorAll('[role="menuitem"]')];
+  let links = allLinks.filter(link => !link.hidden);
+  const destinations = new Map(allLinks.map(link => [link, link.getAttribute('href')]));
   function close(restoreFocus = false) {
     menu.hidden = true;
     backdrop.hidden = true;
@@ -16,12 +17,19 @@
     if (restoreFocus) trigger.focus();
   }
   function open(index) {
+    links = allLinks.filter(link => !link.hidden);
+    if (!links.length) return;
     // Read the latest selection when opening; both pages update their URL after loading.
     for (const link of links) {
       const destination = new URL(destinations.get(link), location.origin);
-      for (const key of ['store', 'month']) {
+      const summary = destinations.get(link) === '/expense/monthly/summary';
+      for (const key of (summary ? ['store','year','currency'] : ['store','month','currency'])) {
         const value = new URL(location.href).searchParams.get(key);
         if (value) destination.searchParams.set(key, value);
+      }
+      if (summary && !destination.searchParams.has('year')) {
+        const month = new URL(location.href).searchParams.get('month');
+        if (/^\d{4}-\d{2}$/.test(month || '')) destination.searchParams.set('year', month.slice(0,4));
       }
       link.href = destination.pathname + destination.search;
     }
@@ -35,6 +43,7 @@
   trigger.addEventListener('click', () => menu.hidden ? open() : close(true));
   trigger.addEventListener('keydown', event => {
     if (!['ArrowDown', 'ArrowUp'].includes(event.key)) return;
+    links = allLinks.filter(link => !link.hidden);
     event.preventDefault();
     open(event.key === 'ArrowUp' ? links.length - 1 : 0);
   });
@@ -61,4 +70,12 @@
   document.addEventListener('keydown', event => {
     if (event.key === 'Escape' && !menu.hidden) { event.preventDefault(); close(true); }
   });
+  fetch('/expense/api/session', {credentials:'same-origin',cache:'no-store',headers:{Accept:'application/json'}}).then(async response => {
+    if (!response.ok) return;
+    const data = await response.json();
+    if (!data.success) return;
+    close();
+    for (const link of allLinks) link.hidden = destinations.get(link) === '/expense/monthly/summary' ? data.permissions?.canOperatingSummary !== true : data.permissions?.canMonthlyReport !== true;
+    links = allLinks.filter(link => !link.hidden);
+  }).catch(() => {});
 })();

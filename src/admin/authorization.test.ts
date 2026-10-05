@@ -14,6 +14,17 @@ const envelope = {
     } },
 };
 
+test("summary viewing requires explicit view dependency but grants no monthly or edit access", () => {
+  const make=(permissions:string[])=>validateExpenseAuthorization({...envelope,access:{...envelope.access,permissions}});
+  const session=make(["report:view","report:operating:summary:view"]);
+  assert.equal(hasPermission(session,"report:operating:summary:view"),true);
+  assert.equal(hasPermission(session,"report:monthly:view"),false);
+  assert.equal(hasPermission(session,"report:operating:edit"),false);
+  assert.equal(session.canWrite,false);
+  assert.throws(()=>make(["report:operating:summary:view"]));
+  assert.equal(hasPermission(make(["report:view","report:monthly:view","report:operating:edit"]),"report:operating:summary:view"),false);
+});
+
 test("operating editing is explicit, depends on monthly viewing, and does not grant report editing", () => {
   const make = (permissions: string[]) => validateExpenseAuthorization({ ...envelope, access: { ...envelope.access, permissions } });
   const session = make(["report:view", "report:monthly:view", "report:operating:edit"]);
