@@ -761,7 +761,13 @@ npm run build
 sudo bash deploy/deploy-wechat-claw.sh
 ```
 
-如果服务器已经完成这次初始化，而你这次没有改本地 `.env`，可以直接用：
+**日常发布（默认方式）**：服务器初始化完成后，发布代码一律在本地执行下面这条命令。它只部署代码，不改服务器上的 `/etc/wechat-claw.env`：
+
+```bash
+ssh root@139.196.140.215 'cd /opt/wechat-claw/current && bash deploy/deploy-wechat-claw.sh'
+```
+
+已经登录服务器时，等价于：
 
 ```bash
 cd /opt/wechat-claw/current
@@ -789,7 +795,7 @@ sudo bash deploy/deploy-wechat-claw.sh
 这样即使旧版脚本或维护命令尝试重启机器人，systemd 也会跳过启动。
 必须获得明确恢复机器人的指示后才能解除保护。下文涉及机器人重启、会话重置和自愈的命令均受此策略约束。
 
-如果你想降低“忘记同步服务器配置”的风险，推荐以后统一只用这一条本地发布命令：
+**同步本地 `.env` 并发布（需特别批准）**：除非明确批准“这次要用本地 `.env` 覆盖生产配置”，否则不要使用下面的命令（包括 `deploy/sync-wechat-claw-env.sh` 及其 `--deploy` 形式）。它会用本地 `.env` 覆盖服务器 `/etc/wechat-claw.env`，本地与生产配置不一致时会意外改动生产配置。只改代码时请使用上面的日常发布命令。
 
 ```bash
 deploy/release-wechat-claw.sh root@139.196.140.215
@@ -808,7 +814,7 @@ deploy/release-wechat-claw.sh root@139.196.140.215
 - 即使需要重新执行 `npm ci`，脚本也会复用 `/opt/wechat-claw/current/.cache/puppeteer` 里的浏览器缓存，避免反复下载 Chromium
 - `deploy/sync-wechat-claw-env.sh --deploy` 会直接执行仓库里的 `deploy/deploy-wechat-claw.sh`，避免服务器 PATH 里的旧版 `deploy-wechat-claw` 副本绕过最新逻辑
 
-如果你本地改了 `.env`，但这次只想同步配置、不发布代码，才单独使用：
+如果已获批准同步配置，但这次只想同步配置、不发布代码，才单独使用：
 
 ```bash
 deploy/sync-wechat-claw-env.sh root@139.196.140.215
@@ -823,7 +829,7 @@ deploy/sync-wechat-claw-env.sh root@139.196.140.215
 - 自动把 `WECHATY_SUMMARY_CRON` 转成服务器更稳的带引号形式
 - 安装到服务器 `/etc/wechat-claw.env`
 
-如果你更喜欢保留原来的细分命令，也可以显式写成：
+它与 `release-wechat-claw.sh` 等价的细分写法如下（同样需特别批准）：
 
 ```bash
 deploy/sync-wechat-claw-env.sh --deploy root@139.196.140.215
