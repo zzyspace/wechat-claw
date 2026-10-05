@@ -39,3 +39,14 @@
 测试涵盖独立权限、查看依赖、旧月报/编辑不自动授权、资源保护、撤权、整店/本人/跨店隔离、历史月份边界、实时成本、时区、1000+ 条完整读取、空值和零、加权比例、CSV 排序与公式转义、原数据不变。
 
 账号网关增加安全登录返回地址，只保留 summary 的 store/year/currency 白名单参数。上线时先发布报账服务，再发布账号管理，避免新权限被旧服务拒绝；不自动调整账号授权，不改共享 Nginx，不启动机器人。
+
+
+## 图表（方案 B / Tremor）
+
+- 使用 Tremor 官方 copy-and-paste LineChart 与 ComboChart，固定提交与原始文件哈希见 `frontend/operating-summary/vendor/tremor/provenance.json`，Apache-2.0 许可证随构建交付。
+- 电脑端：图表位于五项合计和表格之前，左侧收支趋势，右侧盈利与总分红、成本率。手机端只挂载选中的一张图；可切换、收起；五项合计继续隐藏。
+- 无个人分红曲线。金额轴以万元（或万单位所选币种）展示，提示和明细精确到分；百分比分图，使用接口的 foodRate/costRate。真实零和负数保留，空缺月份用 null 断线，不完整成本不绘制。部分范围只显示可见且完整的支出；金额和分红权限不扩大。
+- 原 API 一次读取的 rows 同时用于图表和表格，不增加数据源。筛选、加载失败、权限失效时旧图表立即卸载；表格排序不改变图表时间顺序。月份选择器供键盘和手机精确选月，明细使用现有抽屉。合并期间根据原录入备注标记，不拆分、不生成单月环比。
+- `npm ci` 后 `npm run build` 自动完成后台/图表类型检查、esbuild 和局部 Tailwind 样式编译。图表生成到 dist，源码位于 frontend；构建依赖需要 devDependencies。没有 CDN，CSP 保持 script-src/style-src self，没有 unsafe-inline/unsafe-eval。图表资源与页面均受经营汇总权限保护。
+- React/Tremor 仅挂载图表区域；无 Tailwind preflight，生成的 utility 选择器限定在 #operatingCharts 内。保留深浅主题，图表无入场动画。
+- 验证：`node --test dist/admin/operating-chart-data.test.js dist/admin/operating-summary.test.js dist/admin/operating-report.test.js`。

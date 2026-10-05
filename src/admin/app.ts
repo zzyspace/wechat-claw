@@ -647,7 +647,7 @@ export function createApp(input?: {
     response.set("Content-Security-Policy", "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' blob:; connect-src 'self'; font-src 'self'; base-uri 'none'; frame-ancestors 'self'; form-action 'self'");
     response.sendFile(path.join(staticDir, "operating-summary", "index.html"));
   });
-  for (const asset of ["app.js", "styles.css"]) {
+  for (const asset of ["app.js", "styles.css", "charts.js", "charts.css", "charts.js.LEGAL.txt"]) {
     app.get(`${ADMIN_BASE_PATH}/monthly/summary/${asset}`, ...summaryPageAuth, (_request, response) => response.sendFile(path.join(staticDir, "operating-summary", asset)));
   }
   for (const asset of ["report-switcher.js", "report-switcher.css"]) {

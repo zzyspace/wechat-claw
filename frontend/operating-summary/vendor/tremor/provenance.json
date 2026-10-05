@@ -1,0 +1,14 @@
+{
+  "repository": "https://github.com/tremorlabs/tremor",
+  "commit": "ca4d588f47820ff3d514d37fa4ee08a4222dec11",
+  "files": {
+    "src/components/LineChart/LineChart.tsx": "0564aaa98ceb844211c607cfd5ee3122f662435460e65522713863343d469869",
+    "src/components/ComboChart/ComboChart.tsx": "96153d9d24344ed8425318689b1e6a1c903b1f13fda4c89d2f9774a99504aa95",
+    "src/hooks/useOnWindowResize.ts": "1b90d47b1760ba54bc05b471e92472acedee87291bb8c13059b657c2e51b7443",
+    "src/utils/chartColors.ts": "0d9b486d3edbaab2baaee16b889cd1241753f668300ae750efdd118062dff7c1",
+    "src/utils/cx.ts": "1d84c1b1b8afa7708dd626acf536ae1b7f57b3162b3a959b1cf02c5f22e98592",
+    "src/utils/getYAxisDomain.ts": "733d3dfb6977a1e424b289d91d6b26003c2912e1351cc7b78b36d5fc01e2aa64",
+    "src/utils/hasOnlyOneValueForKey.ts": "8462786ef38ec3bc72afd58eaf625695eb06926a13b6895a8eb7dd95c8f9f91b",
+    "LICENSE": "6e43333ff4b171baacff233a3672365923eb688bf7ce8724eac42868bc4a08eb"
+  }
+}

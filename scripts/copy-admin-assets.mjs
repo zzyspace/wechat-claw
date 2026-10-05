@@ -1,3 +1,4 @@
+import { buildOperatingCharts } from "./build-operating-charts.mjs";
 import { buildReportDetailAssets } from "./build-report-detail-assets.mjs";
 import fs from "node:fs";
 import path from "node:path";
@@ -19,3 +20,5 @@ fs.cpSync(sourceDir, targetDir, {
 });
 
 buildReportDetailAssets(sourceDir, targetDir);
+
+await buildOperatingCharts(targetDir);

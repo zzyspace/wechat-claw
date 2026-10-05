@@ -34,7 +34,7 @@ test("summary routes enforce their own permission and scoped live costs without 
   const app=createApp({gatewayAuth:{mode:"unified",url:`http://127.0.0.1:${ga.port}`,token:"summary-fixture-authorization-000000000001"}}),server=app.listen(0,"127.0.0.1");await once(server,"listening");const address=server.address();assert(address&&typeof address!=="string");const base=`http://127.0.0.1:${address.port}`;t.after(()=>new Promise<void>(resolve=>server.close(()=>resolve())));
   const request=(who:string,route:string,method="GET")=>fetch(base+route,{method,headers:{Cookie:`fixture=${who}`}});
   const api="/expense/api/operating-summary",page="/expense/monthly/summary",query="?store=fuzzy&year=2026&currency=CNY";
-  for(const route of [page,page+"/",page+"/app.js",page+"/styles.css",api+query,api+"/options"+query,api+"/export"+query]){
+  for(const route of [page,page+"/",page+"/app.js",page+"/styles.css",page+"/charts.js",page+"/charts.css",api+query,api+"/options"+query,api+"/export"+query]){
     for(const who of ["monthly","editor"])assert.equal((await request(who,route)).status,403,route);
     assert.equal((await request("none",route)).status,401);
     const reply=await request("summary",route);assert.equal(reply.status,200);assert.equal(reply.headers.get("Cache-Control"),"no-store");
