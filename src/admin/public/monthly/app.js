@@ -36,15 +36,8 @@
     const fields = Object.fromEntries(parts.map(p => [p.type, p.value]));
     return `<time class="column-created-at-value" datetime="${esc(date.toISOString())}"><span class="column-created-at-date">${fields.year}-${fields.month}-${fields.day}</span><span class="column-created-at-time">${fields.hour}:${fields.minute}:${fields.second}</span></time>`;
   }
-  function currentTheme() { return document.documentElement.dataset.theme || 'light'; }
-  function setTheme(value) {
-    const theme=value==='dark'?'dark':'light';
-    document.documentElement.dataset.theme=theme;document.documentElement.style.colorScheme=theme;
-    if($('themeIcon'))$('themeIcon').textContent=theme==='dark'?'☀️':'🌙';
-    if($('themeToggle')){$('themeToggle').setAttribute('aria-label',theme==='dark'?'切换到浅色模式':'切换到深色模式');$('themeToggle').setAttribute('aria-pressed',String(theme==='dark'));}
-  }
-  try { setTheme(localStorage.getItem('comeover-admin-theme') || localStorage.getItem('reimbursement-admin-theme') || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')); } catch { setTheme('light'); }
-  window.addEventListener('storage', e => { if (e.key === 'comeover-admin-theme' && ['light','dark'].includes(e.newValue)) { setTheme(e.newValue); render(); } });
+  // The shared top bar (admin-theme.js) owns the theme; redraw when it changes.
+  document.addEventListener('admin-themechange', () => render());
   async function json(url, signal) {
     const response = await fetch(url, { headers: { Accept:'application/json' }, signal });
     if ([401,403].includes(response.status)) throw new Error(response.status === 403 ? '当前账号没有查看权限，或权限已变更。' : '登录已失效，请返回报账后台重新登录。');
@@ -270,7 +263,6 @@
     if(target.dataset.group!==undefined){openDetail(Number(target.dataset.group));return;}
     if(target.dataset.attachment){s.attachmentIndex=s.attachments.findIndex(a=>a.id===Number(target.dataset.attachment));if(s.attachmentIndex>=0){s.attachmentFocus=target;renderAttachment();showDialog('attachmentDialog');}return;}
     switch(target.dataset.action){
-      case 'theme':{const theme=currentTheme()==='light'?'dark':'light';setTheme(theme);try{localStorage.setItem('comeover-admin-theme',theme);localStorage.setItem('reimbursement-admin-theme',theme);}catch{}render();break;}
       case 'prevMonth':case 'nextMonth':{const [y,m]=s.month.split('-').map(Number),date=new Date(y,m-1+(target.dataset.action==='prevMonth'?-1:1),1),month=`${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}`;if(!allowedMonth(month))return;s.month=month;clearFilters();loadSummary();break;}
       case 'clear':clearFilters();render();break;
       case 'rules':rules();break;

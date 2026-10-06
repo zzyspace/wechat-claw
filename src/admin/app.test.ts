@@ -63,6 +63,23 @@ test("reimbursement admin uses the shared admin top bar with a POST logout back 
   assert.doesNotMatch(html, /\.topbar\s*\{/);
 });
 
+test("report pages use the shared top bar in brand mode with their report switcher in the slot", () => {
+  const read = (file: string) => fs.readFileSync(path.resolve(process.cwd(), "src/admin/public", file), "utf8");
+  for (const [dir, route, link] of [["monthly", "/expense/monthly", "monthly-return"], ["operating", "/expense/monthly/operating", "return-link"], ["operating-summary", "/expense/monthly/summary", "return-link"]]) {
+    const html = read(`${dir}/index.html`);
+    assert.match(html, new RegExp(`<nav class="topbar[^"]*" aria-label="报账中心导航" data-admin-center="expense" data-admin-mode="brand" data-return-to="${route.replaceAll("/", "\\/")}"><div data-admin-slot><div class="report-switcher" id="reportSwitcher">`), dir);
+    assert.match(html, new RegExp(`<div data-admin-actions><a [^>]*class="${link}"[^>]*>返回后台</a></div></nav>`), dir);
+    const order = ["/auth/accounts/admin-shell.css", "/auth/accounts/admin-theme.js", `<link rel="stylesheet" href="/expense/monthly/`, "/auth/accounts/admin-shell.js", "/auth/accounts/user-menu.js", "<nav class=\"topbar"].map(text => html.indexOf(text));
+    assert.ok(order.every(index => index > 0), dir);
+    assert.deepEqual([...order].sort((x, y) => x - y), order, dir);
+    // The shared theme script owns the toggle and storage; pages only react to its change event.
+    const script = read(`${dir}/app.js`);
+    assert.doesNotMatch(script, /themeToggle|localStorage|case 'theme'/, dir);
+    assert.doesNotMatch(read(`${dir}/styles.css`), /(^|[}\s])\.(topbar|brand|top-actions|top-right|logout-button|theme-toggle)\{/, dir);
+  }
+  assert.match(read("monthly/app.js"), /document\.addEventListener\('admin-themechange', \(\) => render\(\)\)/);
+});
+
 test("admin deletion controls preserve legacy access and honor each report capability", async () => {
   const html = fs.readFileSync(path.resolve(process.cwd(), "src/admin/public/admin.html"), "utf8");
   const loadSession = html.slice(html.indexOf("      async function loadSession()"), html.indexOf("      async function loadManualImportOptions()"));

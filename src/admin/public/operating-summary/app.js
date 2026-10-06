@@ -30,9 +30,6 @@
   });}
   function shownColumns(){return columns().filter(col=>s.section==='all'||col.section===s.section||s.section==='cost'&&col.id==='expense');}
   function notify(message){$('toast').textContent=message;$('toast').hidden=false;clearTimeout(s.toastTimer);s.toastTimer=setTimeout(()=>$('toast').hidden=true,3500);}
-  function theme(value){const dark=value==='dark';document.documentElement.dataset.theme=dark?'dark':'light';document.querySelector('meta[name="theme-color"]').content=dark?'#202938':'#ffffff';$('themeIcon').textContent=dark?'☀️':'🌙';$('themeToggle').setAttribute('aria-pressed',String(dark));$('themeToggle').setAttribute('aria-label',dark?'切换到浅色模式':'切换到深色模式');}
-  try{theme(localStorage.getItem('comeover-admin-theme')||localStorage.getItem('reimbursement-admin-theme')||(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light'));}catch{theme('light');}
-  window.addEventListener('storage',event=>{if(event.key==='comeover-admin-theme'&&['light','dark'].includes(event.newValue))theme(event.newValue);});
   async function json(url,signal){const response=await fetch(url,{credentials:'same-origin',cache:'no-store',headers:{Accept:'application/json'},signal});let data;try{data=await response.json();}catch{throw new Error('无法读取汇总，请返回报账后台确认登录状态。');}
     if(!response.ok||!data.success)throw new Error(response.status===401?'登录已失效，请返回报账后台登录。':response.status===403?'当前账号没有“查看经营汇总”权限，或权限已变更。':data.error?.message||'读取汇总失败，请重试。');return data;
   }
@@ -74,7 +71,7 @@
     if(button?.dataset.section){s.section=button.dataset.section;render();return;}
     if(button?.dataset.sort){s.order={id:button.dataset.sort,desc:s.order.id===button.dataset.sort?!s.order.desc:true};render();return;}
     const row=event.target.closest('[data-month-row]');if(button?.dataset.month||row){detail(button?.dataset.month||row.dataset.monthRow);return;}
-    switch(button?.dataset.action){case 'theme':{const value=document.documentElement.dataset.theme==='dark'?'light':'dark';theme(value);try{localStorage.setItem('comeover-admin-theme',value);localStorage.setItem('reimbursement-admin-theme',value);}catch{}break;}case 'prevYear':case 'nextYear':s.year=String(Number(s.year)+(button.dataset.action==='prevYear'?-1:1));load();break;case 'retry':load();break;case 'reset':s.store='';s.year='';s.currency='CNY';load();break;case 'defaultYear':s.year=s.data.defaultYear;load();break;case 'rules':rules();break;case 'close':close();break;case 'export':exportReport();break;case 'prevDetail':case 'nextDetail':{const list=rows(),index=list.findIndex(row=>row.month===s.detail)+(button.dataset.action==='prevDetail'?-1:1);if(list[index])detail(list[index].month,true);break;}}
+    switch(button?.dataset.action){case 'prevYear':case 'nextYear':s.year=String(Number(s.year)+(button.dataset.action==='prevYear'?-1:1));load();break;case 'retry':load();break;case 'reset':s.store='';s.year='';s.currency='CNY';load();break;case 'defaultYear':s.year=s.data.defaultYear;load();break;case 'rules':rules();break;case 'close':close();break;case 'export':exportReport();break;case 'prevDetail':case 'nextDetail':{const list=rows(),index=list.findIndex(row=>row.month===s.detail)+(button.dataset.action==='prevDetail'?-1:1);if(list[index])detail(list[index].month,true);break;}}
   });
   $('summaryDialog').addEventListener('cancel',event=>{event.preventDefault();close();});
   const query=new URL(location.href).searchParams;s.store=query.get('store')||'';s.year=query.get('year')||'';s.currency=query.get('currency')||'CNY';load();
