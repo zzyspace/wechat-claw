@@ -443,10 +443,10 @@ npm run admin:dev
 - 旧账号模式仅使用 `WECHATY_REIMBURSEMENT_ACCOUNTS_JSON` 中显式配置的 `displayName` 匹配唯一且门店授权相符的店长；未配置真实姓名时不会再使用登录名认领。发布时先更新 Gateway 的内部姓名查询接口，再更新报账服务。
 - 快捷指令接口会同步调用现有报账模型并写入正式报账链路；成功响应中的 `receipt` 可直接交给“显示结果”动作
 - `deploy/deploy-wechat-claw.sh` 现在会自动：
-  - 安装 [deploy/wechat-claw-reimbursement-admin.service](/Users/ryan/DataDisk/Work/AI/wechat-claw/deploy/wechat-claw-reimbursement-admin.service)
+  - 安装 [deploy/wechat-claw-reimbursement-admin.service](deploy/wechat-claw-reimbursement-admin.service)
   - 重启并校验 `127.0.0.1:8788/health/expense`
   - 校验 `WECHATY_ADMIN_PUBLIC_HEALTHZ_URL`
-- [deploy/nginx/reimbursement-admin.locations.conf](/Users/ryan/DataDisk/Work/AI/wechat-claw/deploy/nginx/reimbursement-admin.locations.conf) 是迁移前兼容快照；生产 Nginx 路由由独立的 `server-infra` 项目统一发布。业务部署不会写入或 reload Nginx。
+- [deploy/nginx/reimbursement-admin.locations.conf](deploy/nginx/reimbursement-admin.locations.conf) 是迁移前兼容快照；生产 Nginx 路由由独立的 `server-infra` 项目统一发布。业务部署不会写入或 reload Nginx。
 
 报账列表加载与性能排查：
 

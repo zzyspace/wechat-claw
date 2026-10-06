@@ -3,7 +3,7 @@
 ## 1. 进入项目
 
 ```bash
-cd /Users/ryan/DataDisk/Work/AI/wechat-claw
+cd wechat-claw  # 从 comeover 仓库根目录进入
 ```
 
 ## 2. 看当前状态
