@@ -442,10 +442,10 @@ npm run admin:dev
 - 账号归属查询失败时，在保存图片和识别前返回 `503`，使用原 `Idempotency-Key` 重试即可；已完成报账的相同请求直接返回原记录，不重新查询姓名或改写历史归属。姓名匹配是共享快捷指令 Token 下的归属兼容规则，不是个人身份认证。
 - 旧账号模式仅使用 `WECHATY_REIMBURSEMENT_ACCOUNTS_JSON` 中显式配置的 `displayName` 匹配唯一且门店授权相符的店长；未配置真实姓名时不会再使用登录名认领。发布时先更新 Gateway 的内部姓名查询接口，再更新报账服务。
 - 快捷指令接口会同步调用现有报账模型并写入正式报账链路；成功响应中的 `receipt` 可直接交给“显示结果”动作
-- `deploy/deploy-wechat-claw.sh` 现在会自动：
+- 部署（comeover 共享脚本 + [deploy/release.sh](deploy/release.sh)）会自动：
   - 安装 [deploy/wechat-claw-reimbursement-admin.service](deploy/wechat-claw-reimbursement-admin.service)
   - 重启并校验 `127.0.0.1:8788/health/expense`
-  - 校验 `WECHATY_ADMIN_PUBLIC_HEALTHZ_URL`
+  - 校验公网 `https://comeover.cn/health/expense` 和 `/expense` 登录跳转
 - [deploy/nginx/reimbursement-admin.locations.conf](deploy/nginx/reimbursement-admin.locations.conf) 是迁移前兼容快照；生产 Nginx 路由由独立的 `server-infra` 项目统一发布。业务部署不会写入或 reload Nginx。
 
 报账列表加载与性能排查：
@@ -751,43 +751,24 @@ tail -f /var/lib/wechat-claw/logs/error-$(date +%F).log
 - 环境变量文件：`/etc/wechat-claw.env`
 - systemd 服务：`deploy/wechat-claw.service`
 
-部署步骤：
+**日常发布（默认方式）**：在 comeover 仓库根目录执行。它只部署代码，不改服务器上的 `/etc/wechat-claw.env`：
 
 ```bash
-git clone <your-repo> /opt/wechat-claw/current
-cd /opt/wechat-claw/current
-npm ci
-npm run build
-sudo bash deploy/deploy-wechat-claw.sh
+npm run mirrors:push
+npm run deploy -- wechat-claw
 ```
 
-**日常发布（默认方式）**：服务器初始化完成后，发布代码一律在本地执行下面这条命令。它只部署代码，不改服务器上的 `/etc/wechat-claw.env`：
+共享脚本 `scripts/deploy-release.sh` 只打包本项目已发布的镜像提交上传，服务器不需要 GitHub 权限，也不在运行目录 `git pull`。服务器在 `/opt/wechat-claw/releases/<SHA>` 建新版本，按 [deploy/release.sh](deploy/release.sh)：
 
-```bash
-ssh root@139.196.140.215 'cd /opt/wechat-claw/current && bash deploy/deploy-wechat-claw.sh'
-```
+- 锁文件不变时复用上一版本依赖（含开发依赖，用于服务器编译），否则 `npm ci --include=dev`
+- 刷新 Wechaty 补丁，把 `node_modules/puppeteer/.local-chromium` 指向共享浏览器缓存 `/opt/wechat-claw/shared/puppeteer`
+- 确认 HEIC 缩略图解码器已安装，`npm run build`
+- 用 `nobody` 和临时状态目录运行 `npm run test:dist`，再以 `wechatclaw` 和生产配置运行 `npm run doctor`
+- 在线备份 `/var/lib/wechat-claw/wechat-claw.sqlite`；安装 `deploy/bot-disabled.conf` 启动保护和 `needrestart` 豁免，停止并禁用微信机器人、watchdog 和每日重启定时器
+- 安装 systemd 单元，原子切换 `current`，仅启用并重启 `wechat-claw-reimbursement-admin`，检查本机与公网健康接口
+- 验证机器人及自动拉起任务全部保持 `inactive`；任何一步失败都会恢复上一个版本
 
-已经登录服务器时，等价于：
-
-```bash
-cd /opt/wechat-claw/current
-sudo bash deploy/deploy-wechat-claw.sh
-```
-
-这个命令会执行：
-
-- `git pull --ff-only origin main`
-- 安装最新的 `systemd` service 文件
-- 安装最新的 watchdog `service/timer` 文件
-- 安装最新的每日重启 `service/timer` 文件
-- 安装 `needrestart` 豁免，避免系统自动升级时重启 bot
-- `systemctl daemon-reload`
-- 仅当当前 `package-lock.json` 和已安装依赖树不一致时执行 `npm ci --include=dev`
-- `npm run build`
-- `npm run doctor`
-- 安装 `deploy/bot-disabled.conf` 启动保护，停止并禁用微信机器人、watchdog 和每日重启定时器
-- 仅启用并重启 `wechat-claw-reimbursement-admin`，检查报销管理健康接口
-- 验证机器人及自动拉起任务全部保持 `inactive`
+报账图片、附件和数据库都在 `/var/lib/wechat-claw`，部署只读取数据库用于备份，不会改动。部署成功后只自动清理共享脚本自己创建的版本目录和备份（各保留最近 5 个和 10 份）；手工命名的目录和备份不会被删除。
 
 **机器人停用策略（2026-09-28）：** 后续部署保持机器人关闭，报销管理后台继续运行。
 五个机器人相关 systemd 单元均安装独立的 `50-bot-disabled.conf` drop-in，
@@ -801,18 +782,7 @@ sudo bash deploy/deploy-wechat-claw.sh
 deploy/release-wechat-claw.sh root@139.196.140.215
 ```
 
-这条命令会固定执行：
-
-- 同步本地 `.env` 到服务器 `/etc/wechat-claw.env`
-- 自动补齐服务器专用字段
-- 触发远程 `git pull + 条件式 npm ci + build + doctor + restart`
-
-说明：
-
-- `deploy-wechat-claw` 会直接比对当前锁文件和已安装依赖树，不依赖 `node_modules/.package-lock.json` 这类额外文件
-- 如果 `node_modules` 已经和当前 `package-lock.json` 一致，就会跳过 `npm ci`，避免每次发布都重新下载 `puppeteer` 一类的大包
-- 即使需要重新执行 `npm ci`，脚本也会复用 `/opt/wechat-claw/current/.cache/puppeteer` 里的浏览器缓存，避免反复下载 Chromium
-- `deploy/sync-wechat-claw-env.sh --deploy` 会直接执行仓库里的 `deploy/deploy-wechat-claw.sh`，避免服务器 PATH 里的旧版 `deploy-wechat-claw` 副本绕过最新逻辑
+这条命令会先同步本地 `.env` 到服务器 `/etc/wechat-claw.env` 并补齐服务器专用字段，再运行 comeover 共享部署（同上面的日常发布）。
 
 如果已获批准同步配置，但这次只想同步配置、不发布代码，才单独使用：
 
@@ -869,8 +839,8 @@ sudo systemctl restart wechat-claw
 可以按下面规则判断：
 
 - 只改 `/etc/wechat-claw.env`：执行 `sudo systemctl restart wechat-claw`
-- 改了代码：执行 `cd /opt/wechat-claw/current && sudo bash deploy/deploy-wechat-claw.sh`
-- 改了代码和 `/etc/wechat-claw.env`：直接执行 `cd /opt/wechat-claw/current && sudo bash deploy/deploy-wechat-claw.sh`
+- 改了代码：在 comeover 仓库根目录执行 `npm run deploy -- wechat-claw`
+- 改了代码和 `/etc/wechat-claw.env`：先在服务器修改 env，再在 comeover 仓库根目录执行 `npm run deploy -- wechat-claw`
 
 如果你要在服务器上“清空报损数据库里的所有数据，但保留数据库文件和表结构”，可以直接执行：
 

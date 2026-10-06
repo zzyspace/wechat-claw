@@ -26,7 +26,7 @@ Options:
   --app-user <user>       Application runtime user. Default: wechatclaw
   --service-name <name>   systemd service name to restart. Default: wechat-claw
   --cache-dir <path>      Puppeteer cache directory.
-                          Default: <app-dir>/.cache/puppeteer
+                          Default: /opt/wechat-claw/shared/puppeteer
   --env-file <path>       Reserved for future config resolution. Default: /etc/wechat-claw.env
   --wait-seconds <n>      Seconds to wait after restart before printing status.
                           Default: 5
@@ -115,7 +115,7 @@ if [[ ! -f "${APP_DIR}/node_modules/puppeteer/install.js" ]]; then
 fi
 
 if [[ -z "${CACHE_DIR}" ]]; then
-  CACHE_DIR="${APP_DIR}/.cache/puppeteer"
+  CACHE_DIR="/opt/wechat-claw/shared/puppeteer"
 fi
 
 run_as_app_user() {
@@ -154,7 +154,9 @@ else
 fi
 
 echo "[repair-chromium] Rebinding Puppeteer runtime path"
-run_as_app_user "rm -rf 'node_modules/puppeteer/.local-chromium' && ln -sfn '${CACHE_DIR}' 'node_modules/puppeteer/.local-chromium'"
+# Releases are root-owned and read-only to the app user.
+rm -rf "${APP_DIR}/node_modules/puppeteer/.local-chromium"
+ln -sfn "${CACHE_DIR}" "${APP_DIR}/node_modules/puppeteer/.local-chromium"
 
 if [[ "${SKIP_RESTART}" -eq 1 ]]; then
   echo "[repair-chromium] Skip restart requested; repair completed"

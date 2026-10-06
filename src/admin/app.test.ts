@@ -41,7 +41,7 @@ test("reimbursement nginx keeps shortcut Bearer auth public and protects admin r
 
 test("wechat-claw deployment leaves the shared Nginx entry to server-infra", () => {
   const deployScript = fs.readFileSync(
-    path.resolve(process.cwd(), "deploy/deploy-wechat-claw.sh"),
+    path.resolve(process.cwd(), "deploy/release.sh"),
     "utf8",
   );
   assert.doesNotMatch(deployScript, /\/etc\/nginx\/sites-(available|enabled)/);
