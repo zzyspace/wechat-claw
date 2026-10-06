@@ -48,7 +48,15 @@ release_test() {
   run_isolated env WECHATY_STATE_DIR="$state" npm run test:dist
   rm -rf -- "$state"
   # Doctor checks the production configuration as the runtime user, before the switch.
-  runuser -u wechatclaw -- bash -c "set -a; . /etc/wechat-claw.env; set +a; cd '$PWD' && npm run doctor"
+  # The env file is root-only (0600), so root loads it and hands the environment over.
+  (
+    set -a
+    . /etc/wechat-claw.env
+    set +a
+    HOME=$(getent passwd wechatclaw | cut -d: -f6)
+    export HOME
+    runuser -u wechatclaw -- node --loader ts-node/esm src/app/doctor.ts
+  )
 }
 
 release_backup() {
