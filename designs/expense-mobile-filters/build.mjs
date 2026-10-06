@@ -4,7 +4,7 @@ import crypto from 'node:crypto';
 import {createRequire} from 'node:module';
 import {fileURLToPath} from 'node:url';
 const require=createRequire(import.meta.url);
-const babel=require(process.env.BABEL_STANDALONE||'/Users/ryan/DataDisk/Work/AI/server-infra/designs/restaurant-ops-logo-exploration/vendor/babel-7.29.0.min.cjs');
+const babel=require(process.env.BABEL_STANDALONE||'../../../server-infra/designs/restaurant-ops-logo-exploration/vendor/babel-7.29.0.min.cjs');
 const root=path.dirname(fileURLToPath(import.meta.url));
 for(const name of ['app','review','design-canvas']){const input=fs.readFileSync(path.join(root,name+'.jsx'),'utf8');fs.writeFileSync(path.join(root,name+'.js'),babel.transform(input,{presets:['react'],comments:true,filename:name+'.jsx'}).code+'\n')}
 function vendorScript(name){const src=`vendor/${name}`;const hash=crypto.createHash('sha384').update(fs.readFileSync(path.join(root,src))).digest('base64');return `<script src="${src}" integrity="sha384-${hash}"></script>`}
