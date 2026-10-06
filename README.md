@@ -751,6 +751,8 @@ tail -f /var/lib/wechat-claw/logs/error-$(date +%F).log
 - 环境变量文件：`/etc/wechat-claw.env`
 - systemd 服务：`deploy/wechat-claw.service`
 
+`/expense` 主后台的顶栏（切换菜单、深浅主题、退出登录）使用网关提供的共享后台外壳 `/auth/accounts/admin-shell.*`，见 admin-auth-gateway README「共享后台外壳」；提交页和报表页暂时保留各自的顶栏。
+
 **日常发布（默认方式）**：在 comeover 仓库根目录执行。它只部署代码，不改服务器上的 `/etc/wechat-claw.env`：
 
 ```bash

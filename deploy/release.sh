@@ -39,6 +39,10 @@ release_prepare() {
       apt-get install -y --no-install-recommends heif-thumbnailer libheif-plugin-libde265
   fi
   npm run build
+  # The /expense admin top bar comes from admin-auth-gateway; deploy the gateway first.
+  for asset in admin-shell.css admin-shell.js admin-theme.js; do
+    expect_status "https://comeover.cn/auth/accounts/$asset" 200
+  done
 }
 
 release_test() {

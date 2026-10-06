@@ -50,13 +50,17 @@ test("wechat-claw deployment leaves the shared Nginx entry to server-infra", () 
   assert.doesNotMatch(deployScript, /systemctl reload nginx/);
 });
 
-test("reimbursement admin exposes a POST logout action", () => {
+test("reimbursement admin uses the shared admin top bar with a POST logout back to /expense", () => {
   const html = fs.readFileSync(
     path.resolve(process.cwd(), "src/admin/public/admin.html"),
     "utf8",
   );
-  assert.match(html, /<form method="post" action="\/logout">/);
-  assert.match(html, /name="returnTo" value="\/expense"/);
+  // admin-auth-gateway's admin-shell.js renders the switcher and the POST /logout form from this placeholder.
+  assert.match(html, /<nav class="topbar" aria-label="报账中心导航" data-admin-center="expense" data-return-to="\/expense"><\/nav>/);
+  const order = ["/auth/accounts/admin-shell.css", "/auth/accounts/admin-theme.js", "<style>", "/auth/accounts/admin-shell.js", "/auth/accounts/user-menu.js", "<nav class=\"topbar\""].map(text => html.indexOf(text));
+  assert.ok(order.every(index => index > 0), "shared shell assets and placeholder are present");
+  assert.deepEqual([...order].sort((x, y) => x - y), order, "theme before page styles; admin-shell.js before user-menu.js");
+  assert.doesNotMatch(html, /\.topbar\s*\{/);
 });
 
 test("admin deletion controls preserve legacy access and honor each report capability", async () => {
@@ -75,9 +79,8 @@ test("admin deletion controls preserve legacy access and honor each report capab
       state, BASE_PATH: "/expense", buildAuthFetchUrl: (url: string) => url,
       fetch: async () => ({ ok: true, json: async () => ({ success: true, permissions, account: { role: "admin" } }) }),
       document: { getElementById: () => ({ hidden: false }) },
-      configureReportFiltersForAccount: () => {}, loadAuthorizedCenters: async () => {},
+      configureReportFiltersForAccount: () => {},
       elements: {
-        centerSwitcherTrigger: { disabled: true }, centerSwitcherChevron: { toggleAttribute: () => {} },
         operationColumnHeader: {}, accessPill: {}, manualImportOpen: {}, batchImportOpen: {},
       },
     };
@@ -1018,33 +1021,14 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     assert.match(pageHtml, /报账 #\$\{item\.id\} 附件预览 \(\$\{previewAmount\} \| \$\{previewCategory\}\)/);
     assert.match(pageHtml, /<th>金额<\/th>\s*<th>类别<\/th>\s*<th>备注<\/th>/);
     assert.match(pageHtml, /<meta name="color-scheme" content="light dark"/);
-    assert.match(pageHtml, /<nav class="topbar" aria-label="报账中心导航">/);
-    assert.match(pageHtml, /\.topbar \{[^}]*min-height: 52px;[^}]*padding: 7px 12px;[^}]*border-radius: 13px;/s);
+    // The top bar (switcher, theme toggle, logout) comes from admin-auth-gateway's shared shell.
+    assert.match(pageHtml, /<nav class="topbar" aria-label="报账中心导航" data-admin-center="expense" data-return-to="\/expense"><\/nav>/);
+    assert.match(pageHtml, /<script src="\/auth\/accounts\/admin-shell\.js" defer><\/script>\s*<script src="\/auth\/accounts\/user-menu\.js" defer><\/script>/);
+    assert.doesNotMatch(pageHtml, /center-switcher|centerSwitcher|themeToggle|THEME_STORAGE_KEY|reimbursement-admin-theme/);
     assert.match(pageHtml, /\.hero \{[^}]*margin: 0 -14px 0;/s);
-    assert.match(pageHtml, /<span>报账中心<\/span>/);
-    assert.match(pageHtml, /<div class="center-switcher" id="centerSwitcher">/);
-    assert.match(pageHtml, /id="centerSwitcherTrigger"[^>]*disabled/);
-    assert.match(pageHtml, /id="centerSwitcherChevron"[^>]*hidden/);
-    assert.match(pageHtml, /\.center-switcher-chevron\[hidden\] \{ display: none; \}/);
-    assert.match(pageHtml, /\.center-switcher-trigger:disabled \{ color: var\(--ink\); opacity: 1;/);
-    assert.match(pageHtml, /href="\/expense" aria-current="page"/);
-    assert.match(pageHtml, /href="\/invoice"/);
-    assert.match(pageHtml, /href="\/staff"/);
-    assert.match(pageHtml, /\.center-switcher-option\[aria-current="page"\] \{ background: var\(--brand-soft\); \}/);
-    assert.match(pageHtml, /\.center-switcher-option\[data-management\] svg \{ color: #8e8e93; \}/);
-    assert.match(pageHtml, /:root\[data-theme="dark"\] \.center-switcher-option\[data-management\] svg, :root\[data-theme="dark"\] \.center-switcher-option\[data-center="accounts"\] svg \{ color:#a1a1aa; \}/);
-    assert.match(pageHtml, /\.center-switcher-option\[data-center="business"\] svg \{ color: #a78bfa; \}/);
-    assert.match(pageHtml, /M8 7V5\.5A2\.5 2\.5 0 0 1 10\.5 3H22/);
-    assert.match(pageHtml, /link\.innerHTML = '[^']+<span>账号管理<\/span><span><\/span>'/);
-    assert.match(pageHtml, /allowed\.includes\(link\.dataset\.center\)/);
-    assert.match(pageHtml, /elements\.centerSwitcherBackdrop\.addEventListener\("click"/);
-    assert.match(pageHtml, /id="themeIcon" aria-hidden="true">🌙<\/span>/);
-    assert.match(pageHtml, /elements\.themeIcon\.textContent = normalizedTheme === "dark" \? "☀️" : "🌙"/);
     assert.match(pageHtml, /class="button-primary submit-button" type="submit"/);
     assert.doesNotMatch(pageHtml, /class="hero-art"/);
     assert.match(pageHtml, /:root\[data-theme="dark"\]/);
-    assert.match(pageHtml, /window\.localStorage\.setItem\(THEME_STORAGE_KEY, normalizedTheme\)/);
-    assert.match(pageHtml, /systemThemePreference\.addEventListener\("change"/);
     assert.match(pageHtml, /placeholder="支持 !排除、&与、\|\|或，如 张\|\|李"/);
     assert.match(pageHtml, /placeholder="支持 !、&、\|\|，如 食材\|\|房租"/);
     assert.match(pageHtml, /<label for="note">备注<\/label>/);

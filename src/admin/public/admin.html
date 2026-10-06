@@ -5,21 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no" />
     <meta name="color-scheme" content="light dark" />
     <title>报账后台</title>
-    <script>
-      (() => {
-        let savedTheme = null;
-        try {
-          savedTheme = window.localStorage.getItem("comeover-admin-theme") ?? window.localStorage.getItem("reimbursement-admin-theme");
-        } catch {
-          // Storage may be unavailable in privacy-restricted browser contexts.
-        }
-        const theme = savedTheme === "light" || savedTheme === "dark"
-          ? savedTheme
-          : (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
-        document.documentElement.dataset.theme = theme;
-        document.documentElement.style.colorScheme = theme;
-      })();
-    </script>
+    <!-- Shared admin top bar and theme, served by admin-auth-gateway. admin-shell.js must precede user-menu.js. -->
+    <link rel="stylesheet" href="/auth/accounts/admin-shell.css" />
+    <script src="/auth/accounts/admin-theme.js"></script>
     <style>
       /* Allow touch scrolling without page pinch zoom. */
       html { touch-action: pan-x pan-y; }
@@ -99,91 +87,6 @@
         margin: 0 auto;
         padding: 14px 0 48px;
       }
-
-      body.switcher-open { overflow: hidden; }
-      body.switcher-open .topbar { z-index: 21; }
-
-      .topbar {
-        position: relative;
-        z-index: 2;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        min-height: 52px;
-        padding: 7px 12px;
-        border: 1px solid var(--line);
-        border-radius: 13px;
-        background: var(--surface);
-        box-shadow: 0 12px 32px rgba(30, 70, 120, 0.08);
-        backdrop-filter: blur(20px);
-      }
-
-      .center-switcher { position: relative; z-index: 22; }
-      .center-switcher-trigger { display: inline-flex; align-items: center; gap: 8px; min-height: 36px; padding: 0 7px; border: 0; border-radius: 10px; background: transparent; color: var(--ink); font-size: 15px; font-weight: 700; cursor: pointer; }
-      .center-switcher-trigger:hover { background: var(--surface-muted); }
-      .center-switcher-trigger:disabled { color: var(--ink); opacity: 1; cursor: default; -webkit-text-fill-color: var(--ink); }
-      .center-switcher-trigger:disabled:hover { background: transparent; }
-      .center-switcher-trigger:focus-visible { outline: 3px solid var(--brand-soft); outline-offset: 2px; }
-      .center-switcher-trigger .center-icon { width: 22px; height: 22px; color: var(--brand); }
-      .center-switcher-chevron { width: 15px; height: 15px; transition: transform .18s ease; }
-      .center-switcher-chevron[hidden] { display: none; }
-      .center-switcher.is-open .center-switcher-chevron { transform: rotate(180deg); }
-      .center-switcher-backdrop { position: fixed; z-index: 20; inset: 0; border: 0; background: rgba(28, 28, 30, .28); backdrop-filter: blur(2px); cursor: default; }
-      .center-switcher-menu { position: absolute; z-index: 22; top: calc(100% + 10px); left: 0; width: min(286px, calc(100vw - 32px)); padding: 8px; border: 1px solid var(--line); border-radius: 20px; background: var(--surface-strong); box-shadow: 0 24px 60px rgba(28, 28, 30, .22); }
-      .center-switcher-menu[hidden], .center-switcher-backdrop[hidden] { display: none; }
-      .center-switcher-option { display: grid; grid-template-columns: 30px 1fr 20px; align-items: center; gap: 12px; min-height: 62px; padding: 0 14px; border-radius: 14px; color: var(--ink); font-size: 16px; font-weight: 650; text-decoration: none; }
-      .center-switcher-option:hover, .center-switcher-option:focus-visible { background: var(--surface-muted); outline: none; }
-      .center-switcher-option[aria-current="page"] { background: var(--brand-soft); }
-      .center-switcher-option svg { width: 27px; height: 27px; }
-      .center-switcher-option[data-center="expense"] svg { color: #3478f6; }
-      .center-switcher-option[data-center="invoice"] svg { color: #34b978; }
-      .center-switcher-option[data-center="staff"] svg { color: #f0a52b; }
-      .center-switcher-option[data-management] svg { color: #8e8e93; }
-      .center-switcher-check { color: var(--brand); font-size: 22px; font-weight: 800; text-align: center; }
-
-      .topbar-actions {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-      }
-
-      .topbar-actions form { margin: 0; }
-      .topbar-actions button { min-height: 36px; border-radius: 10px; }
-
-      .theme-toggle {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        width: 36px;
-        min-width: 36px;
-        padding: 0;
-        flex: 0 0 36px;
-        background: var(--surface-muted);
-        border-color: transparent;
-      }
-
-      .theme-icon {
-        display: grid;
-        place-items: center;
-        width: 24px;
-        height: 24px;
-        font-family: "Apple Color Emoji", "Segoe UI Emoji", sans-serif;
-        font-size: 20px;
-        line-height: 1;
-      }
-
-      .logout-button {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        padding: 0 9px;
-        border-color: transparent;
-        background: var(--surface-muted);
-        font-size: 14px;
-        white-space: nowrap;
-      }
-
-      .logout-button svg { width: 18px; height: 18px; }
 
       .hero {
         display: grid;
@@ -1672,14 +1575,6 @@
           padding-top: 8px;
         }
 
-        .topbar { min-height: 52px; padding: 7px 12px; border-radius: 13px; }
-        .center-switcher-trigger { gap: 8px; font-size: 15px; }
-        .center-switcher-trigger .center-icon { width: 22px; height: 22px; }
-        .topbar-actions { gap: 6px; }
-        .topbar-actions button { min-height: 36px; border-radius: 10px; }
-        .theme-toggle { width: 36px; min-width: 36px; flex-basis: 36px; }
-        .logout-button { gap: 6px; padding: 0 9px; font-size: 14px; }
-        .logout-button svg { width: 18px; height: 18px; }
         .hero { min-height: 238px; margin: -10px -9px 0; padding: 39px 23px 24px; }
         h1 { margin-bottom: 14px; font-size: clamp(29px, 8.5vw, 38px); }
         .hero p { margin-bottom: 18px; font-size: 13px; line-height: 1.75; }
@@ -1820,19 +1715,6 @@
         .controls .summary-row { margin-top: 12px; }
       }
     [hidden] { display: none !important; }
-.center-switcher-option[data-center="store"] svg { color: #e85d8e; }
-:root[data-theme="dark"] .center-switcher-option[data-center="store"] svg { color: #f486ad; }
-/* Full-width header; keep all existing control styles. */
-body > .topbar { height: auto; min-height: 64px; padding-block: 13px; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; box-shadow: none; }
-/* Anchor the menu below the full header, including wrapped mobile rows. */
-body > .topbar > .center-switcher { position: static; }
-body > .topbar .center-switcher-menu { top: calc(100% + 9px); left: auto; }
-.center-switcher-option[data-center="business"] svg { color: #a78bfa; }
-:root[data-theme="dark"] .center-switcher-option[data-center="business"] svg { color: #a78bfa; }
-/* Shared selector palette, independent of each dashboard's page colors. */
-.center-switcher-menu { --ink:#17202a; --line:#e3e8ef; --surface:#fff; --surface-strong:#fff; --surface-muted:#f5f7fa; --soft:#f5f7fa; --brand:#007aff; --brand-soft:#eaf3ff; background:var(--surface-strong); color:var(--ink); font-family:-apple-system,"SF Pro Text","PingFang SC","Microsoft YaHei",sans-serif; line-height:1.5; box-shadow:0 24px 60px rgba(28,28,30,.22); }
-:root[data-theme="dark"] .center-switcher-menu { --ink:#f1f4f8; --line:#343942; --surface:#1d2026; --surface-strong:#1d2026; --surface-muted:#262a31; --soft:#262a31; --brand:#72b5ff; --brand-soft:#23354c; }
-:root[data-theme="dark"] .center-switcher-option[data-management] svg, :root[data-theme="dark"] .center-switcher-option[data-center="accounts"] svg { color:#a1a1aa; }
 
       /* Match business-data heading typography and vertical spacing. */
       .page { padding-top: 0; }
@@ -1859,38 +1741,11 @@ body::before {
 </style>
 
 <link rel="stylesheet" href="/auth/accounts/user-menu.css">
+<script src="/auth/accounts/admin-shell.js" defer></script>
 <script src="/auth/accounts/user-menu.js" defer></script>
 </head>
   <body>
-      <nav class="topbar" aria-label="报账中心导航">
-        <div class="center-switcher" id="centerSwitcher">
-          <button class="center-switcher-trigger" id="centerSwitcherTrigger" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="centerSwitcherMenu" disabled>
-            <svg class="center-icon" viewBox="0 0 32 32" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="7" width="22" height="19" rx="4" fill="currentColor" fill-opacity=".16"/><path d="M8 7V5.5A2.5 2.5 0 0 1 10.5 3H22"/><path d="M10 13h8"/><path d="m12 17 2.2 2.2 3.5-3.7"/><circle cx="24" cy="24" r="4" fill="currentColor" stroke="none"/><path d="M24 22v4M22 24h4" stroke="white" stroke-width="1.8"/></svg>
-            <span>报账中心</span>
-            <svg class="center-switcher-chevron" id="centerSwitcherChevron" viewBox="0 0 20 20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" hidden><path d="m5 7 5 5 5-5"/></svg>
-          </button>
-          <div class="center-switcher-menu" id="centerSwitcherMenu" role="menu" hidden>
-            <a class="center-switcher-option" data-center="business" role="menuitem" href="/business" hidden><svg viewBox="0 0 32 32" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 26V16M16 26V6M25 26V11"/></svg><span>营业数据</span><span></span></a>
-            <a class="center-switcher-option" data-center="expense" role="menuitem" href="/expense" aria-current="page"><svg viewBox="0 0 32 32" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="7" width="22" height="19" rx="4" fill="currentColor" fill-opacity=".16"/><path d="M8 7V5.5A2.5 2.5 0 0 1 10.5 3H22"/><path d="M10 13h8"/><path d="m12 17 2.2 2.2 3.5-3.7"/><circle cx="24" cy="24" r="4" fill="currentColor" stroke="none"/><path d="M24 22v4M22 24h4" stroke="white" stroke-width="1.8"/></svg><span>报账中心</span><span class="center-switcher-check" aria-hidden="true">✓</span></a>
-            <a class="center-switcher-option" data-center="invoice" role="menuitem" href="/invoice"><svg viewBox="0 0 32 32" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="3.5" width="18" height="25" rx="3"/><path d="M11 9h10M11 14h8M11 19h5"/><circle cx="23" cy="23.5" r="4"/><path d="m21.3 23.5 1.2 1.2 2.2-2.5"/></svg><span>发票中心</span><span></span></a>
-            <a class="center-switcher-option" data-center="staff" role="menuitem" href="/staff"><svg viewBox="0 0 32 32" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="16" cy="10" r="5"/><path d="M6.5 27c.8-6.2 4-9.2 9.5-9.2s8.7 3 9.5 9.2"/></svg><span>员工中心</span><span></span></a>
-            <a class="center-switcher-option" data-center="store" role="menuitem" href="/store" hidden><svg viewBox="0 0 32 32" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 15v10a3 3 0 0 0 3 3h14a3 3 0 0 0 3-3V15M4 12l2.5-7h19l2.5 7M13 28v-8h6v8"/><path d="M4 12a4 4 0 0 0 8 0 4 4 0 0 0 8 0 4 4 0 0 0 8 0"/></svg><span>门店管理</span><span></span></a>
-          </div>
-        </div>
-        <div class="topbar-actions">
-          <button class="theme-toggle" id="themeToggle" type="button" aria-label="切换到深色模式" aria-pressed="false"><span class="theme-icon" id="themeIcon" aria-hidden="true">🌙</span></button>
-          <form method="post" action="/logout">
-            <input type="hidden" name="returnTo" value="/expense" />
-            <button class="logout-button" type="submit">
-              <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M10 4H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h5M15 8l4 4-4 4M19 12H9" />
-              </svg>
-              <span>退出登录</span>
-            </button>
-          </form>
-        </div>
-      </nav>
-      <button class="center-switcher-backdrop" id="centerSwitcherBackdrop" type="button" aria-label="关闭后台选择列表" hidden></button>
+      <nav class="topbar" aria-label="报账中心导航" data-admin-center="expense" data-return-to="/expense"></nav>
     <div class="page">
 
       <header class="hero">
@@ -2251,7 +2106,6 @@ body::before {
       const DEFAULT_PAGE_LIMIT = 200;
       const listRequestGate = ReimbursementListLoading.createRequestGate();
       const listThumbnails = ReimbursementListLoading.createThumbnailLoader();
-      const THEME_STORAGE_KEY = "comeover-admin-theme";
       const BATCH_TASK_STORAGE_KEY = "reimbursement-admin-active-batch-task";
       const DETAIL_CLICK_DELAY_MS = 300;
       const MANUAL_IMAGE_MIME_TYPES = new Set([
@@ -2347,13 +2201,6 @@ body::before {
         batchImportSubmit: document.getElementById("batchImportSubmit"),
         batchImportCancel: document.getElementById("batchImportCancel"),
         batchImportStatus: document.getElementById("batchImportStatus"),
-        centerSwitcher: document.getElementById("centerSwitcher"),
-        centerSwitcherTrigger: document.getElementById("centerSwitcherTrigger"),
-        centerSwitcherChevron: document.getElementById("centerSwitcherChevron"),
-        centerSwitcherMenu: document.getElementById("centerSwitcherMenu"),
-        centerSwitcherBackdrop: document.getElementById("centerSwitcherBackdrop"),
-        themeToggle: document.getElementById("themeToggle"),
-        themeIcon: document.getElementById("themeIcon"),
         resetFilters: document.getElementById("resetFilters"),
         statusText: document.getElementById("statusText"),
         tableBody: document.getElementById("tableBody"),
@@ -2393,32 +2240,6 @@ body::before {
         attachmentPreviewPrevious: document.getElementById("attachmentPreviewPrevious"),
         attachmentPreviewNext: document.getElementById("attachmentPreviewNext"),
       };
-
-      function readSavedTheme() {
-        try {
-          const savedTheme = window.localStorage.getItem(THEME_STORAGE_KEY) ?? window.localStorage.getItem("reimbursement-admin-theme");
-          return savedTheme === "light" || savedTheme === "dark" ? savedTheme : null;
-        } catch {
-          return null;
-        }
-      }
-
-      function applyTheme(theme, persist = false) {
-        const normalizedTheme = theme === "dark" ? "dark" : "light";
-        document.documentElement.dataset.theme = normalizedTheme;
-        document.documentElement.style.colorScheme = normalizedTheme;
-        elements.themeIcon.textContent = normalizedTheme === "dark" ? "☀️" : "🌙";
-        elements.themeToggle.setAttribute("aria-label", normalizedTheme === "dark" ? "切换到浅色模式" : "切换到深色模式");
-        elements.themeToggle.setAttribute("aria-pressed", String(normalizedTheme === "dark"));
-
-        if (persist) {
-          try {
-            window.localStorage.setItem(THEME_STORAGE_KEY, normalizedTheme);
-          } catch {
-            // The active theme still works when storage is unavailable.
-          }
-        }
-      }
 
       function escapeHtml(value) {
         return String(value ?? "")
@@ -2614,25 +2435,6 @@ body::before {
         elements.filterReporter.readOnly = true;
         elements.filterReporter.placeholder = "当前登录账号";
         elements.reporterFilterLabel.textContent = "报账人（当前账号）";
-      }
-
-      function closeCenterSwitcher({ restoreFocus = false } = {}) {
-        elements.centerSwitcher.classList.remove("is-open");
-        elements.centerSwitcherTrigger.setAttribute("aria-expanded", "false");
-        elements.centerSwitcherMenu.hidden = true;
-        elements.centerSwitcherBackdrop.hidden = true;
-        document.body.classList.remove("switcher-open");
-        if (restoreFocus) elements.centerSwitcherTrigger.focus();
-      }
-
-      function openCenterSwitcher() {
-        if (elements.centerSwitcherTrigger.disabled) return;
-        elements.centerSwitcher.classList.add("is-open");
-        elements.centerSwitcherTrigger.setAttribute("aria-expanded", "true");
-        elements.centerSwitcherMenu.hidden = false;
-        elements.centerSwitcherBackdrop.hidden = false;
-        document.body.classList.add("switcher-open");
-        elements.centerSwitcherMenu.querySelector("[aria-current='page']")?.focus();
       }
 
       function restoreRoleScopedFilterValues() {
@@ -4034,34 +3836,6 @@ body::before {
       }
 
 
-      async function loadAuthorizedCenters(container, trigger, menu, currentApp) {
-        container.hidden = false;
-        trigger.disabled = true;
-        trigger.querySelector(".center-switcher-chevron")?.setAttribute("hidden", "");
-        try {
-          const response = await fetch("/auth/api/session", { headers: { Accept: "application/json" } });
-          const payload = await response.json();
-          if (!response.ok) return;
-          const allowed = payload.apps || [];
-          for (const link of menu.querySelectorAll("[data-center]")) {
-            link.hidden = !allowed.includes(link.dataset.center);
-            if (payload.destinations?.[link.dataset.center]) link.href = payload.destinations[link.dataset.center];
-          }
-          if (payload.canManageAccounts && !menu.querySelector('[data-management]')) {
-            const link = document.createElement("a");
-            link.href = "/auth/accounts";
-            link.className = "center-switcher-option";
-            link.dataset.management = "true";
-            link.setAttribute("role", "menuitem");
-            link.innerHTML = '<svg viewBox="0 0 32 32" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="9.5" r="4.25" fill="currentColor" fill-opacity=".16"/><path d="M4.5 25.5c.65-5.8 3.15-8.5 7.5-8.5 3.25 0 5.45 1.5 6.65 4.55"/><circle cx="23.25" cy="22.75" r="3.25" fill="currentColor" fill-opacity=".16"/><path d="M23.25 17.5v1.15M23.25 26.85V28M18 22.75h1.15M27.35 22.75h1.15M19.55 19.05l.8.8M26.15 25.65l.8.8M26.95 19.05l-.8.8M20.35 25.65l-.8.8"/><circle cx="23.25" cy="22.75" r="1.05" fill="currentColor" stroke="none"/></svg><span>账号管理</span><span></span>';
-            menu.appendChild(link);
-          }
-          trigger.disabled = allowed.filter((app) => app !== currentApp).length === 0 && !payload.canManageAccounts;
-        } catch { /* Keep the current center label, with switching disabled. */ }
-        const arrow = trigger.querySelector(".center-switcher-chevron");
-        if (arrow) arrow.toggleAttribute("hidden", trigger.disabled);
-      }
-
       async function loadSession() {
         const response = await fetch(buildAuthFetchUrl(`${BASE_PATH}/api/session`), {
           headers: {
@@ -4084,8 +3858,6 @@ body::before {
         state.unifiedAuthorization = Boolean(payload.authorization);
 
         configureReportFiltersForAccount(payload.account);
-        await loadAuthorizedCenters(elements.centerSwitcher, elements.centerSwitcherTrigger, elements.centerSwitcherMenu, "expense");
-        elements.centerSwitcherChevron.toggleAttribute("hidden", elements.centerSwitcherTrigger.disabled);
         if (payload.authorization) {
           elements.filterReporter.readOnly = false;
           elements.filterReporter.placeholder = "筛选报账人";
@@ -4475,29 +4247,6 @@ body::before {
         }
       }
 
-      const systemThemePreference = window.matchMedia("(prefers-color-scheme: dark)");
-      applyTheme(document.documentElement.dataset.theme || (systemThemePreference.matches ? "dark" : "light"));
-
-      elements.themeToggle.addEventListener("click", () => {
-        const nextTheme = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
-        applyTheme(nextTheme, true);
-      });
-
-      elements.centerSwitcherTrigger.addEventListener("click", () => {
-        if (elements.centerSwitcher.classList.contains("is-open")) closeCenterSwitcher();
-        else openCenterSwitcher();
-      });
-      elements.centerSwitcherBackdrop.addEventListener("click", () => closeCenterSwitcher({ restoreFocus: true }));
-
-      window.addEventListener("storage", (event) => {
-        if (event.key === THEME_STORAGE_KEY && (event.newValue === "light" || event.newValue === "dark")) applyTheme(event.newValue);
-      });
-      systemThemePreference.addEventListener("change", (event) => {
-        if (!readSavedTheme()) {
-          applyTheme(event.matches ? "dark" : "light");
-        }
-      });
-
       document.getElementById("limit").addEventListener("change", () => {
         elements.filters.requestSubmit();
       });
@@ -4881,10 +4630,6 @@ body::before {
       });
 
       document.addEventListener("keydown", (event) => {
-        if (event.key === "Escape" && elements.centerSwitcher.classList.contains("is-open")) {
-          closeCenterSwitcher({ restoreFocus: true });
-          return;
-        }
         if (!elements.attachmentPreviewModal.hidden && event.key === "ArrowLeft") {
           navigateAttachmentPreview(-1);
           return;
