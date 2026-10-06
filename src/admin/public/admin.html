@@ -13,7 +13,6 @@
       html { touch-action: pan-x pan-y; }
       :root {
         --bg: #f2f2f7;
-        --bg-accent: #e9edf7;
         --surface: rgba(255, 255, 255, 0.84);
         --surface-strong: #ffffff;
         --line: rgba(60, 60, 67, 0.16);
@@ -26,8 +25,6 @@
         --danger: #ff3b30;
         --warn: #c96f00;
         --warn-soft: rgba(255, 149, 0, 0.16);
-        --page-glow-start: rgba(0, 122, 255, 0.16);
-        --page-glow-end: rgba(90, 200, 250, 0.18);
         --surface-muted: rgba(255, 255, 255, 0.72);
         --surface-hover: rgba(255, 255, 255, 0.56);
         --surface-input: rgba(255, 255, 255, 0.92);
@@ -43,7 +40,6 @@
 
       :root[data-theme="dark"] {
         --bg: #0d1117;
-        --bg-accent: #151b25;
         --surface: rgba(27, 34, 45, 0.88);
         --surface-strong: #202938;
         --line: rgba(235, 242, 255, 0.14);
@@ -56,8 +52,6 @@
         --danger: #ff6961;
         --warn: #ffb340;
         --warn-soft: rgba(255, 179, 64, 0.18);
-        --page-glow-start: rgba(32, 110, 210, 0.22);
-        --page-glow-end: rgba(50, 170, 210, 0.14);
         --surface-muted: rgba(41, 51, 66, 0.82);
         --surface-hover: rgba(73, 91, 116, 0.32);
         --surface-input: rgba(17, 23, 32, 0.9);
@@ -77,9 +71,6 @@
         min-height: 100vh;
         font-family: "SF Pro Text", "PingFang SC", "Noto Sans SC", sans-serif;
         color: var(--ink);
-        --admin-page-background: radial-gradient(circle at top left, var(--page-glow-start), transparent 28%),
-          radial-gradient(circle at top right, var(--page-glow-end), transparent 26%),
-          linear-gradient(180deg, var(--bg) 0%, var(--bg-accent) 100%); background: var(--bg-accent); isolation: isolate;
       }
 
       .page {
@@ -1729,15 +1720,6 @@
       .hero-actions { margin-top: 14px; }
       @media (max-width: 650px) { .hero-actions { margin-top: 8px; } }
 
-/* Keep the gradient tied to the viewport, independent of list length. */
-body::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-  background: var(--admin-page-background);
-}
 </style>
 
 <link rel="stylesheet" href="/auth/accounts/user-menu.css">

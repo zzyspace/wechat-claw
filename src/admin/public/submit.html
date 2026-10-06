@@ -13,7 +13,6 @@
       html { touch-action: pan-x pan-y; }
       :root {
         --bg: #f2f2f7;
-        --bg-accent: #e9edf7;
         --surface: rgba(255, 255, 255, 0.86);
         --surface-muted: rgba(255, 255, 255, 0.72);
         --surface-input: rgba(255, 255, 255, 0.94);
@@ -26,13 +25,10 @@
         --danger: #ff3b30;
         --success: #16843f;
         --shadow: 0 24px 60px rgba(28, 28, 30, 0.1);
-        --glow-start: rgba(0, 122, 255, 0.16);
-        --glow-end: rgba(90, 200, 250, 0.18);
       }
 
       :root[data-theme="dark"] {
         --bg: #0d1117;
-        --bg-accent: #151b25;
         --surface: rgba(27, 34, 45, 0.9);
         --surface-muted: rgba(41, 51, 66, 0.82);
         --surface-input: rgba(17, 23, 32, 0.92);
@@ -45,8 +41,6 @@
         --danger: #ff6961;
         --success: #57ca7b;
         --shadow: 0 24px 60px rgba(0, 0, 0, 0.34);
-        --glow-start: rgba(32, 110, 210, 0.22);
-        --glow-end: rgba(50, 170, 210, 0.14);
       }
 
       * { box-sizing: border-box; }
@@ -56,9 +50,6 @@
         min-height: 100vh;
         color: var(--ink);
         font-family: "SF Pro Text", "PingFang SC", "Noto Sans SC", sans-serif;
-        --admin-page-background: radial-gradient(circle at top left, var(--glow-start), transparent 28%),
-          radial-gradient(circle at top right, var(--glow-end), transparent 26%),
-          linear-gradient(180deg, var(--bg) 0%, var(--bg-accent) 100%); background: var(--bg-accent); isolation: isolate;
       }
 
       button, input, select { font: inherit; }
@@ -377,15 +368,6 @@
         .records-button { margin-top: 8px; }
       }
 
-/* Keep the gradient tied to the viewport, independent of list length. */
-body::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-  background: var(--admin-page-background);
-}
 </style>
 
 <link rel="stylesheet" href="/auth/accounts/user-menu.css">
