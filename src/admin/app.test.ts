@@ -1074,14 +1074,14 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     });
     assert.equal(submissionPageResponse.status, 200);
     const submissionPageHtml = await submissionPageResponse.text();
-    assert.match(submissionPageHtml, /<nav class="topbar" aria-label="报账中心导航">/);
-    assert.match(submissionPageHtml, /\.topbar \{[^}]*min-height: 52px;[^}]*padding: 7px 12px;[^}]*border-radius: 13px;/s);
+    // The submit page uses the shared top bar in brand mode (no center switcher); logout returns to this path.
+    assert.match(submissionPageHtml, /<nav class="topbar" aria-label="报账中心导航" data-admin-center="expense" data-admin-mode="brand"><\/nav>\s*<main class="page">/);
+    assert.match(submissionPageHtml, /<script src="\/auth\/accounts\/admin-shell\.js" defer><\/script>\s*<script src="\/auth\/accounts\/user-menu\.js" defer><\/script>/);
+    assert.doesNotMatch(submissionPageHtml, /brand-lockup|themeToggle|logoutReturnTo|THEME_STORAGE_KEY|\.topbar\s*\{/);
     assert.match(submissionPageHtml, /\.hero \{[^}]*margin: 0 -14px 0;/s);
     assert.match(submissionPageHtml, /<h1>新建报账<\/h1>/);
     assert.match(submissionPageHtml, /class="link-button button-primary records-button" href="\/expense">/);
     assert.match(submissionPageHtml, /<span>查看报账记录<\/span>/);
-    assert.match(submissionPageHtml, /id="themeIcon" aria-hidden="true">🌙<\/span>/);
-    assert.match(submissionPageHtml, /elements\.themeIcon\.textContent = normalized === "dark" \? "☀️" : "🌙"/);
     assert.match(submissionPageHtml, /<svg class="hero-art"/);
     assert.match(submissionPageHtml, /\.field input\[type="datetime-local"\] \{\s*padding-inline: 0;/);
     assert.match(submissionPageHtml, /input\[type="datetime-local"\]::-webkit-date-and-time-value \{\s*padding-inline-start: 14px;\s*text-align: left;/);

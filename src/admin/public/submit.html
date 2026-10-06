@@ -5,21 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no" />
     <meta name="color-scheme" content="light dark" />
     <title>新建报账</title>
-    <script>
-      (() => {
-        let savedTheme = null;
-        try {
-          savedTheme = window.localStorage.getItem("comeover-admin-theme") ?? window.localStorage.getItem("reimbursement-admin-theme");
-        } catch {
-          // Storage may be unavailable in privacy-restricted browser contexts.
-        }
-        const theme = savedTheme === "light" || savedTheme === "dark"
-          ? savedTheme
-          : (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
-        document.documentElement.dataset.theme = theme;
-        document.documentElement.style.colorScheme = theme;
-      })();
-    </script>
+    <!-- Shared admin top bar and theme, served by admin-auth-gateway. admin-shell.js must precede user-menu.js. -->
+    <link rel="stylesheet" href="/auth/accounts/admin-shell.css" />
+    <script src="/auth/accounts/admin-theme.js"></script>
     <style>
       /* Allow touch scrolling without page pinch zoom. */
       html { touch-action: pan-x pan-y; }
@@ -99,71 +87,11 @@
         font-weight: 700;
       }
 
-      .theme-toggle {
-        width: 36px;
-        min-width: 36px;
-        padding: 0;
-        flex: 0 0 36px;
-        border-color: transparent;
-        background: var(--surface-muted);
-      }
-
-      .theme-icon {
-        display: grid;
-        place-items: center;
-        width: 24px;
-        height: 24px;
-        font-family: "Apple Color Emoji", "Segoe UI Emoji", sans-serif;
-        font-size: 20px;
-        line-height: 1;
-      }
-
       .page {
         width: min(920px, calc(100vw - 28px));
         margin: 0 auto;
         padding: 14px 0 52px;
       }
-
-      .topbar {
-        position: relative;
-        z-index: 2;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        min-height: 52px;
-        padding: 7px 12px;
-        border: 1px solid var(--line);
-        border-radius: 13px;
-        background: var(--surface);
-        box-shadow: 0 12px 32px rgba(30, 70, 120, 0.08);
-        backdrop-filter: blur(20px);
-      }
-
-      .brand-lockup {
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        color: var(--ink);
-        font-size: 15px;
-        font-weight: 700;
-        text-decoration: none;
-      }
-
-      .brand-lockup svg { width: 22px; height: 22px; color: var(--brand); }
-
-      .topbar-actions { display: flex; align-items: center; gap: 6px; }
-      .topbar-actions form { margin: 0; }
-      .topbar-actions button { min-height: 36px; border-radius: 10px; }
-
-      .logout-button {
-        gap: 6px;
-        padding: 0 9px;
-        border-color: transparent;
-        font-size: 14px;
-        font-weight: 600;
-      }
-
-      .logout-button svg { width: 18px; height: 18px; }
 
       .hero {
         position: relative;
@@ -424,14 +352,6 @@
         }
 
         .page { width: min(100% - 16px, 920px); padding-top: 8px; }
-        .topbar { min-height: 52px; padding: 7px 12px; border-radius: 13px; }
-        .brand-lockup { gap: 8px; font-size: 15px; }
-        .brand-lockup svg { width: 22px; height: 22px; }
-        .topbar-actions { gap: 6px; }
-        .topbar-actions button { min-height: 36px; border-radius: 10px; }
-        .theme-toggle { width: 36px; min-width: 36px; flex-basis: 36px; }
-        .logout-button { gap: 6px; padding: 0 9px; font-size: 14px; }
-        .logout-button svg { width: 18px; height: 18px; }
         .hero { min-height: 238px; margin: -10px -8px 0; padding: 39px 23px 24px; }
         .hero-copy { width: 53%; }
         h1 { margin-bottom: 14px; font-size: clamp(29px, 8.5vw, 38px); }
@@ -469,34 +389,12 @@ body::before {
 </style>
 
 <link rel="stylesheet" href="/auth/accounts/user-menu.css">
+<script src="/auth/accounts/admin-shell.js" defer></script>
 <script src="/auth/accounts/user-menu.js" defer></script>
 </head>
   <body>
+    <nav class="topbar" aria-label="报账中心导航" data-admin-center="expense" data-admin-mode="brand"></nav>
     <main class="page">
-      <nav class="topbar" aria-label="报账中心导航">
-        <a class="brand-lockup" href="/expense" aria-label="返回报账中心">
-          <svg viewBox="0 0 32 32" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="6" y="3.5" width="19" height="25" rx="3" />
-            <path d="M11 10h9M11 15h9M11 20h5" />
-            <circle cx="23.5" cy="23.5" r="4" fill="var(--surface)" />
-            <path d="M23.5 21.5v4M21.5 23.5h4" />
-          </svg>
-          <span>报账中心</span>
-        </a>
-        <div class="topbar-actions">
-          <button class="theme-toggle" id="themeToggle" type="button" aria-label="切换到深色模式" aria-pressed="false"><span class="theme-icon" id="themeIcon" aria-hidden="true">🌙</span></button>
-          <form method="post" action="/logout">
-            <input id="logoutReturnTo" type="hidden" name="returnTo" value="/expense/submit" />
-            <button class="logout-button" type="submit">
-              <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M10 4H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h5M15 8l4 4-4 4M19 12H9" />
-              </svg>
-              <span>退出登录</span>
-            </button>
-          </form>
-        </div>
-      </nav>
-
       <header class="hero">
         <div class="hero-copy">
           <h1>新建报账</h1>
@@ -589,7 +487,6 @@ body::before {
       const BASE_PATH = "/expense";
       const SUBMISSION_PAGE = "submit";
       const TASK_STORAGE_KEY = "reimbursement-active-submission-task:submit";
-      const THEME_STORAGE_KEY = "comeover-admin-theme";
       const IMAGE_MIME_TYPES = new Set([
         "image/jpeg", "image/png", "image/webp", "image/gif", "image/heic", "image/heif",
       ]);
@@ -620,9 +517,6 @@ body::before {
         status: document.getElementById("status"),
         resetButton: document.getElementById("resetButton"),
         submitButton: document.getElementById("submitButton"),
-        themeToggle: document.getElementById("themeToggle"),
-        themeIcon: document.getElementById("themeIcon"),
-        logoutReturnTo: document.getElementById("logoutReturnTo"),
       };
 
       function setStatus(message, isError = false) {
@@ -968,27 +862,6 @@ body::before {
         }
       }
 
-      function readSavedTheme() {
-        try {
-          const savedTheme = window.localStorage.getItem(THEME_STORAGE_KEY) ?? window.localStorage.getItem("reimbursement-admin-theme");
-          return savedTheme === "light" || savedTheme === "dark" ? savedTheme : null;
-        } catch {
-          return null;
-        }
-      }
-
-      function applyTheme(theme, persist = false) {
-        const normalized = theme === "dark" ? "dark" : "light";
-        document.documentElement.dataset.theme = normalized;
-        document.documentElement.style.colorScheme = normalized;
-        elements.themeIcon.textContent = normalized === "dark" ? "☀️" : "🌙";
-        elements.themeToggle.setAttribute("aria-label", normalized === "dark" ? "切换到浅色模式" : "切换到深色模式");
-        elements.themeToggle.setAttribute("aria-pressed", String(normalized === "dark"));
-        if (persist) {
-          try { window.localStorage.setItem(THEME_STORAGE_KEY, normalized); } catch { /* Ignore. */ }
-        }
-      }
-
       elements.form.addEventListener("submit", (event) => {
         event.preventDefault();
         void submitForm();
@@ -1032,24 +905,8 @@ body::before {
         const item = state.imageItems[Number(input.dataset.noteIndex)];
         if (item) item.note = input.value;
       });
-      const systemThemePreference = window.matchMedia("(prefers-color-scheme: dark)");
-      applyTheme(document.documentElement.dataset.theme || (systemThemePreference.matches ? "dark" : "light"));
-
-      elements.themeToggle.addEventListener("click", () => {
-        applyTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark", true);
-      });
-      window.addEventListener("storage", (event) => {
-        if (event.key === THEME_STORAGE_KEY && (event.newValue === "light" || event.newValue === "dark")) applyTheme(event.newValue);
-      });
-      systemThemePreference.addEventListener("change", (event) => {
-        if (!readSavedTheme()) {
-          applyTheme(event.matches ? "dark" : "light");
-        }
-      });
-
       async function initialize() {
         elements.sentAt.value = formatLocalDateTimeInput();
-        elements.logoutReturnTo.value = location.pathname;
         try {
           await loadOptions();
           const taskId = window.localStorage.getItem(TASK_STORAGE_KEY);
