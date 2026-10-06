@@ -2,7 +2,7 @@
 
 ## 页面与入口
 
-独立页面为 `/expense/monthly/operating`（支持尾斜杠）。报表顶部提供带箭头的「经营月报 / 支出月报」下拉切换，支出月报为现有 `/expense/monthly` 页面。两页共享切换器并保留门店、月份参数；选中项标记，支持键盘方向键、Esc 和点击空白收起。报账后台主入口位置仍待决定。
+独立页面为 `/expense/monthly/operating`（支持尾斜杠）。报表顶部提供带箭头的「支出月报 / 经营月报」下拉切换，支出月报为现有 `/expense/monthly` 页面。两页共享切换器并保留门店、月份参数；选中项标记，支持键盘方向键、Esc 和点击空白收起。报账后台主入口位置仍待决定。
 
 页面使用原生 HTML/CSS/JS，沿用报账月报的配色、门店/月份切换及深浅色偏好。没有 React、CDN 或内联脚本依赖。静态文件位于 `src/admin/public/operating/`，由现有构建流程复制。页面、资源和接口均验证 `report:view` 与 `report:monthly:view`，响应禁止缓存。
 

@@ -1,6 +1,6 @@
 # 经营及分红汇总
 
-页面 `/expense/monthly/summary`，复用顶部报表切换器，与经营月报、支出月报并列。入口默认隐藏，仅在服务端确认 `canOperatingSummary` 后显示。
+页面 `/expense/monthly/summary`，复用顶部报表切换器，与支出月报、经营月报并列。入口默认隐藏，仅在服务端确认 `canOperatingSummary` 后显示。
 
 ## 独立权限
 
