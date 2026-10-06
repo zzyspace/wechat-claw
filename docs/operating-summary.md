@@ -1,10 +1,10 @@
-# 经营及分红汇总
+# 财务汇总
 
 页面 `/expense/monthly/summary`，复用顶部报表切换器，与支出月报、经营月报并列。入口默认隐藏，仅在服务端确认 `canOperatingSummary` 后显示。
 
 ## 独立权限
 
-账号管理 → 报账后台 → **查看经营汇总**：`report:operating:summary:view`，只依赖 `report:view`，不自动授予月报查看或经营编辑权限。已有统一账号不自动添加权限；完整管理员模板仅在用户显式套用时包含新选项。旧版 Basic Auth 仍沿用管理员兼容规则。
+账号管理 → 报账后台 → **查看财务汇总**：`report:operating:summary:view`，只依赖 `report:view`，不自动授予月报查看或经营编辑权限。已有统一账号不自动添加权限；完整管理员模板仅在用户显式套用时包含新选项。旧版 Basic Auth 仍沿用管理员兼容规则。
 
 页面、自己的静态资源、选项、汇总及导出均验证此权限。报表切换器的公共资源允许月报权限或汇总权限任意一项；这不会开放其他页面的数据。每次请求重新读取账号权限，响应禁止缓存。
 
@@ -47,7 +47,7 @@
 - 电脑端：图表位于五项合计和表格之前，左侧淡渐变收支面积图，右侧盈利柱状图、成本率，以独立卡片排列。手机端只挂载选中的一张图；可切换、收起；五项合计继续隐藏。
 - 图表不显示总分红及个人分红曲线；总分红与各分红人的表格数据保持不变。金额轴以万元（或万单位所选币种）展示，提示和明细精确到分；百分比分图，使用接口的 foodRate/costRate。真实零和负数保留，空缺月份用 null 断线，不完整成本不绘制。部分范围只显示可见且完整的支出；金额和分红权限不扩大。
 - 原 API 一次读取的 rows 同时用于图表和表格，不增加数据源。筛选、加载失败、权限失效时旧图表立即卸载；表格排序不改变图表时间顺序。图表不提供单独的月份选择、单月数值或明细入口；悬停或点按图形查看提示，下方月度表格继续提供明细抽屉。合并期间根据原录入备注标记，不拆分、不生成单月环比。
-- `npm ci` 后 `npm run build` 自动完成后台/图表类型检查、esbuild 和局部 Tailwind 样式编译。图表生成到 dist，源码位于 frontend；构建依赖需要 devDependencies。没有 CDN，CSP 保持 script-src/style-src self，没有 unsafe-inline/unsafe-eval。图表资源与页面均受经营汇总权限保护。
+- `npm ci` 后 `npm run build` 自动完成后台/图表类型检查、esbuild 和局部 Tailwind 样式编译。图表生成到 dist，源码位于 frontend；构建依赖需要 devDependencies。没有 CDN，CSP 保持 script-src/style-src self，没有 unsafe-inline/unsafe-eval。图表资源与页面均受财务汇总权限保护。
 - React/Tremor 仅挂载图表区域；无 Tailwind preflight，生成的 utility 选择器限定在 #operatingCharts 内。保留深浅主题，图表无入场动画。
 - 验证：`node --test dist/admin/operating-chart-data.test.js dist/admin/operating-summary.test.js dist/admin/operating-report.test.js`。
 

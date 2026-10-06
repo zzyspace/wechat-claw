@@ -43,7 +43,7 @@ test("summary routes enforce their own permission and scoped live costs without 
   assert.equal((await request("summary","/expense/monthly/operating")).status,403);
   for(const asset of ["report-switcher.js","report-switcher.css"])assert.equal((await request("summary","/expense/monthly/"+asset)).status,200);
   const session=await (await request("summary","/expense/api/session")).json();assert.equal(session.permissions.canOperatingSummary,true);assert.equal(session.permissions.canMonthlyReport,false);assert.equal((await (await request("monthly","/expense/api/session")).json()).permissions.canOperatingSummary,false);
-  const html=await (await request("admin",page)).text();assert.doesNotMatch(html,/REPORT_ROWS|react|设计预览|data.js/);assert.match(html,/经营及分红汇总/);
+  const html=await (await request("admin",page)).text();assert.doesNotMatch(html,/REPORT_ROWS|react|设计预览|data.js/);assert.match(html,/财务汇总/);
   const db=getDatabase();
   const insert=db.prepare(`INSERT INTO reimbursement_reports(channel_code,channel_name,reporter,amount,currency,expense_category,voucher_date,voucher_date_source,note,evidence_type,confidence,needs_review,submitted_by_account_id,created_at) VALUES(@channel,'fixture','A',@amount,@currency,@category,'2026-09-01','model','fixture','text',1,0,@owner,@created)`);
   const seed=(patch:Record<string,unknown>={})=>insert.run({channel:"reimbursement_fuzzy",amount:200,currency:"CNY",category:"food",owner:"admin",created:"2026-09-15 00:00:00",...patch});

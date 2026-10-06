@@ -16,7 +16,7 @@ export function createOperatingSummaryRouter(timeZone: string) {
     const stores=monthlyStoresForScope(reportAccessScope(session)).map(({channels:_,...store})=>store);
     const store=request.query.store??stores[0]?.id,year=request.query.year??defaultYear,currency=request.query.currency??"CNY";
     if(typeof store!=="string"||store.length>30||typeof year!=="string"||typeof currency!=="string"||!currency||currency.length>100)throw new MonthlyReportValidationError("请选择有效门店、年份和币种。");
-    if(year!=="all"&&(!/^(19|20|21)\d{2}$/.test(year)||year<months.minMonth.slice(0,4)))throw new MonthlyReportValidationError(`经营汇总仅支持 ${months.minMonth} 及之后的月份。`);
+    if(year!=="all"&&(!/^(19|20|21)\d{2}$/.test(year)||year<months.minMonth.slice(0,4)))throw new MonthlyReportValidationError(`财务汇总仅支持 ${months.minMonth} 及之后的月份。`);
     const source=loadOperatingSummarySource({store,minMonth:months.minMonth,currentMonth:months.currentMonth,timeZone,scope:reportAccessScope(session)});
     if(!source){response.status(404).json({success:false,error:{message:"门店不存在或无权查看。"}});return null;}
     const options=operatingSummaryOptions(source,defaultYear);
@@ -38,7 +38,7 @@ export function createOperatingSummaryRouter(timeZone: string) {
           : row[sort as "month"|"income"|"expense"|"profit"|"dividend"|"food"|"foodRate"|"costRate"];
         summary.rows.sort((a,b)=>{const x=value(a),y=value(b);if(x===null&&y===null)return b.month.localeCompare(a.month);if(x===null)return 1;if(y===null)return -1;
           return (direction==="desc"?-1:1)*(typeof x==="string"?x.localeCompare(String(y)):x-Number(y))||b.month.localeCompare(a.month);});
-        response.set("Content-Disposition",`attachment; filename*=UTF-8''${encodeURIComponent(`${data.source.store.name}-${data.year==="all"?"全部年份":data.year}-${data.currency}-经营及分红汇总.csv`)}`);
+        response.set("Content-Disposition",`attachment; filename*=UTF-8''${encodeURIComponent(`${data.source.store.name}-${data.year==="all"?"全部年份":data.year}-${data.currency}-财务汇总.csv`)}`);
         response.type("text/csv; charset=utf-8").send(operatingSummaryCsv(summary,data.source.store.name,data.currency));return;
       }
       response.json({...metadata,year:data.year,currency:data.currency,...summary});
