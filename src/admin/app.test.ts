@@ -1029,15 +1029,23 @@ test("createApp serves reimbursement admin page, list, detail, and attachment ro
     assert.doesNotMatch(pageHtml, /item\.channelCode \? `<div class="mono muted">/);
     assert.match(pageHtml, /已加载 \$\{state\.items\.length\} 条记录，总计金额 \$\{sumLoadedAmounts\(state\.items\)\.toFixed\(2\)\} 元/);
     assert.match(pageHtml, /<th class="column-bill">附件<\/th>/);
-    assert.match(pageHtml, /id="attachmentPreviewModal"/);
-    assert.match(pageHtml, /id="attachmentPreviewPrevious"[^>]+aria-label="上一个报账的附件"/);
-    assert.match(pageHtml, /id="attachmentPreviewNext"[^>]+aria-label="下一个报账的附件"/);
-    assert.match(pageHtml, /function navigateAttachmentPreview\(direction\)/);
-    assert.match(pageHtml, /function renderAttachmentViewerInfo\(item, index, total\)/);
+    // The attachment viewer is a shared component; the page only describes its rows.
+    assert.match(pageHtml, /<script src="\/expense\/api\/attachment-viewer\.js"><\/script>/);
+    assert.match(pageHtml, /href="\/expense\/api\/attachment-viewer\.css"/);
+    assert.match(pageHtml, /ReimbursementAttachmentViewer\.create\(/);
+    assert.match(pageHtml, /title: `报账 #\$\{item\.id\} · \$\{store\}`/);
     assert.match(pageHtml, /renderCategoryTag\(item\.expenseCategory, item\.expenseCategoryLabel \|\| item\.expenseCategory \|\| "其他"\)/);
-    assert.match(pageHtml, /`报账 #\$\{item\.id\} · /);
-    assert.match(pageHtml, /id="attachmentPreviewEdit"[^>]*>编辑这条报账</);
-    assert.match(pageHtml, /id="attachmentPreviewRetry"[^>]*>重试</);
+    assert.match(pageHtml, /\{ key: "edit", label: "编辑这条报账", primary: true, visible: \(\) => state\.canEdit/);
+    const viewerSource = fs.readFileSync(path.resolve(process.cwd(), "src/admin/public/attachment-viewer.js"), "utf8");
+    assert.match(viewerSource, /id="attachmentPreviewPrevious"[^>]+aria-label="上一个报账的附件"/);
+    assert.match(viewerSource, /id="attachmentPreviewNext"[^>]+aria-label="下一个报账的附件"/);
+    assert.match(viewerSource, /id="attachmentPreviewRetry"[^>]*>重试</);
+    for (const asset of ["attachment-viewer.js", "attachment-viewer.css"]) {
+      const response = await fetch(`${server.baseUrl}/expense/api/${asset}`, { headers: createAdminAuthHeaders() });
+      assert.equal(response.status, 200);
+      assert.match(await response.text(), /attachment-viewer/);
+      assert.equal((await fetch(`${server.baseUrl}/expense/api/${asset}`)).status, 401);
+    }
     assert.match(pageHtml, /<th>金额<\/th>\s*<th>类别<\/th>\s*<th>备注<\/th>/);
     assert.match(pageHtml, /<meta name="color-scheme" content="light dark"/);
     // The top bar (switcher, theme toggle, logout) comes from admin-auth-gateway's shared shell.

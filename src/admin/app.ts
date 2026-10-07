@@ -624,6 +624,13 @@ export function createApp(input?: {
     response.sendFile(path.join(staticDir, "list-loading.js"));
   });
 
+  // Shared attachment viewer, used by the expense list and the monthly report.
+  for (const asset of ["attachment-viewer.js", "attachment-viewer.css"]) {
+    app.get(`${ADMIN_BASE_PATH}/api/${asset}`, adminAuth, requirePermission("report:view"), (_request, response) => {
+      response.sendFile(path.join(staticDir, asset));
+    });
+  }
+
   app.get([`${ADMIN_BASE_PATH}/submit`, `${ADMIN_BASE_PATH}/submit/`], adminAuth, requirePermission("report:submit"), (_request, response) => {
     response.sendFile(path.join(staticDir, "submit.html"));
   });

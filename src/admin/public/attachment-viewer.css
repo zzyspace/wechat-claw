@@ -1,0 +1,717 @@
+/*
+ * Shared reimbursement attachment viewer (attachment-viewer.js). Loaded by the expense list and the
+ * monthly report; colours fall back to each page's own tokens.
+ */
+/* Attachment viewer: full-screen dark stage, toolbar on top, report info on the right (below on phones). */
+.attachment-viewer {
+  --viewer-bg: #0b0c0f;
+  --viewer-raised: #23262d;
+  --viewer-ink: #f2f3f5;
+  --viewer-soft: #9aa0aa;
+  --viewer-line: rgba(255, 255, 255, 0.1);
+  --av-panel: var(--surface-strong, var(--surface, #ffffff));
+  --av-ink: var(--ink, #1c1c1e);
+  --av-soft: var(--ink-soft, var(--soft, #6e6e73));
+  --av-line: var(--line, rgba(60, 60, 67, 0.16));
+  --av-warn: var(--warn, #c96f00);
+  --av-brand: var(--brand, #007aff);
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  display: grid;
+  font: inherit;
+  font-size: 14px;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  background: rgba(11, 12, 15, calc(1 - var(--viewer-dismiss, 0)));
+  color: var(--viewer-ink);
+  overscroll-behavior: contain;
+}
+
+/* While pulling down to close, the controls fade out faster than the backdrop. */
+.attachment-viewer-toolbar,
+.attachment-viewer-strip,
+.attachment-viewer-info,
+.attachment-viewer-stage > button,
+.attachment-viewer-hint {
+  opacity: calc(1 - var(--viewer-dismiss, 0) * 2.5);
+}
+
+.attachment-viewer[hidden],
+.attachment-viewer [hidden] {
+  display: none !important;
+}
+
+.attachment-viewer::backdrop {
+  background: transparent;
+}
+
+.attachment-viewer *,
+.attachment-viewer *::before,
+.attachment-viewer *::after {
+  box-sizing: border-box;
+}
+
+.attachment-viewer button {
+  font: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.attachment-viewer.is-info-hidden {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.attachment-viewer.is-info-hidden .attachment-viewer-info {
+  display: none;
+}
+
+html.attachment-viewer-open {
+  overflow: hidden;
+}
+
+.attachment-viewer-main {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  min-width: 0;
+  min-height: 0;
+}
+
+.attachment-viewer-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: calc(8px + env(safe-area-inset-top, 0px)) 12px 8px;
+  border-bottom: 1px solid var(--viewer-line);
+}
+
+.attachment-viewer-heading {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+  margin-right: auto;
+}
+
+.attachment-viewer-count {
+  flex: none;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.attachment-viewer-count small {
+  color: var(--viewer-soft);
+  font-size: inherit;
+  font-weight: 500;
+}
+
+.attachment-viewer-heading h2 {
+  margin: 0;
+  overflow: hidden;
+  color: var(--viewer-soft);
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.attachment-viewer-tool {
+  flex: none;
+  min-width: 34px;
+  min-height: 34px;
+  height: 34px;
+  padding: 0 9px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--viewer-ink);
+  font-size: 13px;
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.attachment-viewer-tool:hover,
+.attachment-viewer-tool[aria-pressed="true"] {
+  background: var(--viewer-raised);
+}
+
+.attachment-viewer-tool:focus-visible,
+.attachment-viewer-nav:focus-visible,
+.attachment-viewer-notice button:focus-visible {
+  outline: 2px solid #0a84ff;
+  outline-offset: 1px;
+}
+
+.attachment-viewer-tool svg {
+  width: 18px;
+  height: 18px;
+}
+
+.attachment-viewer-zoom {
+  min-width: 56px;
+  font-variant-numeric: tabular-nums;
+}
+
+.attachment-viewer-divider {
+  flex: none;
+  width: 1px;
+  height: 20px;
+  margin: 0 4px;
+  background: var(--viewer-line);
+}
+
+.attachment-viewer-stage {
+  position: relative;
+  overflow: hidden;
+  touch-action: none;
+  user-select: none;
+  outline: none;
+}
+
+.attachment-viewer-stage::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 50% 40%, #1a1d23, var(--viewer-bg) 70%);
+  opacity: calc(1 - var(--viewer-dismiss, 0) * 2.5);
+}
+
+.attachment-viewer-strip {
+  display: flex;
+  gap: 8px;
+  padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px));
+  overflow-x: auto;
+  border-top: 1px solid var(--viewer-line);
+  scrollbar-width: thin;
+  scrollbar-color: var(--viewer-raised) transparent;
+}
+
+.attachment-viewer-strip:empty {
+  display: none;
+}
+
+.attachment-viewer-thumb {
+  position: relative;
+  flex: none;
+  width: 48px;
+  min-width: 48px;
+  height: 60px;
+  min-height: 60px;
+  padding: 0;
+  overflow: hidden;
+  border: 2px solid transparent;
+  border-radius: 8px;
+  background: var(--viewer-raised);
+  opacity: 0.55;
+  transition: opacity 0.15s, border-color 0.15s;
+}
+
+.attachment-viewer-thumb:hover {
+  border-color: transparent;
+  opacity: 0.9;
+}
+
+.attachment-viewer-thumb[aria-current="true"] {
+  border-color: #0a84ff;
+  opacity: 1;
+}
+
+.attachment-viewer-thumb:focus-visible {
+  outline: 2px solid #0a84ff;
+  outline-offset: 1px;
+}
+
+.attachment-viewer-thumb img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.attachment-viewer-thumb.needs-review::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ff9f0a;
+  box-shadow: 0 0 0 2px var(--viewer-bg);
+}
+
+.attachment-viewer-stage.can-pan {
+  cursor: grab;
+}
+
+.attachment-viewer-stage.is-panning {
+  cursor: grabbing;
+}
+
+.attachment-viewer-stage img {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  max-width: none;
+  transform-origin: center;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+  -webkit-user-drag: none;
+}
+
+.attachment-viewer-stage img:not([src]) {
+  visibility: hidden;
+}
+
+.attachment-viewer-stage.is-animating img {
+  transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.attachment-viewer-stage.is-loading #attachmentPreviewImage {
+  filter: blur(3px);
+}
+
+.attachment-viewer-progress {
+  position: absolute;
+  inset: 0 0 auto;
+  z-index: 2;
+  height: 2px;
+  overflow: hidden;
+  visibility: hidden;
+}
+
+.attachment-viewer-progress::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 40%;
+  background: #0a84ff;
+  animation: attachment-viewer-progress 1.1s ease-in-out infinite;
+}
+
+.attachment-viewer-stage.is-loading .attachment-viewer-progress {
+  visibility: visible;
+}
+
+@keyframes attachment-viewer-progress {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(250%); }
+}
+
+.attachment-viewer-chip {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  z-index: 2;
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: rgba(35, 38, 45, 0.88);
+  font-size: 12px;
+  white-space: nowrap;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.attachment-viewer-nav {
+  position: absolute;
+  top: 50%;
+  z-index: 2;
+  width: 44px;
+  min-width: 44px;
+  min-height: 64px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 12px;
+  background: rgba(35, 38, 45, 0.72);
+  color: var(--viewer-ink);
+  transform: translateY(-50%);
+}
+
+.attachment-viewer-nav:hover {
+  background: rgba(60, 64, 74, 0.92);
+}
+
+.attachment-viewer-nav[disabled] {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.attachment-viewer-nav.previous {
+  left: 14px;
+}
+
+.attachment-viewer-nav.next {
+  right: 14px;
+}
+
+.attachment-viewer-tool svg,
+.attachment-viewer-nav svg,
+.attachment-viewer-thumb img {
+  flex-shrink: 0;
+}
+
+.attachment-viewer-nav svg {
+  width: 22px;
+  height: 22px;
+}
+
+.attachment-viewer-notice {
+  position: absolute;
+  left: 50%;
+  bottom: 18px;
+  z-index: 3;
+  max-width: calc(100% - 32px);
+  padding: 9px 14px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  border-radius: 10px;
+  background: rgba(35, 38, 45, 0.95);
+  font-size: 13px;
+  transform: translateX(-50%);
+}
+
+.attachment-viewer-notice.is-error {
+  border: 1px solid rgba(255, 105, 97, 0.45);
+}
+
+.attachment-viewer-notice button {
+  flex: none;
+  white-space: nowrap;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #64b0ff;
+  font-size: 13px;
+}
+
+.attachment-viewer-hint {
+  position: absolute;
+  right: 14px;
+  bottom: 12px;
+  z-index: 1;
+  display: flex;
+  gap: 12px;
+  color: var(--viewer-soft);
+  font-size: 12px;
+  pointer-events: none;
+}
+
+.attachment-viewer-info {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  min-height: 0;
+  background: var(--av-panel);
+  color: var(--av-ink);
+  border-left: 1px solid var(--av-line);
+}
+
+.attachment-viewer-info-body {
+  display: grid;
+  align-content: start;
+  gap: 18px;
+  padding: calc(22px + env(safe-area-inset-top, 0px)) 20px 20px;
+  overflow: auto;
+}
+
+.attachment-viewer-amount {
+  display: grid;
+  gap: 4px;
+}
+
+.attachment-viewer-amount span {
+  color: var(--av-soft);
+  font-size: 12px;
+}
+
+.attachment-viewer-amount strong {
+  font-size: 32px;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+.attachment-viewer-amount strong small {
+  margin-right: 2px;
+  color: var(--av-soft);
+  font-size: 18px;
+}
+
+.attachment-viewer-amount strong.is-missing {
+  color: var(--av-warn);
+  font-size: 24px;
+}
+
+.attachment-viewer-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.attachment-viewer-tags .tag svg {
+  width: 13px;
+  height: 13px;
+  margin-right: 4px;
+}
+
+.attachment-viewer-summary {
+  display: grid;
+  gap: 18px;
+}
+
+.attachment-viewer-fields {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  font-size: 14px;
+}
+
+.attachment-viewer-fields > div {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr);
+  gap: 12px;
+}
+
+.attachment-viewer-time-short {
+  display: none;
+}
+
+.attachment-viewer-fields dt {
+  color: var(--av-soft);
+}
+
+.attachment-viewer-fields dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.attachment-viewer-actions {
+  display: grid;
+  gap: 8px;
+  padding: 14px 20px calc(14px + env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid var(--av-line);
+}
+
+.attachment-viewer-action {
+  min-height: 40px;
+  padding: 0 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--av-line);
+  border-radius: 14px;
+  background: var(--av-panel);
+  color: var(--av-ink);
+  font-weight: 700;
+}
+
+.attachment-viewer-action:hover {
+  border-color: var(--av-soft);
+}
+
+.attachment-viewer-action.is-primary {
+  border-color: var(--av-brand);
+  background: var(--av-brand);
+  color: #ffffff;
+}
+
+.attachment-viewer-action:focus-visible {
+  outline: 2px solid var(--av-brand);
+  outline-offset: 2px;
+}
+
+.attachment-viewer-muted {
+  color: var(--av-soft);
+}
+
+@media (hover: none) {
+  .attachment-viewer-hint {
+    display: none;
+  }
+}
+
+@media (max-width: 860px) {
+  .attachment-viewer,
+  .attachment-viewer.is-info-hidden {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) auto;
+  }
+
+  .attachment-viewer.is-info-hidden .attachment-viewer-info {
+    display: grid;
+  }
+
+  .attachment-viewer-info {
+    max-height: 42vh;
+    border-left: 0;
+    border-top: 1px solid var(--av-line);
+  }
+
+  .attachment-viewer-info-body {
+    padding-top: 16px;
+    gap: 12px;
+  }
+
+  .attachment-viewer-actions {
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 1fr);
+    padding-top: 10px;
+  }
+
+  .attachment-viewer-hint,
+  .attachment-viewer-tool-label,
+  [data-viewer-tool="info"] {
+    display: none;
+  }
+
+  .attachment-viewer-nav {
+    width: 36px;
+    min-width: 36px;
+    min-height: 52px;
+  }
+
+  .attachment-viewer-nav.previous { left: 6px; }
+  .attachment-viewer-nav.next { right: 6px; }
+}
+
+@media (max-width: 620px) {
+  .attachment-viewer-toolbar {
+    padding-inline: 6px;
+    gap: 0;
+  }
+
+  .attachment-viewer-heading h2,
+  .attachment-viewer-divider,
+  .attachment-viewer-strip,
+  [data-viewer-tool="zoom-out"],
+  [data-viewer-tool="zoom-in"] {
+    display: none;
+  }
+
+  /* Phones: amount and tags on one line, store · reporter · time on the next, then the note. */
+  .attachment-viewer-info-body {
+    gap: 6px;
+    padding: 10px 16px 8px;
+  }
+
+  .attachment-viewer-summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+
+  .attachment-viewer-amount span {
+    display: none;
+  }
+
+  .attachment-viewer-amount strong,
+  .attachment-viewer-amount strong.is-missing {
+    font-size: 22px;
+    white-space: nowrap;
+  }
+
+  .attachment-viewer-amount strong small {
+    font-size: 14px;
+  }
+
+  .attachment-viewer-tags {
+    flex-wrap: nowrap;
+    justify-content: flex-end;
+    min-width: 0;
+  }
+
+  .attachment-viewer-tags .tag {
+    min-height: 24px;
+    padding: 0 8px;
+    white-space: nowrap;
+  }
+
+  .attachment-viewer-fields {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 2px 0;
+    color: var(--av-soft);
+    font-size: 13px;
+  }
+
+  .attachment-viewer-fields > div {
+    display: block;
+    min-width: 0;
+  }
+
+  .attachment-viewer-fields > div:not(.attachment-viewer-note) dd {
+    display: inline;
+    white-space: nowrap;
+  }
+
+  .attachment-viewer-fields dt {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  .attachment-viewer-fields > div:not(.attachment-viewer-note) + div:not(.attachment-viewer-note)::before {
+    content: "·";
+    margin: 0 6px;
+  }
+
+  .attachment-viewer-time-full {
+    display: none;
+  }
+
+  .attachment-viewer-time-short {
+    display: inline;
+  }
+
+  .attachment-viewer-note {
+    flex-basis: 100%;
+    color: var(--av-ink);
+  }
+
+  .attachment-viewer-note.is-empty {
+    display: none !important;
+  }
+
+  .attachment-viewer-note dd {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    white-space: normal;
+  }
+
+  .attachment-viewer-actions {
+    gap: 8px;
+    padding: 8px 18px max(24px, calc(env(safe-area-inset-bottom, 0px) + 12px));
+    border-top: 0;
+  }
+
+  .attachment-viewer-action {
+    min-height: 40px;
+    font-size: 14px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .attachment-viewer-stage.is-animating img { transition: none; }
+  .attachment-viewer-progress::before { animation-duration: 3s; }
+}

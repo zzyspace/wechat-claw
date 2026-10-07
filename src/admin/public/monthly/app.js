@@ -5,7 +5,7 @@
   const MONTH_PATTERN = /^(19|20|21)\d{2}-(0[1-9]|1[0-2])$/;
   const minMonth = () => s.options?.minMonth || '2026-09';
   const allowedMonth = month => MONTH_PATTERN.test(month || '') && month >= minMonth();
-  const s = { sourceSerial:0, editSerial:0, sourceSaving:false, sourceChanged:false, options: null, data: null, store: '', month: '', currency: 'CNY', reporter: '', query: '', loading: true, error: '', serial: 0, group: null, details: [], detailTotal: 0, detailLoading: false, detailError: '', detailSerial: 0, canAttachment: false, attachments: [], attachmentIndex: 0 };
+  const s = { sourceSerial:0, editSerial:0, sourceSaving:false, sourceChanged:false, options: null, data: null, store: '', month: '', currency: 'CNY', reporter: '', query: '', loading: true, error: '', serial: 0, group: null, details: [], detailTotal: 0, detailLoading: false, detailError: '', detailSerial: 0, canAttachment: false };
   const icons = {receipt:'M6 3h12v18l-3-2-3 2-3-2-3 2V3Zm3 5h6m-6 4h6',left:'m14 6-6 6 6 6',right:'m9 6 6 6-6 6',calendar:'M4 5h16v16H4V5Zm0 5h16M8 3v4m8-4v4',search:'M21 21l-5-5M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16',download:'M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5',moon:'M20 15A9 9 0 0 1 9 3a9 9 0 1 0 11 12Z',sun:'M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5',close:'m6 6 12 12M6 18 18 6',info:'M12 11v6m0-10v.1M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0',store:'M4 10v11h16V10M3 10l2-7h14l2 7M9 21v-7h6v7M3 10c0 4 6 4 6 0 0 4 6 4 6 0 0 4 6 4 6 0'};
   const icon = name => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${icons[name] || ''}"/></svg>`;
   const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -36,6 +36,35 @@
     const fields = Object.fromEntries(parts.map(p => [p.type, p.value]));
     return `<time class="column-created-at-value" datetime="${esc(date.toISOString())}"><span class="column-created-at-date">${fields.year}-${fields.month}-${fields.day}</span><span class="column-created-at-time">${fields.hour}:${fields.minute}:${fields.second}</span></time>`;
   }
+  function createdAtText(value) {
+    const date = new Date(value.includes('T') ? value : value.replace(' ', 'T') + 'Z');
+    if (!Number.isFinite(date.getTime())) return { full: '—', short: '—' };
+    const parts = new Intl.DateTimeFormat('en-CA', { timeZone: s.options?.timeZone || 'Asia/Shanghai', year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23' }).formatToParts(date);
+    const f = Object.fromEntries(parts.map(p => [p.type, p.value]));
+    return { full: `${f.year}-${f.month}-${f.day} ${f.hour}:${f.minute}:${f.second}`, short: `${f.month}/${f.day} ${f.hour}:${f.minute}` };
+  }
+  // Bill images open in the shared attachment viewer (/expense/api/attachment-viewer.js), as on the expense list.
+  const viewableRecords = () => s.canAttachment ? s.details.filter(r => r.billAttachment?.exists) : [];
+  const attachmentViewer = ReimbursementAttachmentViewer.create({
+    modal: true,
+    getItems: viewableRecords,
+    keyOf: r => r.id,
+    attachmentIdOf: r => r.billAttachment.id,
+    describe: r => {
+      const missing = r.amount === null || r.amount === undefined || !Number.isFinite(Number(r.amount));
+      const time = createdAtText(r.createdAt);
+      const store = s.data?.store?.name || '';
+      return {
+        title: `报账 #${r.id}${store ? ` · ${store}` : ''}`,
+        alt: `${r.reporter || '报账人'}的报账附件`,
+        amount: { missing, currency: String(r.currency || 'CNY').trim().toUpperCase(), text: missing ? '' : Number(r.amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) },
+        tagsHtml: category({ code: r.expenseCategory, label: r.expenseCategoryLabel }),
+        store, reporter: r.reporter, createdAt: time.full, createdAtShort: time.short, note: r.note,
+      };
+    },
+    isBlocked: () => $('sourceReportDialog').open || $('sourceEditDialog').open,
+    actions: [{ key: 'detail', label: '查看详情', primary: true, run: r => { void openSourceReport(r.id); } }],
+  });
   // The shared top bar (admin-theme.js) owns the theme; redraw when it changes.
   document.addEventListener('admin-themechange', () => render());
   async function json(url, signal) {
@@ -88,7 +117,7 @@
     finally { if(serial===s.serial){s.loading=false;render();} }
   }
   function closeDialog(id) { if((id==='sourceEditDialog'||id==='sourceReportDialog')&&s.sourceSaving)return; if($(id).open)$(id).close(); }
-  function modalTop(title,id,label) { return `<div class="drawer-inner"><div class="drawer-top"><span>${esc(label)}</span><button class="icon-button" data-close="${id}" aria-label="关闭面板">${icon('close')}</button></div><h2 id="${id==='detailDialog'?'detailTitle':id==='rulesDialog'?'rulesTitle':'attachmentTitle'}">${esc(title)}</h2>`; }
+  function modalTop(title,id,label) { return `<div class="drawer-inner"><div class="drawer-top"><span>${esc(label)}</span><button class="icon-button" data-close="${id}" aria-label="关闭面板">${icon('close')}</button></div><h2 id="${id==='detailDialog'?'detailTitle':id==='rulesDialog'?'rulesTitle':'drawerTitle'}">${esc(title)}</h2>`; }
   function showDialog(id) { $(id).showModal(); document.body.classList.add('dialog-open'); }
   function mobileDetailRecord(record) {
     const value = record.amount;
@@ -116,18 +145,12 @@
       const data=await json(`${API}/details?${params({projectId:g.projectId,reporter:g.reporter,currency:g.currency,offset:String(s.details.length),limit:'50'})}`,s.detailAbort.signal);
       if(serial!==s.detailSerial||!s.group)return;
       s.details.push(...data.items);s.detailTotal=data.total;s.canAttachment=data.canAttachment;
-      s.attachments=s.details.filter(r=>data.canAttachment&&r.billAttachment?.exists).map(r=>({id:r.billAttachment.id,reporter:r.reporter}));
     }catch(error){if(serial===s.detailSerial&&error.name!=='AbortError')s.detailError=error.message;}
-    finally{if(serial===s.detailSerial&&s.group){s.detailLoading=false;renderDetail();}}
+    finally{if(serial===s.detailSerial&&s.group){s.detailLoading=false;renderDetail();attachmentViewer.sync();}}
   }
   function openDetail(index) {
     s.group=filteredGroups()[index];if(!s.group)return;
-    s.details=[];s.detailTotal=s.group.recordCount;s.detailLoading=false;s.detailError='';s.attachments=[];s.canAttachment=s.options.canAttachment;renderDetail();showDialog('detailDialog');loadDetails();
-  }
-  function renderAttachment() {
-    const a=s.attachments[s.attachmentIndex];if(!a)return;
-    $('attachmentDialog').innerHTML=modalTop('附件预览','attachmentDialog','报账附件')+`<div class="attachment-preview-meta"><span>${esc(a.reporter)}</span><span>${s.attachmentIndex+1} / ${s.attachments.length}</span></div><div class="attachment-preview-stage"><button class="attachment-preview-nav previous" data-action="prevAttachment" aria-label="上一个附件" ${s.attachmentIndex===0?'disabled':''}>${icon('left')}</button><img src="/expense/api/attachments/${a.id}/content" alt="报账附件"><button class="attachment-preview-nav next" data-action="nextAttachment" aria-label="下一个附件" ${s.attachmentIndex===s.attachments.length-1?'disabled':''}>${icon('right')}</button></div><p class="attachment-error" role="alert" hidden>附件无法加载，可能已被清理或无权访问。</p></div>`;
-    $('attachmentDialog').querySelector('img').addEventListener('error',()=>{$('attachmentDialog').querySelector('.attachment-error').hidden=false;});
+    s.details=[];s.detailTotal=s.group.recordCount;s.detailLoading=false;s.detailError='';s.canAttachment=s.options.canAttachment;renderDetail();showDialog('detailDialog');loadDetails();
   }
   function sourceShell(title, body) {
     return `<div class="detail-dialog"><div class="detail-grip"></div><div class="detail-topbar"><h2 id="sourceReportDialogTitle">${esc(title)}</h2><button id="sourceReportDialogClose" data-close="sourceReportDialog" aria-label="关闭报账详情">${icon('close')}</button></div><div class="detail-scroll" id="sourceReportScroll">${body}</div></div>`;
@@ -261,7 +284,7 @@
     if(target.dataset.close){closeDialog(target.dataset.close);return;}
     if(target.dataset.store){s.store=target.dataset.store;clearFilters();loadSummary();return;}
     if(target.dataset.group!==undefined){openDetail(Number(target.dataset.group));return;}
-    if(target.dataset.attachment){s.attachmentIndex=s.attachments.findIndex(a=>a.id===Number(target.dataset.attachment));if(s.attachmentIndex>=0){s.attachmentFocus=target;renderAttachment();showDialog('attachmentDialog');}return;}
+    if(target.dataset.attachment){const record=viewableRecords().find(r=>r.billAttachment.id===Number(target.dataset.attachment));if(record)attachmentViewer.open(record.id);return;}
     switch(target.dataset.action){
       case 'prevMonth':case 'nextMonth':{const [y,m]=s.month.split('-').map(Number),date=new Date(y,m-1+(target.dataset.action==='prevMonth'?-1:1),1),month=`${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}`;if(!allowedMonth(month))return;s.month=month;clearFilters();loadSummary();break;}
       case 'clear':clearFilters();render();break;
@@ -269,19 +292,16 @@
       case 'retry':s.options&&s.store?loadSummary():init();break;
       case 'more':loadDetails();break;
       case 'export':exportReport(target);break;
-      case 'prevAttachment':s.attachmentIndex--;renderAttachment();break;
-      case 'nextAttachment':s.attachmentIndex++;renderAttachment();break;
     }
   });
   document.addEventListener('submit',event=>{if(event.target.id==='sourceEditForm')void saveSourceEdit(event);});
-  for(const id of ['detailDialog','rulesDialog','attachmentDialog','sourceReportDialog','sourceEditDialog']){
+  for(const id of ['detailDialog','rulesDialog','sourceReportDialog','sourceEditDialog']){
     $(id).addEventListener('cancel',event=>{if((id==='sourceEditDialog'||id==='sourceReportDialog')&&s.sourceSaving)event.preventDefault();});
     $(id).addEventListener('click',e=>{if(e.target===$(id)){if(id==='sourceReportDialog'){closeDialog(id);return;}const r=$(id).getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)closeDialog(id);}});
     $(id).addEventListener('close',()=>{
       if(id==='sourceReportDialog'){s.sourceSerial++;s.sourceAbort?.abort();const changed=s.sourceChanged;s.sourceChanged=false;s.sourceReport=null;closeDialog('sourceEditDialog');s.sourceReturnFocus?.focus({preventScroll:true});if(changed)void refreshAfterSourceEdit();}
       if(id==='sourceEditDialog'){s.editSerial++;if($('sourceReportDialog').open)$('sourceReportDialog').querySelector('[data-detail-edit]')?.focus({preventScroll:true});}
-      if(id==='detailDialog'){s.group=null;s.detailSerial++;s.detailAbort?.abort();s.detailLoading=false;closeDialog('attachmentDialog');closeDialog('sourceReportDialog');}
-      if(id==='attachmentDialog'&&$('detailDialog').open)s.attachmentFocus?.focus({preventScroll:true});
+      if(id==='detailDialog'){s.group=null;s.detailSerial++;s.detailAbort?.abort();s.detailLoading=false;attachmentViewer.close();closeDialog('sourceReportDialog');}
       if(!document.querySelector('dialog[open]'))document.body.classList.remove('dialog-open');
     });
   }

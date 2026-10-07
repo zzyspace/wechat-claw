@@ -8,6 +8,8 @@ import sharp from "sharp";
 // Isolated browser fixture: no application database, credentials or external requests.
 const html = await fs.readFile(new URL("../src/admin/public/admin.html", import.meta.url));
 const script = await fs.readFile(new URL("../src/admin/public/list-loading.js", import.meta.url));
+const viewerScript = await fs.readFile(new URL("../src/admin/public/attachment-viewer.js", import.meta.url));
+const viewerStyles = await fs.readFile(new URL("../src/admin/public/attachment-viewer.css", import.meta.url));
 const thumbnail = await sharp({ create: { width: 240, height: 180, channels: 3, background: "#3388aa" } }).webp().toBuffer();
 const requests = [];
 let activeImages = 0;
@@ -20,6 +22,8 @@ const server = createServer((request, response) => {
   const json = (value) => { response.setHeader("Content-Type", "application/json"); response.end(JSON.stringify(value)); };
   if (url.pathname === "/expense") { response.setHeader("Content-Type", "text/html"); response.end(html); }
   else if (url.pathname === "/expense/api/list-loading.js") { response.setHeader("Content-Type", "text/javascript"); response.end(script); }
+  else if (url.pathname === "/expense/api/attachment-viewer.js") { response.setHeader("Content-Type", "text/javascript"); response.end(viewerScript); }
+  else if (url.pathname === "/expense/api/attachment-viewer.css") { response.setHeader("Content-Type", "text/css"); response.end(viewerStyles); }
   else if (url.pathname === "/auth/api/session") json({ apps: ["expense"] });
   else if (url.pathname === "/expense/api/session") json({ success: true, account: { role: "partner", username: "fixture" }, permissions: { canWrite: false, canAttachment: true, canSubmit: false } });
   else if (url.pathname === "/expense/api/reports") {

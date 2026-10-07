@@ -67,6 +67,12 @@ test("monthly page, API, details, export and assets enforce explicit permission 
   }
   const page=await request("all","/expense/monthly");assert.equal(page.status,200);assert.match(page.headers.get("content-security-policy")||"",/script-src 'self'/);assert.doesNotMatch(await page.text(),/示例|react|unpkg/);
   assert.equal((await request("all","/expense/monthly/app.js")).status,200);
+  // The monthly page opens bill images in the shared attachment viewer.
+  const monthlyHtml=await (await request("all","/expense/monthly")).text();
+  assert.match(monthlyHtml,/<script src="\/expense\/api\/attachment-viewer\.js" defer><\/script><script src="\/expense\/monthly\/app\.js" defer>/);
+  assert.match(monthlyHtml,/href="\/expense\/api\/attachment-viewer\.css"/);
+  assert.doesNotMatch(monthlyHtml,/attachmentDialog/);
+  for(const asset of ["attachment-viewer.js","attachment-viewer.css"])assert.equal((await request("all","/expense/api/"+asset)).status,200,asset);
   const options=await (await request("owner",api+"/options")).json();assert.equal(options.stores.length,1);assert.equal(options.stores[0].partial,true);
   const expectedMonths=getMonthlyMonthSelection("Asia/Shanghai");
   for(const field of ["minMonth","defaultMonth","currentMonth"] as const)assert.equal(options[field],expectedMonths[field]);

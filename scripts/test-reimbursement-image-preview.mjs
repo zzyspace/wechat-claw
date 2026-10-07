@@ -8,6 +8,8 @@ import sharp from "sharp";
 // Local fixture only: no application database, credentials or production attachments.
 const html = await fs.readFile(new URL("../src/admin/public/admin.html", import.meta.url));
 const script = await fs.readFile(new URL("../src/admin/public/list-loading.js", import.meta.url));
+const viewerScript = await fs.readFile(new URL("../src/admin/public/attachment-viewer.js", import.meta.url));
+const viewerStyles = await fs.readFile(new URL("../src/admin/public/attachment-viewer.css", import.meta.url));
 const thumbnail = await sharp({ create: { width: 120, height: 240, channels: 3, background: "#3388aa" } }).webp().toBuffer();
 const original = await sharp({ create: { width: 480, height: 960, channels: 3, background: "#cc6644" } }).png().toBuffer();
 const requests = [];
@@ -21,6 +23,8 @@ const server = createServer((request, response) => {
   const json = (value) => send("application/json", JSON.stringify(value));
   if (url.pathname === "/expense") send("text/html", html);
   else if (url.pathname === "/expense/api/list-loading.js") send("text/javascript", script);
+  else if (url.pathname === "/expense/api/attachment-viewer.js") send("text/javascript", viewerScript);
+  else if (url.pathname === "/expense/api/attachment-viewer.css") send("text/css", viewerStyles);
   else if (url.pathname === "/auth/api/session") json({ apps: ["expense"] });
   else if (url.pathname === "/expense/api/session") json({ success: true, account: { role: "partner", username: "fixture" }, permissions: { canWrite: false, canAttachment: true, canSubmit: false } });
   else if (url.pathname === "/expense/api/reports") json({ success: true, total: 6, limit: 200, offset: 0, timeZone: "Asia/Shanghai",
@@ -195,11 +199,11 @@ try {
   await shown(2, 480);
   assert.match((await state()).transform, /rotate\(90deg\)/, "rotation is remembered per attachment");
   const strip = () => page.$$eval(".attachment-viewer-thumb", (thumbs) => thumbs.map((thumb) => ({
-    id: Number(thumb.dataset.viewerReportId), current: thumb.getAttribute("aria-current") === "true",
+    id: Number(thumb.dataset.viewerKey), current: thumb.getAttribute("aria-current") === "true",
   })));
   assert.deepEqual((await strip()).map((thumb) => thumb.id), [1, 2, 3, 4, 5, 6]);
   assert.equal((await strip()).find((thumb) => thumb.current).id, 2);
-  await page.click('.attachment-viewer-thumb[data-viewer-report-id="4"]');
+  await page.click('.attachment-viewer-thumb[data-viewer-key="4"]');
   await shown(4, 480);
   assert.equal((await strip()).find((thumb) => thumb.current).id, 4);
   await page.keyboard.press("Escape");
@@ -221,7 +225,7 @@ try {
   release(mobile);
   await shown(6, 480);
   assert.equal(await page.$$eval(".attachment-viewer-thumb", (thumbs) => thumbs.length), 0, "no strip on phones");
-  assert.equal(await page.evaluate(() => attachmentRotations.get(2)), 90, "rotation survives a reload");
+  assert.equal(await page.evaluate(() => attachmentPreview.rotation(2)), 90, "rotation survives a reload");
 
   phase = "touch gestures";
   // Synthetic touch pointers, positioned relative to the stage centre.
@@ -239,7 +243,24 @@ try {
   const zoomScale = () => page.$eval("#attachmentPreviewImage", (img) => Number(/scale\(([\d.]+)\)/.exec(img.style.transform)[1]));
   await swipe(-120, 0);
   await page.waitForFunction(() => document.getElementById("attachmentPreviewNoticeText").textContent.includes("最后一张"));
-  await swipe(120, 0);
+  // Photo-style carousel: the neighbour follows the finger and becomes the current image without reloading.
+  await touch("pointerdown", 1, 0, 0);
+  for (const x of [30, 70, 120]) await touch("pointermove", 1, x, 0);
+  const carousel = await page.evaluate(() => {
+    const sides = [...document.querySelectorAll(".attachment-viewer-side")];
+    const stage = document.getElementById("attachmentPreviewStage").getBoundingClientRect();
+    sides.forEach((side) => { side.__carouselMarker = true; });
+    return sides.map((side) => {
+      const rect = side.getBoundingClientRect();
+      return { left: rect.left - stage.left, right: rect.right - stage.left, width: stage.width };
+    });
+  });
+  assert.equal(carousel.length, 1, "only the previous attachment exists beside the last one");
+  assert.ok(carousel[0].right > 0 && carousel[0].right < 120, "the previous attachment peeks in from the left while dragging");
+  await touch("pointerup", 1, 120, 0);
+  await page.waitForFunction(() => document.getElementById("attachmentPreviewImage").__carouselMarker === true &&
+    document.getElementById("attachmentPreviewTitle").textContent.includes("报账 #5 "));
+  assert.equal(await page.$$eval(".attachment-viewer-side", (sides) => sides.length), 0);
   release(await nextOriginal(5));
   await shown(5, 480);
   await touch("pointerdown", 1, -20, 0);
@@ -259,7 +280,7 @@ try {
   await swipe(0, 200);
   assert.equal(await page.$eval("#attachmentPreviewModal", (modal) => modal.hidden), true, "pulling down closes");
   assert.deepEqual(errors, []);
-  console.log(JSON.stringify({ passed: true, cachedPlaceholder: "passed", originalReplacement: "passed", listResetOwnership: "passed", rapidSwitch: "passed", closeDuringDecode: "passed", originalFailure: "passed", retry: "passed", preloadAndControls: "passed", filmstrip: "passed", touchGestures: "passed", savedRotation: "passed", mobileUncachedPlaceholder: "passed" }, null, 2));
+  console.log(JSON.stringify({ passed: true, cachedPlaceholder: "passed", originalReplacement: "passed", listResetOwnership: "passed", rapidSwitch: "passed", closeDuringDecode: "passed", originalFailure: "passed", retry: "passed", preloadAndControls: "passed", filmstrip: "passed", touchGestures: "passed", carousel: "passed", savedRotation: "passed", mobileUncachedPlaceholder: "passed" }, null, 2));
 } finally {
   for (const entry of originals) entry.response.destroy();
   await browser?.close();
