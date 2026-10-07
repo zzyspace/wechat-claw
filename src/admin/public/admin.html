@@ -1447,6 +1447,8 @@
       }
 
       .attachment-viewer-notice button {
+        flex: none;
+        white-space: nowrap;
         min-height: 0;
         padding: 0;
         border: 0;
@@ -1524,12 +1526,26 @@
         margin-right: 4px;
       }
 
+      .attachment-viewer-summary {
+        display: grid;
+        gap: 18px;
+      }
+
       .attachment-viewer-fields {
         display: grid;
-        grid-template-columns: 64px minmax(0, 1fr);
-        gap: 10px 12px;
+        gap: 10px;
         margin: 0;
         font-size: 14px;
+      }
+
+      .attachment-viewer-fields > div {
+        display: grid;
+        grid-template-columns: 64px minmax(0, 1fr);
+        gap: 12px;
+      }
+
+      .attachment-viewer-time-short {
+        display: none;
       }
 
       .attachment-viewer-fields dt {
@@ -1620,8 +1636,112 @@
           display: none;
         }
 
-        .attachment-viewer-amount strong {
-          font-size: 26px;
+        /* Phones: amount and tags on one line, store · reporter · time on the next, then the note. */
+        .attachment-viewer-info-body {
+          gap: 6px;
+          padding: 10px 16px 8px;
+        }
+
+        .attachment-viewer-summary {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 10px;
+        }
+
+        .attachment-viewer-amount span {
+          display: none;
+        }
+
+        .attachment-viewer-amount strong,
+        .attachment-viewer-amount strong.is-missing {
+          font-size: 22px;
+          white-space: nowrap;
+        }
+
+        .attachment-viewer-amount strong small {
+          font-size: 14px;
+        }
+
+        .attachment-viewer-tags {
+          flex-wrap: nowrap;
+          justify-content: flex-end;
+          min-width: 0;
+        }
+
+        .attachment-viewer-tags .tag {
+          min-height: 24px;
+          padding: 0 8px;
+          white-space: nowrap;
+        }
+
+        .attachment-viewer-fields {
+          display: flex;
+          flex-wrap: wrap;
+          align-items: baseline;
+          gap: 2px 0;
+          color: var(--ink-soft);
+          font-size: 13px;
+        }
+
+        .attachment-viewer-fields > div {
+          display: block;
+          min-width: 0;
+        }
+
+        .attachment-viewer-fields > div:not(.attachment-viewer-note) dd {
+          display: inline;
+          white-space: nowrap;
+        }
+
+        .attachment-viewer-fields dt {
+          position: absolute;
+          width: 1px;
+          height: 1px;
+          overflow: hidden;
+          clip: rect(0 0 0 0);
+          white-space: nowrap;
+        }
+
+        .attachment-viewer-fields > div:not(.attachment-viewer-note) + div:not(.attachment-viewer-note)::before {
+          content: "·";
+          margin: 0 6px;
+        }
+
+        .attachment-viewer-time-full {
+          display: none;
+        }
+
+        .attachment-viewer-time-short {
+          display: inline;
+        }
+
+        .attachment-viewer-note {
+          flex-basis: 100%;
+          color: var(--ink);
+        }
+
+        .attachment-viewer-note.is-empty {
+          display: none !important;
+        }
+
+        .attachment-viewer-note dd {
+          display: -webkit-box;
+          overflow: hidden;
+          -webkit-box-orient: vertical;
+          -webkit-line-clamp: 2;
+          white-space: normal;
+        }
+
+        .attachment-viewer-actions {
+          gap: 8px;
+          padding: 8px 16px calc(8px + env(safe-area-inset-bottom, 0px));
+          border-top: 0;
+        }
+
+        .attachment-viewer-actions button {
+          min-height: 38px;
+          font-size: 14px;
         }
       }
 
@@ -4108,6 +4228,18 @@
         image.draggable = false;
         elements.attachmentPreviewImage.replaceWith(image);
         elements.attachmentPreviewImage = image;
+        const enterFrom = attachmentViewer.enterFrom;
+        attachmentViewer.enterFrom = 0;
+        if (enterFrom && image.getAttribute("src")) {
+          // After a swipe, the next image slides in from the side the finger moved away from.
+          setAttachmentViewerOffset(enterFrom, 0);
+          layoutAttachmentViewer();
+          image.getBoundingClientRect();
+          animateAttachmentViewer();
+          setAttachmentViewerOffset(0, 0);
+          applyAttachmentViewerTransform();
+          return;
+        }
         layoutAttachmentViewer();
       }
 
@@ -4116,6 +4248,9 @@
         clearAttachmentPreviewRequest();
         hideAttachmentViewerNotice();
         endAttachmentViewerDrag();
+        window.clearTimeout(attachmentViewer.slideTimer);
+        attachmentViewer.sliding = false;
+        attachmentViewer.enterFrom = 0;
         elements.attachmentPreviewModal.hidden = true;
         document.documentElement.classList.remove("attachment-viewer-open");
         const empty = new Image();
@@ -4148,16 +4283,18 @@
         elements.attachmentPreviewCount.innerHTML = `${index + 1} <small>/ ${total}</small>`;
         elements.attachmentPreviewTitle.textContent = `报账 #${item.id} · ${STORE_LABELS_BY_CHANNEL_CODE.get(String(item.channelCode || "").trim()) || item.channelName || ""}`;
         elements.attachmentPreviewInfoBody.innerHTML = `
-          <div class="attachment-viewer-amount"><span>报账金额</span>${amount}</div>
-          <div class="attachment-viewer-tags">
-            ${renderCategoryTag(item.expenseCategory, item.expenseCategoryLabel || item.expenseCategory || "其他")}
-            <span class="tag ${item.needsReview ? "warn" : "ok"}">${desktopReportIcon(item.needsReview ? "review" : "check")}${item.needsReview ? "需复核" : "已确认"}</span>
+          <div class="attachment-viewer-summary">
+            <div class="attachment-viewer-amount"><span>报账金额</span>${amount}</div>
+            <div class="attachment-viewer-tags">
+              ${renderCategoryTag(item.expenseCategory, item.expenseCategoryLabel || item.expenseCategory || "其他")}
+              <span class="tag ${item.needsReview ? "warn" : "ok"}">${desktopReportIcon(item.needsReview ? "review" : "check")}${item.needsReview ? "需复核" : "已确认"}</span>
+            </div>
           </div>
           <dl class="attachment-viewer-fields">
-            <dt>门店</dt><dd>${renderStoreCell(item)}</dd>
-            <dt>报账人</dt><dd>${escapeHtml(item.reporter || "未填写")}</dd>
-            <dt>提交时间</dt><dd>${escapeHtml(formatTimestamp(item.createdAt))}</dd>
-            <dt>备注</dt><dd>${note ? escapeHtml(note) : '<span class="muted">无</span>'}</dd>
+            <div><dt>门店</dt><dd>${renderStoreCell(item)}</dd></div>
+            <div><dt>报账人</dt><dd>${escapeHtml(item.reporter || "未填写")}</dd></div>
+            <div><dt>提交时间</dt><dd><span class="attachment-viewer-time-full">${escapeHtml(formatTimestamp(item.createdAt))}</span><span class="attachment-viewer-time-short">${escapeHtml(formatMobileCreatedAt(item.createdAt))}</span></dd></div>
+            <div class="attachment-viewer-note${note ? "" : " is-empty"}"><dt>备注</dt><dd>${note ? escapeHtml(note) : '<span class="muted">无</span>'}</dd></div>
           </dl>
         `;
         elements.attachmentPreviewEdit.hidden = !state.canEdit;
@@ -4200,6 +4337,7 @@
           elements.attachmentPreviewLoading.hidden = true;
           if (entry.status === "ready") {
             entry.image.alt = alt;
+            request.originalShown = true;
             setAttachmentPreviewImage(entry.image);
             if (request.thumbnailUrl) {
               URL.revokeObjectURL(request.thumbnailUrl);
@@ -4207,6 +4345,7 @@
             }
           } else {
             // Keep the thumbnail visible when the original cannot be loaded or decoded.
+            request.showPlaceholder?.();
             showAttachmentViewerNotice("原图加载失败，当前显示的是缩略图", { retry: true });
           }
           preloadAttachmentNeighbours(item.id);
@@ -4223,7 +4362,13 @@
             if (elements.attachmentPreviewImage === placeholder) layoutAttachmentViewer();
           });
           placeholder.src = request.thumbnailUrl || thumbnailSrc;
-          setAttachmentPreviewImage(placeholder);
+          // The previous image stays on screen until the thumbnail is decoded, so switching never flashes blank.
+          request.showPlaceholder = () => {
+            request.showPlaceholder = null;
+            if (state.attachmentPreviewRequest !== request || request.originalShown) return;
+            setAttachmentPreviewImage(placeholder);
+          };
+          placeholder.decode().then(() => request.showPlaceholder?.(), () => request.showPlaceholder?.());
           if (entry.status === "error") {
             showOriginal();
           } else {
@@ -4500,7 +4645,7 @@
           const direction = gesture.dx < 0 ? 1 : -1;
           if (Math.abs(gesture.dx) >= ATTACHMENT_SWIPE_DISTANCE) {
             if (attachmentViewerHasNeighbour(direction)) {
-              navigateAttachmentPreview(direction);
+              slideToAttachmentNeighbour(direction);
               return;
             }
             navigateAttachmentPreview(direction);
@@ -4512,6 +4657,26 @@
         animateAttachmentViewer();
         setAttachmentViewerOffset(0, 0);
         applyAttachmentViewerTransform();
+      }
+
+      // Slide the current image out, then open the neighbour, which slides in from the opposite side.
+      function slideToAttachmentNeighbour(direction) {
+        const stageWidth = elements.attachmentPreviewStage.clientWidth;
+        const image = elements.attachmentPreviewImage.getBoundingClientRect();
+        // Just far enough for the image to leave the stage; the next one starts entering as it does.
+        const distance = (stageWidth + image.width) / 2 + 8;
+        attachmentViewer.sliding = true;
+        animateAttachmentViewer();
+        setAttachmentViewerOffset(-direction * distance, 0);
+        applyAttachmentViewerTransform();
+        window.clearTimeout(attachmentViewer.slideTimer);
+        attachmentViewer.slideTimer = window.setTimeout(() => {
+          attachmentViewer.sliding = false;
+          if (elements.attachmentPreviewModal.hidden) return;
+          setAttachmentPreviewImage(new Image());
+          attachmentViewer.enterFrom = direction * stageWidth * 0.75;
+          navigateAttachmentPreview(direction);
+        }, 120);
       }
 
       function renderDetail(report) {
@@ -5597,6 +5762,7 @@
       elements.attachmentPreviewStage.addEventListener("pointerdown", (event) => {
         if (event.pointerType === "mouse" && event.button !== 0) return;
         if (event.target instanceof Element && event.target.closest("button")) return;
+        if (attachmentViewer.sliding) return;
         const viewer = attachmentViewer;
         const [x, y] = attachmentViewerStagePoint(event);
         viewer.lastPointerType = event.pointerType;
