@@ -40,7 +40,7 @@ const server = createServer((request, response) => {
 });
 async function nextOriginal(id) {
   for (;;) {
-    const entry = originals.find((item) => item.id === id && !item.claimed);
+    const entry = originals.find((item) => item.id === id && !item.claimed && !item.response.destroyed);
     if (entry) { entry.claimed = true; return entry; }
     try {
       await once(server, "fixture-content", { signal: AbortSignal.timeout(5000) });
@@ -153,10 +153,63 @@ try {
   release(failed, true);
   await failedLoad;
   await shown(4, 120);
+  await page.waitForFunction(() => !document.getElementById("attachmentPreviewNotice").hidden &&
+    !document.getElementById("attachmentPreviewRetry").hidden);
+  await page.click("#attachmentPreviewRetry");
+  release(await nextOriginal(4));
+  await shown(4, 480);
+  assert.equal(await page.$eval("#attachmentPreviewNotice", (notice) => notice.hidden), true);
   await close();
+
+  phase = "preloaded neighbour and viewer controls";
+  await open(1);
+  await shown(1, 480);
+  const contentRequests = requests.filter((url) => url.endsWith("/content")).length;
+  await page.keyboard.press("ArrowRight");
+  await shown(2, 480);
+  assert.equal(requests.filter((url) => url.endsWith("/content")).length, contentRequests, "preloaded original must be reused");
+  const state = () => page.evaluate(() => ({
+    count: document.getElementById("attachmentPreviewCount").textContent.replace(/\s+/g, " ").trim(),
+    zoom: document.getElementById("attachmentPreviewZoom").textContent,
+    transform: document.getElementById("attachmentPreviewImage").style.transform,
+    info: document.getElementById("attachmentPreviewInfoBody").textContent,
+  }));
+  let viewer = await state();
+  assert.equal(viewer.count, "2 / 6");
+  const fittedZoom = viewer.zoom;
+  assert.match(fittedZoom, /^\d+%$/, "zoom label shows the original's display scale");
+  assert.match(viewer.info, /12\.00/);
+  assert.match(viewer.info, /图片预览测试/);
+  await page.keyboard.press("=");
+  viewer = await state();
+  assert.equal(viewer.zoom, `${Math.round(Number.parseInt(fittedZoom, 10) * 1.25)}%`);
+  assert.match(viewer.transform, /scale\(1\.25\)/);
+  await page.keyboard.press("r");
+  viewer = await state();
+  assert.match(viewer.transform, /rotate\(90deg\) scale\(1\)/, "rotating resets zoom");
+  await page.keyboard.press("ArrowLeft");
+  await shown(1, 480);
+  await page.keyboard.press("ArrowLeft");
+  await page.waitForFunction(() => document.getElementById("attachmentPreviewNoticeText").textContent.includes("第一张"));
+  await page.keyboard.press("ArrowRight");
+  await shown(2, 480);
+  assert.match((await state()).transform, /rotate\(90deg\)/, "rotation is remembered per attachment");
+  const strip = () => page.$$eval(".attachment-viewer-thumb", (thumbs) => thumbs.map((thumb) => ({
+    id: Number(thumb.dataset.viewerReportId), current: thumb.getAttribute("aria-current") === "true",
+  })));
+  assert.deepEqual((await strip()).map((thumb) => thumb.id), [1, 2, 3, 4, 5, 6]);
+  assert.equal((await strip()).find((thumb) => thumb.current).id, 2);
+  await page.click('.attachment-viewer-thumb[data-viewer-report-id="4"]');
+  await shown(4, 480);
+  assert.equal((await strip()).find((thumb) => thumb.current).id, 4);
+  await page.keyboard.press("Escape");
+  assert.equal(await page.$eval("#attachmentPreviewModal", (modal) => modal.hidden), true);
+  assert.equal(await page.$$eval(".attachment-viewer-thumb", (thumbs) => thumbs.length), 0, "closing clears the strip");
+  assert.equal(await page.evaluate(() => localStorage.getItem("reimbursement-attachment-rotations")), "[[2,90]]");
 
   phase = "mobile uncached placeholder";
   await page.setViewport({ width: 390, height: 844 });
+  for (const entry of originals) entry.claimed = true;
   await page.reload();
   await page.waitForFunction(() => document.getElementById("statusText").textContent.includes("已加载"));
   const beforeMobile = requests.filter((url) => url.endsWith("/thumbnail")).length;
@@ -167,9 +220,46 @@ try {
   assert.equal(requests.filter((url) => url.endsWith("/thumbnail")).length, beforeMobile + 1);
   release(mobile);
   await shown(6, 480);
-  await close();
+  assert.equal(await page.$$eval(".attachment-viewer-thumb", (thumbs) => thumbs.length), 0, "no strip on phones");
+  assert.equal(await page.evaluate(() => attachmentRotations.get(2)), 90, "rotation survives a reload");
+
+  phase = "touch gestures";
+  // Synthetic touch pointers, positioned relative to the stage centre.
+  const touch = (type, id, x, y) => page.evaluate((eventType, pointerId, dx, dy) => {
+    const stage = document.getElementById("attachmentPreviewStage");
+    const rect = stage.getBoundingClientRect();
+    stage.dispatchEvent(new PointerEvent(eventType, { pointerId, pointerType: "touch", isPrimary: pointerId === 1, button: 0,
+      clientX: rect.left + rect.width / 2 + dx, clientY: rect.top + rect.height / 2 + dy, bubbles: true }));
+  }, type, id, x, y);
+  const swipe = async (dx, dy) => {
+    await touch("pointerdown", 1, 0, 0);
+    for (const step of [0.25, 0.5, 1]) await touch("pointermove", 1, dx * step, dy * step);
+    await touch("pointerup", 1, dx, dy);
+  };
+  const zoomScale = () => page.$eval("#attachmentPreviewImage", (img) => Number(/scale\(([\d.]+)\)/.exec(img.style.transform)[1]));
+  await swipe(-120, 0);
+  await page.waitForFunction(() => document.getElementById("attachmentPreviewNoticeText").textContent.includes("最后一张"));
+  await swipe(120, 0);
+  release(await nextOriginal(5));
+  await shown(5, 480);
+  await touch("pointerdown", 1, -20, 0);
+  await touch("pointerdown", 2, 20, 0);
+  await touch("pointermove", 1, -80, 0);
+  await touch("pointermove", 2, 80, 0);
+  await touch("pointerup", 1, -80, 0);
+  await touch("pointerup", 2, 80, 0);
+  assert.equal(await zoomScale(), 4, "pinch zooms by the finger spread");
+  for (let tap = 0; tap < 2; tap++) { await touch("pointerdown", 1, 0, 0); await touch("pointerup", 1, 0, 0); }
+  assert.equal(await zoomScale(), 1, "double tap returns to fit");
+  for (let tap = 0; tap < 2; tap++) { await touch("pointerdown", 1, 0, 0); await touch("pointerup", 1, 0, 0); }
+  assert.ok(await zoomScale() > 1, "double tap zooms in");
+  for (let tap = 0; tap < 2; tap++) { await touch("pointerdown", 1, 0, 0); await touch("pointerup", 1, 0, 0); }
+  await swipe(0, 60);
+  assert.equal(await page.$eval("#attachmentPreviewModal", (modal) => modal.hidden), false, "a short pull does not close");
+  await swipe(0, 200);
+  assert.equal(await page.$eval("#attachmentPreviewModal", (modal) => modal.hidden), true, "pulling down closes");
   assert.deepEqual(errors, []);
-  console.log(JSON.stringify({ passed: true, cachedPlaceholder: "passed", originalReplacement: "passed", listResetOwnership: "passed", rapidSwitch: "passed", closeDuringDecode: "passed", originalFailure: "passed", mobileUncachedPlaceholder: "passed" }, null, 2));
+  console.log(JSON.stringify({ passed: true, cachedPlaceholder: "passed", originalReplacement: "passed", listResetOwnership: "passed", rapidSwitch: "passed", closeDuringDecode: "passed", originalFailure: "passed", retry: "passed", preloadAndControls: "passed", filmstrip: "passed", touchGestures: "passed", savedRotation: "passed", mobileUncachedPlaceholder: "passed" }, null, 2));
 } finally {
   for (const entry of originals) entry.response.destroy();
   await browser?.close();
